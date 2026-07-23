@@ -83,6 +83,5 @@ dashboard-assistant-<version>-x86_64.raw.zst
        target drive, and flash.
 
 Once the flash finishes, move the disk into the target machine (or leave it in
-place) and boot it. On first boot you'll land in the on-screen
-[setup wizard](installer/installer.md) — or provision headlessly with a
-[seed file](flash/seed.md).
+place) and boot it. On first boot the device waits to be configured from a
+[seed file](flash/seed.md) — see [First-Boot Setup](installer/installer.md).

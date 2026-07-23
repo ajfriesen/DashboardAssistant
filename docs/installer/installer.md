@@ -5,38 +5,36 @@ icon: material/usb-flash-drive
 # First-Boot Setup
 
 After you [flash the image](../flash/flash.md) and boot the device for the first
-time, it comes up **unprovisioned** and shows an on-screen setup wizard instead
-of a dashboard. Everything happens on the device's own screen — no separate
-computer needed.
+time, it comes up **unprovisioned** and shows a waiting screen. The device is
+configured entirely from a [seed file](../flash/seed.md) — there is no on-screen
+setup wizard, so nobody standing at the panel can point it at a different Home
+Assistant instance or broker.
 
-## The setup wizard
+## Provision with a seed file
 
-The wizard walks you through the two things the kiosk needs to reach your
-dashboard:
+Create a `dashboard-assistant.yaml` describing what the device needs — Wi-Fi,
+the Home Assistant URL, an access token, MQTT and dashboard pages — and hand it
+to the device on a USB stick or on the boot partition. The device applies it on
+first boot and goes straight to your dashboard.
 
-1. **Network** — join a Wi-Fi network (scan, pick, enter the password), or skip
-   it if the device is on wired Ethernet.
-2. **Home Assistant URL** — the address the kiosk should open, e.g.
-   `https://homeassistant.local:8123`.
+See [Seed File](../flash/seed.md) for the full schema and the two ways to apply
+it, and [Create Home Assistant User](../flash/home-assistant-setup.md) for how to
+make a dedicated kiosk user and generate the access token.
 
-Provide a Home Assistant access token here too (or later) so the kiosk logs in
-automatically instead of stopping at the login screen. See
-[Create Home Assistant User](../flash/home-assistant-setup.md) for how to make a
-dedicated kiosk user and generate that token.
+## The on-device panel
 
-Once you finish, the device stores the settings, skips the wizard on subsequent
-boots, and opens straight into your dashboard.
+Once running, a ⚙ **Config** button on the kiosk opens a small local admin panel
+(served on `localhost`, reachable only from the device screen). It is read-only
+with respect to provisioning — it does **not** let anyone reconfigure where the
+kiosk points. It offers two tabs:
 
-## Skipping the wizard (headless provisioning)
-
-If you're setting up several devices, or want a fully hands-off first boot, you
-can drop a [seed file](../flash/seed.md) on the boot partition or a USB stick.
-The device applies it automatically and goes straight to the dashboard without
-ever showing the wizard.
+- **Info** — device identity and network details (hostname, IP, MAC, model,
+  serial, version, MQTT node ID, Home Assistant URL).
+- **Recovery** — boot an earlier system generation if an update misbehaved.
 
 ## MQTT integration
 
 To have the panel appear back inside Home Assistant as a device with its own
-controls and sensors, point it at your MQTT broker. See the
+controls and sensors, include MQTT broker settings in the seed file. See the
 [Home Assistant integration](../about/features.md#home-assistant-integration)
 reference for the full list of entities it exposes.

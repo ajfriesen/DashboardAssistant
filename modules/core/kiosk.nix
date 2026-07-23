@@ -63,10 +63,12 @@ let
     STATE=$(${lib.getExe pkgs.curl} -s --max-time 2 ${daemonBase}/api/state \
       | ${lib.getExe pkgs.jq} -r '.state' 2>/dev/null || echo SETUP)
 
+    # Provisioning is seed-only (no on-screen wizard): an unprovisioned or
+    # offline device shows the waiting splash until a seed file configures it.
+    # /setup is the admin panel, reached on demand via the waybar Config button.
     case "$STATE" in
-      READY)     URL="$HA_URL" ;;
-      RECONNECT) URL="${daemonBase}/waiting" ;;
-      *)         URL="${daemonBase}/setup" ;;
+      READY) URL="$HA_URL" ;;
+      *)     URL="${daemonBase}/waiting" ;;
     esac
 
     # Host<->guest clipboard when running under QEMU/SPICE: the vdagent virtio

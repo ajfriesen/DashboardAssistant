@@ -24,16 +24,6 @@
       font-weight: 600; touch-action: manipulation;
     }
     button:disabled { opacity: .5; }
-    .row { display: flex; gap: .5rem; align-items: end; }
-    .row select { flex: 1; }
-    .row button { width: auto; margin-top: 0; padding: .85rem 1.1rem; background: #263241; border-color: #2a3644; }
-    .banner {
-      display: flex; align-items: center; gap: .6rem; padding: .8rem 1rem; border-radius: 12px;
-      background: #14251a; border: 1px solid #1f4d31; color: #4ade80; font-size: .95rem;
-    }
-    .banner.hidden { display: none; }
-    .toggle { margin-top: .9rem; }
-    .toggle a { color: #6ea8fe; text-decoration: none; font-size: .9rem; cursor: pointer; }
     /* Full-width top navbar, pinned so it stays put while a panel scrolls under it.
        Brand sits at the far left; the tab links group at the far right. */
     .topbar {
@@ -75,65 +65,18 @@
       Dashboard Assistant
     </span>
     <nav class="tabs">
-      <a id="tab-btn-setup" class="tab active">Dashboard</a>
-      <a id="tab-btn-mqtt" class="tab">MQTT</a>
-      <a id="tab-btn-info" class="tab">Info</a>
+      <a id="tab-btn-info" class="tab active">Info</a>
       <a id="tab-btn-recovery" class="tab">Recovery</a>
     </nav>
   </header>
 
   <main class="content">
     <div class="card">
-    <div id="panel-setup">
-      <div id="banner" class="banner hidden"></div>
-
-      <div id="wifiFields" class="hidden">
-        <label for="ssid">Wi-Fi network</label>
-        <div class="row">
-          <select id="ssid"><option value="">Scanning…</option></select>
-          <button id="rescan" type="button">Rescan</button>
-        </div>
-
-        <label for="psk">Wi-Fi password</label>
-        <input id="psk" type="password" autocomplete="off" placeholder="Leave blank for open networks">
-      </div>
-
-      <div id="toggle" class="toggle hidden"></div>
-
-      <label for="haurl">Home Assistant URL</label>
-      <input id="haurl" type="url" inputmode="url" value="http://homeassistant.local:8123">
-
-      <button id="submit" type="button">Connect</button>
-      <div id="msg" class="msg"></div>
-    </div>
-
-    <div id="panel-mqtt" class="hidden">
+    <div id="panel-info">
       <p class="hint">
-        Publish this dashboard to Home Assistant over MQTT — it exposes the display
-        as a light and is discovered automatically. Leave the broker blank to disable.
+        Device identity and network details. Read-only — this device is configured
+        from a seed file, not from this screen.
       </p>
-
-      <label for="mqttBroker">Broker URL</label>
-      <input id="mqttBroker" type="text" inputmode="url" autocomplete="off" placeholder="tcp://192.168.1.10:1883">
-
-      <label for="mqttUser">Username</label>
-      <input id="mqttUser" type="text" autocomplete="off" placeholder="Optional">
-
-      <label for="mqttPass">Password</label>
-      <input id="mqttPass" type="password" autocomplete="off" placeholder="Optional">
-
-      <label for="mqttNode">Node ID</label>
-      <input id="mqttNode" type="text" autocomplete="off" placeholder="Optional — defaults to the device id">
-
-      <label for="mqttPrefix">Discovery prefix</label>
-      <input id="mqttPrefix" type="text" autocomplete="off" placeholder="homeassistant">
-
-      <button id="mqttSave" type="button">Save MQTT settings</button>
-      <div id="mqttMsg" class="msg"></div>
-    </div>
-
-    <div id="panel-info" class="hidden">
-      <p class="hint">Device identity and network details. Read-only.</p>
       <dl id="infoRows" class="info"></dl>
       <div id="infoMsg" class="msg"></div>
     </div>
@@ -156,175 +99,18 @@
 
   <script>
     const $ = (id) => document.getElementById(id);
-    const msg = (text, cls) => { const m = $("msg"); m.textContent = text; m.className = "msg " + (cls || ""); };
 
-    // mode: "existing" (use current/wired connection) or "wifi" (join a network).
-    let mode = "wifi";
-    let net = { connected: false, has_wifi: true, type: "", name: "" };
-
-    function render() {
-      const useWifi = mode === "wifi";
-      $("wifiFields").classList.toggle("hidden", !useWifi);
-
-      const banner = $("banner");
-      if (net.connected) {
-        banner.classList.remove("hidden");
-        banner.textContent = "✓ Connected via " + (net.type || "network") +
-          (net.name ? " (" + net.name + ")" : "");
-      } else {
-        banner.classList.add("hidden");
-      }
-
-      // Offer a toggle only when both paths are actually available.
-      const toggle = $("toggle");
-      if (net.connected && net.has_wifi) {
-        toggle.classList.remove("hidden");
-        toggle.innerHTML = useWifi
-          ? '<a id="useExisting">Use the current connection instead</a>'
-          : '<a id="useWifi">Set up Wi-Fi instead</a>';
-        const alt = document.getElementById(useWifi ? "useExisting" : "useWifi");
-        alt.onclick = () => { mode = useWifi ? "existing" : "wifi"; render(); };
-      } else {
-        toggle.classList.add("hidden");
-      }
-
-      $("submit").textContent = useWifi ? "Connect" : "Finish";
-      if (useWifi) scan();
-    }
-
-    async function loadNetInfo() {
-      try {
-        net = await (await fetch("/api/netinfo")).json();
-      } catch (_) { /* keep defaults */ }
-      // Default to the current connection when one exists; otherwise Wi-Fi.
-      // If there is no Wi-Fi device at all, force the existing-connection path.
-      if (net.connected && !net.has_wifi) mode = "existing";
-      else if (net.connected) mode = "existing";
-      else mode = net.has_wifi ? "wifi" : "existing";
-
-      if (!net.connected && !net.has_wifi) {
-        msg("No network detected. Attach an Ethernet cable, then reload.", "err");
-      }
-      render();
-    }
-
-    let scanned = false;
-    async function scan(force) {
-      if (scanned && !force) return;
-      scanned = true;
-      const sel = $("ssid");
-      sel.innerHTML = '<option value="">Scanning…</option>';
-      try {
-        const aps = await (await fetch("/api/wifi/scan")).json();
-        if (aps.error) throw new Error(aps.error);
-        sel.innerHTML = "";
-        for (const ap of aps) {
-          const o = document.createElement("option");
-          o.value = ap.ssid;
-          o.textContent = ap.ssid + (ap.secure ? " 🔒" : "") + "  (" + ap.strength + "%)";
-          sel.appendChild(o);
-        }
-        if (!aps.length) sel.innerHTML = '<option value="">No networks found</option>';
-      } catch (e) {
-        sel.innerHTML = '<option value="">Scan failed</option>';
-        msg("Wi-Fi scan failed: " + e.message, "err");
-      }
-    }
-
-    async function submit() {
-      const ha_url = $("haurl").value.trim();
-      if (!ha_url) return msg("Enter your Home Assistant URL.", "err");
-
-      const body = { ha_url };
-      if (mode === "wifi") {
-        const ssid = $("ssid").value;
-        if (!ssid) return msg("Pick a Wi-Fi network.", "err");
-        body.ssid = ssid;
-        body.psk = $("psk").value;
-      }
-
-      $("submit").disabled = true;
-      msg("Connecting…");
-      try {
-        const res = await fetch("/api/provision", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || res.statusText);
-        msg("Connected — launching your dashboard…", "ok");
-      } catch (e) {
-        msg("Could not connect: " + e.message, "err");
-        $("submit").disabled = false;
-      }
-    }
-
-    // Tabs: Dashboard (Wi-Fi + HA URL), MQTT, Info, and Recovery.
+    // Tabs: Info (read-only identity) and Recovery (generation rollback).
     function showTab(name) {
-      for (const t of ["setup", "mqtt", "info", "recovery"]) {
+      for (const t of ["info", "recovery"]) {
         $("panel-" + t).classList.toggle("hidden", name !== t);
         $("tab-btn-" + t).classList.toggle("active", name === t);
       }
-      if (name === "mqtt") loadMQTT();
       if (name === "info") loadInfo();
       if (name === "recovery") loadGenerations();
     }
-    $("tab-btn-recovery").addEventListener("click", () => showTab("recovery"));
     $("tab-btn-info").addEventListener("click", () => showTab("info"));
-    $("tab-btn-setup").addEventListener("click", () => showTab("setup"));
-    $("tab-btn-mqtt").addEventListener("click", () => showTab("mqtt"));
-
-    const mmsg = (text, cls) => { const m = $("mqttMsg"); m.textContent = text; m.className = "msg " + (cls || ""); };
-
-    let mqttLoaded = false;
-    async function loadMQTT() {
-      if (mqttLoaded) return;
-      mqttLoaded = true;
-      try {
-        const c = await (await fetch("/api/mqtt")).json();
-        $("mqttBroker").value = c.broker || "";
-        $("mqttUser").value = c.username || "";
-        $("mqttNode").value = c.node_id || "";
-        $("mqttPrefix").value = c.discovery_prefix || "";
-        // The password is never sent back; note whether one is already stored.
-        $("mqttPass").placeholder = c.password_set ? "•••••• (unchanged)" : "Optional";
-      } catch (e) {
-        mmsg("Could not load MQTT settings: " + e.message, "err");
-        mqttLoaded = false;
-      }
-    }
-
-    async function saveMQTT() {
-      const body = {
-        broker: $("mqttBroker").value.trim(),
-        username: $("mqttUser").value.trim(),
-        password: $("mqttPass").value,
-        node_id: $("mqttNode").value.trim(),
-        discovery_prefix: $("mqttPrefix").value.trim(),
-      };
-      $("mqttSave").disabled = true;
-      mmsg("Saving…");
-      try {
-        const res = await fetch("/api/mqtt", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || res.statusText);
-        mmsg(body.broker
-          ? "Saved — Home Assistant will discover this device."
-          : "Saved — MQTT disabled.", "ok");
-        // Clear the password box; the placeholder reflects the stored state.
-        $("mqttPass").value = "";
-        $("mqttPass").placeholder = body.broker && (body.password || $("mqttPass").placeholder.includes("unchanged"))
-          ? "•••••• (unchanged)" : "Optional";
-      } catch (e) {
-        mmsg("Could not save: " + e.message, "err");
-      } finally {
-        $("mqttSave").disabled = false;
-      }
-    }
-    $("mqttSave").addEventListener("click", saveMQTT);
+    $("tab-btn-recovery").addEventListener("click", () => showTab("recovery"));
 
     // Recovery: pick a generation and roll back into it (reboots).
     const gmsg = (text, cls) => { const m = $("genMsg"); m.textContent = text; m.className = "msg " + (cls || ""); };
@@ -408,9 +194,8 @@
       }
     }
 
-    $("rescan").addEventListener("click", () => scan(true));
-    $("submit").addEventListener("click", submit);
-    loadNetInfo();
+    // Open on the Info tab.
+    showTab("info");
   </script>
 </body>
 </html>

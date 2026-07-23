@@ -1,9 +1,10 @@
 # Seed File
 
-A **seed file** provisions a freshly flashed device without touching the
-on-screen setup wizard. Drop a `dashboard-assistant.yaml` next to the image and the
-device picks up its Home Assistant URL, access token and Wi-Fi on first boot —
-handy for field deploys or flashing several tablets at once.
+A **seed file** is how you provision a freshly flashed device — it's the only
+configuration path (there is no on-screen setup wizard). Drop a
+`dashboard-assistant.yaml` next to the image and the device picks up its Home
+Assistant URL, access token and Wi-Fi on first boot — handy for field deploys or
+flashing several tablets at once.
 
 !!! warning "Physical access = full trust"
     Any USB stick carrying a `dashboard-assistant.yaml` is applied automatically, and

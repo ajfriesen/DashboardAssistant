@@ -26,23 +26,37 @@
 </head>
 <body>
   <div class="spinner"></div>
-  <h1>Reconnecting to your network…</h1>
-  <p>The dashboard will appear automatically once the connection is back.</p>
-  <button id="reset" type="button">Re-run setup</button>
+  <h1 id="title">Reconnecting to your network…</h1>
+  <p id="subtitle">The dashboard will appear automatically once the connection is back.</p>
 
   <script>
+    // Reflect the current state in the copy: a fresh device is provisioned from a
+    // seed file (no on-screen wizard), while a provisioned one is just offline.
+    function applyState(state) {
+      const title = document.getElementById("title");
+      const subtitle = document.getElementById("subtitle");
+      if (state === "SETUP") {
+        title.textContent = "Awaiting configuration…";
+        subtitle.textContent =
+          "Provide a seed file (dashboard-assistant.yaml) on a USB stick or the boot " +
+          "partition to set up this device.";
+      } else {
+        title.textContent = "Reconnecting to your network…";
+        subtitle.textContent = "The dashboard will appear automatically once the connection is back.";
+      }
+    }
+
     // Poll state; when READY, the kiosk unit gets restarted server-side, but
     // reload as a fallback so the splash doesn't linger.
-    setInterval(async () => {
+    async function poll() {
       try {
         const { state } = await (await fetch("/api/state")).json();
-        if (state === "READY") location.reload();
+        if (state === "READY") { location.reload(); return; }
+        applyState(state);
       } catch (_) {}
-    }, 5000);
-
-    document.getElementById("reset").addEventListener("click", async () => {
-      await fetch("/api/reset", { method: "POST" });
-    });
+    }
+    poll();
+    setInterval(poll, 5000);
   </script>
 </body>
 </html>

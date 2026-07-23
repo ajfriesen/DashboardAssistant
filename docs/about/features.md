@@ -19,11 +19,12 @@ icon: lucide/sparkles
 - Automatic generation rollback on a failed boot, plus a manual recovery picker.
 - Atomic OS updates surfaced as a Home Assistant `update` entity.
 
-**First-boot setup**
+**Seed-file provisioning**
 
-- On-screen wizard: join Wi-Fi (or use wired) and set the Home Assistant URL.
-- Or drop a small YAML config bundle on a USB stick to provision headlessly
-  (HA URL, token, Wi-Fi, MQTT, dashboard URLs).
+- Configured entirely from a small YAML seed file (HA URL, token, Wi-Fi, MQTT,
+  dashboard URLs) dropped on a USB stick or the boot partition — no on-screen
+  wizard, so a person at the panel can't re-point the device.
+- On-device ⚙ Config panel is read-only: Info and Recovery tabs only.
 
 ## Home Assistant integration
 

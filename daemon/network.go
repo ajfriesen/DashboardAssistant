@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	"sort"
-	"time"
 
 	"github.com/godbus/dbus/v5"
 )
@@ -15,7 +13,6 @@ const (
 	nmIface      = "org.freedesktop.NetworkManager"
 	nmDevIface   = "org.freedesktop.NetworkManager.Device"
 	nmWifiIface  = "org.freedesktop.NetworkManager.Device.Wireless"
-	nmApIface    = "org.freedesktop.NetworkManager.AccessPoint"
 	nmActiveConn = "org.freedesktop.NetworkManager.Connection.Active"
 
 	// NMDeviceType.WIFI
@@ -23,13 +20,6 @@ const (
 	// NMActiveConnectionState.ACTIVATED
 	nmActiveStateActivated uint32 = 2
 )
-
-// AccessPoint is a scanned Wi-Fi network, deduplicated by SSID.
-type AccessPoint struct {
-	SSID     string `json:"ssid"`
-	Strength uint8  `json:"strength"` // 0-100
-	Secure   bool   `json:"secure"`
-}
 
 // NetworkManager wraps the system-bus connection and the Wi-Fi device path.
 type NetworkManager struct {
@@ -51,10 +41,6 @@ func NewNetworkManager() (*NetworkManager, error) {
 	}
 	return nm, nil
 }
-
-// HasWifi reports whether a Wi-Fi device is present (drives whether the wizard
-// shows the Wi-Fi flow at all).
-func (nm *NetworkManager) HasWifi() bool { return nm.wifiDev != "" }
 
 func (nm *NetworkManager) Close() error { return nm.conn.Close() }
 
@@ -139,65 +125,6 @@ func friendlyType(nmType string) string {
 
 // Connected is the live gate between RECONNECT and READY.
 func (nm *NetworkManager) Connected() bool { return nm.NetInfo().Connected }
-
-// Scan triggers a rescan and returns visible access points, strongest first,
-// deduplicated by SSID.
-func (nm *NetworkManager) Scan() ([]AccessPoint, error) {
-	if nm.wifiDev == "" {
-		return nil, fmt.Errorf("no Wi-Fi device")
-	}
-	dev := nm.conn.Object(nmService, nm.wifiDev)
-
-	// RequestScan is best-effort; ignore "scanning too soon" style errors.
-	_ = dev.Call(nmWifiIface+".RequestScan", 0, map[string]dbus.Variant{}).Err
-	time.Sleep(2 * time.Second)
-
-	var apPaths []dbus.ObjectPath
-	if err := dev.Call(nmWifiIface+".GetAccessPoints", 0).Store(&apPaths); err != nil {
-		return nil, fmt.Errorf("GetAccessPoints: %w", err)
-	}
-
-	best := map[string]AccessPoint{}
-	for _, p := range apPaths {
-		apObj := nm.conn.Object(nmService, p)
-		ssidV, err := apObj.GetProperty(nmApIface + ".Ssid")
-		if err != nil {
-			continue
-		}
-		raw, ok := ssidV.Value().([]byte)
-		if !ok || len(raw) == 0 {
-			continue
-		}
-		ssid := string(raw)
-
-		var strength uint8
-		if v, err := apObj.GetProperty(nmApIface + ".Strength"); err == nil {
-			strength, _ = v.Value().(uint8)
-		}
-		var flags, wpa, rsn uint32
-		if v, err := apObj.GetProperty(nmApIface + ".Flags"); err == nil {
-			flags, _ = v.Value().(uint32)
-		}
-		if v, err := apObj.GetProperty(nmApIface + ".WpaFlags"); err == nil {
-			wpa, _ = v.Value().(uint32)
-		}
-		if v, err := apObj.GetProperty(nmApIface + ".RsnFlags"); err == nil {
-			rsn, _ = v.Value().(uint32)
-		}
-		secure := flags&0x1 != 0 || wpa != 0 || rsn != 0
-
-		if cur, ok := best[ssid]; !ok || strength > cur.Strength {
-			best[ssid] = AccessPoint{SSID: ssid, Strength: strength, Secure: secure}
-		}
-	}
-
-	out := make([]AccessPoint, 0, len(best))
-	for _, ap := range best {
-		out = append(out, ap)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Strength > out[j].Strength })
-	return out, nil
-}
 
 // Provision adds a persistent Wi-Fi connection and activates it immediately.
 // A blank psk provisions an open network. It returns once NetworkManager has

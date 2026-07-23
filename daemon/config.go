@@ -129,15 +129,6 @@ func markProvisioned() error {
 	return os.WriteFile(markerFile, []byte("1\n"), 0o664)
 }
 
-// clearProvisioned removes the marker, so the next launch re-enters SETUP.
-func clearProvisioned() error {
-	err := os.Remove(markerFile)
-	if os.IsNotExist(err) {
-		return nil
-	}
-	return err
-}
-
 // restartKiosk restarts the greetd session over the systemd D-Bus API. A scoped
 // polkit rule (see daemon.nix) grants dashboard-assistant rights to manage only this
 // unit. Restarting re-runs the state-aware launcher, which re-reads /api/state.
