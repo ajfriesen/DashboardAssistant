@@ -17,29 +17,53 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     h1 { font-size: 1.4rem; margin: 0; font-weight: 600; }
-    p { color: #9fb0c0; margin: 0; }
-    button {
-      margin-top: 1rem; font-size: 1rem; padding: .7rem 1.4rem; border-radius: 10px;
-      border: 1px solid #2a3644; background: #182029; color: #e8edf2; touch-action: manipulation;
+    p { color: #9fb0c0; margin: 0; max-width: 32rem; line-height: 1.5; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #e8edf2; }
+    /* Seed-file QR: shown only in the unprovisioned (SETUP) state. */
+    .qr { display: none; flex-direction: column; align-items: center; gap: .55rem; }
+    .qr.show { display: flex; }
+    .qr img {
+      width: 180px; height: 180px; image-rendering: pixelated;
+      background: #fff; padding: 10px; border-radius: 12px;
+    }
+    .qr .cap { color: #9fb0c0; font-size: .9rem; }
+    .qr .url {
+      color: #6ea8fe; font-size: .82rem; word-break: break-all; max-width: 22rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     }
   </style>
 </head>
 <body>
-  <div class="spinner"></div>
+  <div class="spinner" id="spinner"></div>
   <h1 id="title">Reconnecting to your network…</h1>
   <p id="subtitle">The dashboard will appear automatically once the connection is back.</p>
+
+  <div class="qr" id="qr">
+    <img alt="QR code linking to the seed file setup guide"
+         src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMYAAADGAQMAAACzVW0eAAAABlBMVEUAAAD///+l2Z/dAAAAAnRSTlP//8i138cAAAAJcEhZcwAACxIAAAsSAdLdfvwAAAFWSURBVFiF7ZdBDgMhCEVJPIBH8uoeyQOYUP4Hp+007RYWNaZR3ywo8BFFvw35k59kiY1mv12bThxhjBpk2K6tsbvaV7Zttl9ViNlIe6fZvm297E+UIrqF3jW/ViPm0bC9Fjk7HLTPPMgkrpJxzbt+EomPhQVi3u91J5OYI48+MPsULkoQtaWwtAw/M6FUIQvHNJxxhtVHJelE56aZrmOvLpEH6YSShdUUrn0l/dJ2NqFE9inMb3mQTlBdmIN9UiUu6BokKgo8ioLnro26k0+YgDOqizxvjAoE4e3ql60w2ufGyCaoLpPKwMJmY39XgiDa5s7IR7/WnnmQS6KbiyA3NgXIzQpEj2RpPhans8sn3j0hH6fftziuQoZ61+m2c26pQs5Lwnv2lzyoQqK5s6qs72+MfMKK4vXv5tFc4tG+GijlO6wG8VdOvMD46L/qdTb5Nv7kF3kAJ0yu5hiZ9pgAAAAASUVORK5CYII=">
+    <span class="cap">Scan for the seed file setup guide</span>
+    <span class="url">dashboard-assistant.com/flash/seed/</span>
+  </div>
 
   <script>
     // Reflect the current state in the copy: a fresh device is provisioned from a
     // seed file (no on-screen wizard), while a provisioned one is just offline.
     function applyState(state) {
+      const spinner = document.getElementById("spinner");
       const title = document.getElementById("title");
       const subtitle = document.getElementById("subtitle");
-      if (state === "SETUP") {
-        title.textContent = "Awaiting configuration…";
-        subtitle.textContent =
-          "Provide a seed file (dashboard-assistant.yaml) on a USB stick or the boot " +
-          "partition to set up this device.";
+      const qr = document.getElementById("qr");
+      const setup = state === "SETUP";
+      // In SETUP nothing is progressing — we're waiting on the user, so drop the
+      // spinner and show the QR to the seed-file guide instead.
+      spinner.style.display = setup ? "none" : "";
+      qr.classList.toggle("show", setup);
+      if (setup) {
+        title.textContent = "Awaiting configuration";
+        subtitle.innerHTML =
+          "This device hasn't been set up yet. Create a seed file named " +
+          "<code>dashboard-assistant.yaml</code> and provide it on a USB stick or the " +
+          "boot partition — scan the code below for step-by-step instructions.";
       } else {
         title.textContent = "Reconnecting to your network…";
         subtitle.textContent = "The dashboard will appear automatically once the connection is back.";
