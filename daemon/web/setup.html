@@ -56,6 +56,12 @@
     .info > div { display: flex; justify-content: space-between; gap: 1rem; padding: .65rem 0; border-bottom: 1px solid #1b2430; }
     .info dt { color: #9fb0c0; font-size: .9rem; }
     .info dd { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9rem; text-align: right; word-break: break-all; }
+    .diagbig {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1.35rem;
+      text-align: center; padding: .8rem 1rem; border-radius: 12px;
+      background: #0b0f15; border: 1px solid #2a3644; word-break: break-all;
+    }
+    .diagbig.code { letter-spacing: .35em; color: #4ade80; font-size: 2rem; }
   </style>
 </head>
 <body>
@@ -67,6 +73,7 @@
     <nav class="tabs">
       <a id="tab-btn-info" class="tab active">Info</a>
       <a id="tab-btn-recovery" class="tab">Recovery</a>
+      <a id="tab-btn-diag" class="tab hidden">Diagnostics</a>
     </nav>
   </header>
 
@@ -94,15 +101,32 @@
       <button id="genRollback" type="button" style="background:#b3391f;border-color:#b3391f;">Roll back &amp; reboot</button>
       <div id="genMsg" class="msg"></div>
     </div>
+
+    <div id="panel-diag" class="hidden">
+      <p class="hint">
+        Share logs with support without SSH. Start a session, then on your phone or
+        laptop (same Wi-Fi) open the address below, enter the code, and copy the
+        logs. Secrets are removed automatically. The code expires after 15 minutes.
+      </p>
+
+      <button id="diagStart" type="button">Start diagnostics session</button>
+      <div id="diagOut" class="hidden">
+        <label>Open this on your phone</label>
+        <div class="diagbig" id="diagUrl"></div>
+        <label>Enter this code</label>
+        <div class="diagbig code" id="diagCode"></div>
+      </div>
+      <div id="diagMsg" class="msg"></div>
+    </div>
     </div>
   </main>
 
   <script>
     const $ = (id) => document.getElementById(id);
 
-    // Tabs: Info (read-only identity) and Recovery (generation rollback).
+    // Tabs: Info (read-only identity), Recovery (rollback), Diagnostics (opt-in).
     function showTab(name) {
-      for (const t of ["info", "recovery"]) {
+      for (const t of ["info", "recovery", "diag"]) {
         $("panel-" + t).classList.toggle("hidden", name !== t);
         $("tab-btn-" + t).classList.toggle("active", name === t);
       }
@@ -111,6 +135,37 @@
     }
     $("tab-btn-info").addEventListener("click", () => showTab("info"));
     $("tab-btn-recovery").addEventListener("click", () => showTab("recovery"));
+    $("tab-btn-diag").addEventListener("click", () => showTab("diag"));
+
+    // Diagnostics: mint a one-time code + LAN URL the user opens on their phone.
+    // The session endpoint only exists when the feature is enabled, so probe it
+    // once and reveal the tab only then.
+    const dmsg = (t, cls) => { const m = $("diagMsg"); m.textContent = t; m.className = "msg " + (cls || ""); };
+
+    async function startDiag() {
+      $("diagStart").disabled = true;
+      dmsg("Starting…");
+      try {
+        const res = await fetch("/api/diag/session", { method: "POST" });
+        if (!res.ok) throw new Error("Request failed (" + res.status + ").");
+        const d = await res.json();
+        $("diagUrl").textContent = d.url;
+        $("diagCode").textContent = d.code;
+        $("diagOut").classList.remove("hidden");
+        dmsg("Open the address on your phone and enter the code. Expires in " +
+          Math.round((d.ttl_seconds || 900) / 60) + " min.", "ok");
+      } catch (e) {
+        dmsg("Could not start: " + e.message, "err");
+      } finally {
+        $("diagStart").disabled = false;
+      }
+    }
+    $("diagStart").addEventListener("click", startDiag);
+
+    // Reveal the Diagnostics tab only if the feature is enabled on this device.
+    fetch("/api/diag/session", { method: "OPTIONS" }).then((r) => {
+      if (r.status !== 404) $("tab-btn-diag").classList.remove("hidden");
+    }).catch(() => {});
 
     // Recovery: pick a generation and roll back into it (reboots).
     const gmsg = (text, cls) => { const m = $("genMsg"); m.textContent = text; m.className = "msg " + (cls || ""); };

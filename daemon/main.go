@@ -35,6 +35,7 @@ type server struct {
 	nm    *NetworkManager // nil if no Wi-Fi device / D-Bus unavailable
 	mqtt  *MQTTManager    // owns the runtime-reconfigurable MQTT bridge
 	pages *Pages          // the pushable page list + current index
+	diag  *diagSession    // one-time code for the opt-in LAN diagnostics page
 }
 
 // deriveState implements the first-boot decision flow.
@@ -72,7 +73,7 @@ func main() {
 	upd := NewUpdateChecker()
 	zoom := NewZoom()
 	theme := NewTheme()
-	srv := &server{nm: nm, mqtt: NewMQTTManager(disp, pages, act, upd, zoom, theme), pages: pages}
+	srv := &server{nm: nm, mqtt: NewMQTTManager(disp, pages, act, upd, zoom, theme), pages: pages, diag: newDiagSession()}
 
 	// MQTT bridge to Home Assistant (opt-in: disabled unless a broker is set).
 	// Settings come from the environment overlaid by the runtime state file the
@@ -119,11 +120,35 @@ func main() {
 	mux.Handle("/api/generations", loopbackOnly(http.HandlerFunc(srv.handleGenerations)))
 	mux.Handle("/api/rollback", loopbackOnly(http.HandlerFunc(srv.handleRollback)))
 
+	// Opt-in LAN diagnostics (modules/core/diagnostics.nix sets the env). The code
+	// is minted here on the loopback panel; the redacted logs are served on a
+	// separate LAN listener below so :8080 stays loopback-only.
+	if diagEnabled() {
+		mux.Handle("/api/diag/session", loopbackOnly(http.HandlerFunc(srv.handleDiagSession)))
+		go serveDiag(srv)
+	}
+
 	mux.HandleFunc("/", srv.handleRoot)
 
 	log.Printf("dashboard-assistant-api listening on %s (state=%s)", addr, srv.deriveState())
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatalf("server error: %v", err)
+	}
+}
+
+// diagEnabled reports whether the opt-in LAN diagnostics feature is on.
+func diagEnabled() bool { return os.Getenv("DASHBOARD_ASSISTANT_DIAG") == "1" }
+
+// serveDiag runs the dedicated LAN diagnostics listener: only the code-entry
+// page and the code-gated log endpoint, nothing from the admin surface.
+func serveDiag(srv *server) {
+	addr := envOr("DASHBOARD_ASSISTANT_DIAG_ADDR", ":8099")
+	dmux := http.NewServeMux()
+	dmux.HandleFunc("/diag", srv.handleDiagPage)
+	dmux.HandleFunc("/api/diag", srv.handleDiagData)
+	log.Printf("diagnostics listening on %s", addr)
+	if err := http.ListenAndServe(addr, dmux); err != nil {
+		log.Printf("diagnostics server error: %v", err)
 	}
 }
 

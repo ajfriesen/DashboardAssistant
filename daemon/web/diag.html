@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard Assistant — Diagnostics</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: system-ui, sans-serif; background: #10151c; color: #e8edf2;
+      min-height: 100vh; padding: 6vh 5vw; display: flex; justify-content: center;
+    }
+    .card { width: 100%; max-width: 760px; }
+    h1 { font-size: 1.35rem; margin: 0 0 .5rem; }
+    p.hint { color: #9fb0c0; font-size: .95rem; line-height: 1.5; margin: 0 0 1rem; }
+    label { display: block; margin: 1rem 0 .35rem; font-size: .95rem; color: #9fb0c0; }
+    input, button {
+      font-size: 1.15rem; padding: .8rem 1rem; border-radius: 12px;
+      border: 1px solid #2a3644; background: #182029; color: #e8edf2;
+    }
+    #code { width: 100%; letter-spacing: .3em; text-align: center; }
+    .row { display: flex; gap: .6rem; margin-top: 1rem; flex-wrap: wrap; }
+    .row button { flex: 1; min-width: 9rem; touch-action: manipulation; font-weight: 600; }
+    #load { background: #2f81f7; border-color: #2f81f7; color: #fff; }
+    #copy { background: #263241; }
+    button:disabled { opacity: .5; }
+    .msg { margin-top: 1rem; min-height: 1.3rem; font-size: .95rem; }
+    .msg.err { color: #ff6b6b; }
+    .msg.ok { color: #4ade80; }
+    pre {
+      margin-top: 1rem; background: #0b0f15; border: 1px solid #2a3644; border-radius: 12px;
+      padding: 1rem; overflow: auto; max-height: 60vh; font-size: .82rem; line-height: 1.45;
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Device diagnostics</h1>
+    <p class="hint">
+      Enter the code shown on the device screen (Config → Diagnostics), then copy
+      the logs and send them to support. Secrets are removed automatically, but
+      look them over before sharing.
+    </p>
+
+    <label for="code">Code from the device</label>
+    <input id="code" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="000000">
+
+    <div class="row">
+      <button id="load" type="button">Load logs</button>
+      <button id="copy" type="button" disabled>Copy to clipboard</button>
+    </div>
+    <div id="msg" class="msg"></div>
+
+    <pre id="out" class="hidden"></pre>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const msg = (t, cls) => { const m = $("msg"); m.textContent = t; m.className = "msg " + (cls || ""); };
+
+    async function load() {
+      const code = $("code").value.trim();
+      if (!/^\d{6}$/.test(code)) return msg("Enter the 6-digit code from the device.", "err");
+      $("load").disabled = true;
+      msg("Loading…");
+      try {
+        const res = await fetch("/api/diag?code=" + encodeURIComponent(code));
+        if (res.status === 403) throw new Error("Code is wrong or expired — generate a new one on the device.");
+        if (!res.ok) throw new Error("Request failed (" + res.status + ").");
+        const text = await res.text();
+        $("out").textContent = text;
+        $("out").classList.remove("hidden");
+        $("copy").disabled = false;
+        msg("Loaded. Tap Copy, then paste into your message to support.", "ok");
+      } catch (e) {
+        msg(e.message, "err");
+      } finally {
+        $("load").disabled = false;
+      }
+    }
+
+    async function copy() {
+      const text = $("out").textContent;
+      try {
+        await navigator.clipboard.writeText(text);
+        msg("Copied to clipboard.", "ok");
+      } catch (_) {
+        // Clipboard API needs a secure context on some browsers; fall back to select.
+        const r = document.createRange();
+        r.selectNodeContents($("out"));
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(r);
+        msg("Select-all done — long-press and choose Copy.", "ok");
+      }
+    }
+
+    $("load").addEventListener("click", load);
+    $("copy").addEventListener("click", copy);
+    $("code").addEventListener("keydown", (e) => { if (e.key === "Enter") load(); });
+  </script>
+</body>
+</html>

@@ -8,6 +8,7 @@
     ./mqtt.nix
     ./update.nix
     ./configimport.nix
+    ./diagnostics.nix
     ./seed.nix
     ./debug.nix
     ./cleanup.nix
