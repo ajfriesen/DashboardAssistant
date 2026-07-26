@@ -17,8 +17,9 @@ a reboot. Dashboard Assistant takes the opposite approach:
   check automatically rolls back to the previous working generation, and a
   recovery picker lets you pick an older one by hand.
 - **A first-class Home Assistant citizen.** The panel doesn't just *show* Home
-  Assistant — it reports back over MQTT as a device with its own controls and
-  sensors (display, brightness, zoom, screenshots, CPU, temperature and more).
+  Assistant — a native integration (installable via HACS) reports it back as a
+  device with its own controls and sensors (display, brightness, zoom,
+  screenshots, CPU, temperature and more).
 
 ## Project status
 

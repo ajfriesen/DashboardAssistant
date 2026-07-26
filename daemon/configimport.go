@@ -15,14 +15,11 @@ type importConfig struct {
 		SSID string `yaml:"ssid"`
 		PSK  string `yaml:"psk"`
 	} `yaml:"wifi"`
-	MQTT *struct {
-		Broker          string `yaml:"broker"`
-		Username        string `yaml:"username"`
-		Password        string `yaml:"password"`
-		NodeID          string `yaml:"node_id"`
-		DiscoveryPrefix string `yaml:"discovery_prefix"`
-	} `yaml:"mqtt"`
-	Pages []struct {
+	// APIToken presets the device's Home Assistant API token, so a fleet can be
+	// flashed with a known token instead of the per-device one generated on first
+	// boot. Optional; omit to keep the generated token.
+	APIToken string `yaml:"api_token"`
+	Pages    []struct {
 		Name string `yaml:"name"`
 		URL  string `yaml:"url"`
 	} `yaml:"pages"`
@@ -67,22 +64,13 @@ func (s *server) applyImport(data []byte) ([]string, error) {
 		applied = append(applied, "ha_url:"+cfg.HAURL)
 	}
 
-	if cfg.MQTT != nil {
-		mc := MQTTConfig{
-			Broker:          cfg.MQTT.Broker,
-			Username:        cfg.MQTT.Username,
-			Password:        cfg.MQTT.Password,
-			NodeID:          cfg.MQTT.NodeID,
-			DiscoveryPrefix: cfg.MQTT.DiscoveryPrefix,
+	if cfg.APIToken != "" {
+		if err := writeAPIToken(cfg.APIToken); err != nil {
+			return applied, fmt.Errorf("write api token: %w", err)
 		}
-		if err := writeMQTTConfig(mc); err != nil {
-			return applied, fmt.Errorf("write mqtt config: %w", err)
-		}
-		// Apply live so HA discovers the device without waiting for a restart.
-		if s.mqtt != nil {
-			s.mqtt.Apply(mc.withDefaults())
-		}
-		applied = append(applied, "mqtt")
+		// Takes effect on the next daemon start (the API listener reads the token
+		// at boot); note it so the operator knows to restart if changing it live.
+		applied = append(applied, "api_token")
 	}
 
 	if cfg.Pages != nil {
@@ -95,9 +83,6 @@ func (s *server) applyImport(data []byte) ([]string, error) {
 		if s.pages != nil {
 			if err := s.pages.SetList(pages); err != nil {
 				return applied, fmt.Errorf("set pages: %w", err)
-			}
-			if s.mqtt != nil {
-				s.mqtt.RepublishPageDiscovery()
 			}
 		}
 		applied = append(applied, fmt.Sprintf("pages:%d", len(pages)))

@@ -6,7 +6,8 @@ icon: lucide/rocket
 
 A declarative, **unbreakable Home Assistant kiosk OS** built on NixOS. Flash it,
 point it at your Home Assistant, and get a self-contained wall dashboard that
-integrates back into HA over MQTT.
+integrates back into HA through a native custom integration (installable via
+HACS).
 
 <figure markdown="span">
   ![A tablet on the wall running a Home Assistant dashboard](img/website.jpg){ width="600" }
@@ -16,8 +17,9 @@ integrates back into HA over MQTT.
 ## Goals
 
 - **Easy flash and install** — no Linux knowledge needed.
-- **Integrates with Home Assistant via MQTT** — the device exposes itself as
-  entities you can automate.
+- **Integrates natively with Home Assistant** — a first-party integration
+  (installable via HACS) exposes the device as entities you can automate; no MQTT
+  broker required.
 - **Unbreakable system via NixOS** — a bad update boots into the last working
   generation.
 - **Broad hardware support** — x86_64 today; Raspberry Pi and other aarch64

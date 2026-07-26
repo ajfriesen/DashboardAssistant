@@ -77,8 +77,8 @@ func readUptime() (int, error) {
 	return int(sec), err
 }
 
-// cpu is a package-level CPU-usage sampler (kept outside the MQTT bridge so it
-// survives reconnects and measures over the telemetry interval between calls).
+// cpu is a package-level CPU-usage sampler (kept outside the HA hub so it
+// survives restarts and measures over the telemetry interval between calls).
 var cpu = &cpuSampler{}
 
 type cpuSampler struct {

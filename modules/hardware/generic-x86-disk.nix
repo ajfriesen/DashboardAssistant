@@ -68,9 +68,10 @@
   # Gate "boot succeeded" on the dashboard actually being up: the boot is blessed
   # only once the daemon answers /healthz and the kiosk session is active. So an
   # update that crashes the daemon or the session fails to bless and auto-reverts.
-  # Deliberately NOT gated on the MQTT broker (which can be down for unrelated
-  # reasons) — a functional-but-buggy build (e.g. broken MQTT logic) still boots
-  # healthy here and is rolled back manually from the recovery UI instead.
+  # Deliberately NOT gated on Home Assistant reachability (which can be down for
+  # unrelated reasons) — a functional-but-buggy build (e.g. broken integration
+  # logic) still boots healthy here and is rolled back manually from the recovery
+  # UI instead.
   systemd.services.ha-boot-health = {
     description = "Gate boot success on the dashboard being healthy";
     before = [ "boot-complete.target" ];

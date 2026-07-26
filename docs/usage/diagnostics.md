@@ -33,10 +33,10 @@ The code expires after 15 minutes; start a new session to get a fresh one.
 ## What's included — and what's removed
 
 The page shows a device summary (hostname, IP, model, version, Home Assistant
-URL, MQTT broker) and the recent journal for the daemon and kiosk session.
+URL, device ID) and the recent journal for the daemon and kiosk session.
 
 Secrets are redacted before anything is shown — the Home Assistant access token,
-the MQTT password, and values that look like tokens or passwords are replaced
+the device API token, and values that look like tokens or passwords are replaced
 with `«redacted»`. Logs can still contain local IP addresses and entity names, so
 glance over them before sharing.
 

@@ -19,7 +19,7 @@ type Display struct {
 	on         bool
 	brightness int // 0..100, the panel backlight/gamma level
 	fifo       string
-	observer   func() // notified after any state change, to republish over MQTT
+	observer   func() // notified after any state change, to broadcast over SSE
 }
 
 // NewDisplay assumes the panel is on and at full brightness at boot; the
@@ -34,8 +34,8 @@ func NewDisplay() *Display {
 }
 
 // SetObserver registers a callback fired (outside the lock) whenever any tracked
-// state changes, so the MQTT bridge can republish it. Used to keep HA in sync
-// with out-of-band changes reported over the reverse channel.
+// state changes, so the HA hub can broadcast it. Used to keep HA in sync with
+// out-of-band changes reported over the reverse channel.
 func (d *Display) SetObserver(f func()) {
 	d.mu.Lock()
 	d.observer = f
@@ -121,7 +121,7 @@ func clampPct(p int) int {
 
 // Set requests the display power state. Writing is non-blocking: if the kiosk
 // session isn't up yet there's no reader on the FIFO, and we report that rather
-// than hang the caller (an MQTT command handler).
+// than hang the caller (an API command handler).
 func (d *Display) Set(on bool) error {
 	cmd := "off"
 	if on {
@@ -136,8 +136,8 @@ func (d *Display) Set(on bool) error {
 	obs := d.observer
 	d.mu.Unlock()
 
-	// Notify outside the lock: the observer may publish over MQTT (a blocking
-	// broker round-trip) and we must not hold the lock across it.
+	// Notify outside the lock: the observer marshals + broadcasts a snapshot to
+	// SSE subscribers, and we must not hold the lock across it.
 	if obs != nil {
 		obs()
 	}

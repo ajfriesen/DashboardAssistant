@@ -2,7 +2,7 @@
 
 Once provisioned, the device boots straight into your Home Assistant dashboard
 and stays there. Day-to-day you control it in two places: **on the screen
-itself** and **from Home Assistant** over MQTT.
+itself** and **from Home Assistant** through the native integration.
 
 ## On the device
 
@@ -15,8 +15,9 @@ A small bar gives you touch controls without leaving the kiosk:
 
 ## From Home Assistant
 
-Give the device your MQTT broker and it auto-discovers as a single **Dashboard
-Assistant** device. From there you can:
+Install the **Dashboard Assistant** integration (via HACS) and Home Assistant
+discovers the device over mDNS as a single device — enter the API token shown on
+the device's Config → Info screen to pair. From there you can:
 
 - Turn the **display** on/off and set **brightness**.
 - Adjust **zoom** and flip **dark mode**.

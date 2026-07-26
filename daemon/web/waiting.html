@@ -3,9 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Dashboard Assistant — Reconnecting</title>
+  <title>Dashboard Assistant — Setup</title>
   <style>
     :root { color-scheme: dark; }
+    /* Count padding inside the 100vh so the centered splash never overflows into
+       a scrollbar (padding on a content-box body would add on top of 100vh). */
+    * { box-sizing: border-box; }
     body {
       margin: 0; font-family: system-ui, sans-serif; background: #10151c; color: #e8edf2;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -19,11 +22,19 @@
     h1 { font-size: 1.4rem; margin: 0; font-weight: 600; }
     p { color: #9fb0c0; margin: 0; max-width: 32rem; line-height: 1.5; }
     code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #e8edf2; }
-    /* Seed-file QR: shown only in the unprovisioned (SETUP) state. */
+    /* Guided add-to-HA steps: shown only in the SETUP (online, not-yet-added) state. */
+    .steps {
+      display: none; text-align: left; max-width: 30rem; margin: 0; padding-left: 1.5rem;
+      color: #cdd7e0; line-height: 1.6;
+    }
+    .steps.show { display: block; }
+    .steps li { margin: .45rem 0; }
+    .steps b, #devname { color: #e8edf2; }
+    /* QR: the seed-file guide. Primary help in SETUP, a fallback hint while CONNECTING. */
     .qr { display: none; flex-direction: column; align-items: center; gap: .55rem; }
     .qr.show { display: flex; }
     .qr img {
-      width: 180px; height: 180px; image-rendering: pixelated;
+      width: 160px; height: 160px; image-rendering: pixelated;
       background: #fff; padding: 10px; border-radius: 12px;
     }
     .qr .cap { color: #9fb0c0; font-size: .9rem; }
@@ -35,43 +46,64 @@
 </head>
 <body>
   <div class="spinner" id="spinner"></div>
-  <h1 id="title">Reconnecting to your network…</h1>
-  <p id="subtitle">The dashboard will appear automatically once the connection is back.</p>
+  <h1 id="title">Connecting to your network…</h1>
+  <p id="subtitle">Your dashboard will load automatically once the device is online.</p>
+
+  <ol class="steps" id="steps">
+    <li>Open <b>Home Assistant</b> on your phone or computer.</li>
+    <li>Go to <b>Settings → Devices &amp; services</b>. This device<span id="devname"></span>
+      is discovered automatically — click <b>Add</b>. (Or <b>Add integration → Dashboard Assistant</b>.)</li>
+    <li>That's it — a fresh device pairs automatically, and your dashboard appears here.</li>
+  </ol>
 
   <div class="qr" id="qr">
     <img alt="QR code linking to the seed file setup guide"
          src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMYAAADGAQMAAACzVW0eAAAABlBMVEUAAAD///+l2Z/dAAAAAnRSTlP//8i138cAAAAJcEhZcwAACxIAAAsSAdLdfvwAAAFWSURBVFiF7ZdBDgMhCEVJPIBH8uoeyQOYUP4Hp+007RYWNaZR3ywo8BFFvw35k59kiY1mv12bThxhjBpk2K6tsbvaV7Zttl9ViNlIe6fZvm297E+UIrqF3jW/ViPm0bC9Fjk7HLTPPMgkrpJxzbt+EomPhQVi3u91J5OYI48+MPsULkoQtaWwtAw/M6FUIQvHNJxxhtVHJelE56aZrmOvLpEH6YSShdUUrn0l/dJ2NqFE9inMb3mQTlBdmIN9UiUu6BokKgo8ioLnro26k0+YgDOqizxvjAoE4e3ql60w2ufGyCaoLpPKwMJmY39XgiDa5s7IR7/WnnmQS6KbiyA3NgXIzQpEj2RpPhans8sn3j0hH6fftziuQoZ61+m2c26pQs5Lwnv2lzyoQqK5s6qs72+MfMKK4vXv5tFc4tG+GijlO6wG8VdOvMD46L/qdTb5Nv7kF3kAJ0yu5hiZ9pgAAAAASUVORK5CYII=">
-    <span class="cap">Scan for the seed file setup guide</span>
+    <span class="cap" id="qrcap">Scan for the setup guide</span>
     <span class="url">dashboard-assistant.com/flash/seed/</span>
   </div>
 
   <script>
-    // Reflect the current state in the copy: a fresh device is provisioned from a
-    // seed file (no on-screen wizard), while a provisioned one is just offline.
+    const $ = (id) => document.getElementById(id);
+
+    // Device identity (name), fetched once so the SETUP screen can tell the user
+    // which entry to pick in Home Assistant's discovery list. Loopback-only, like
+    // this page; failures are non-fatal (the step still reads fine without it).
+    let device = null;
+    fetch("/api/info").then((r) => r.json()).then((d) => { device = d; }).catch(() => {});
+
+    // Reflect the current state in the copy. Four cases:
+    //   CONNECTING — provisioned/seeded but never yet online (first-time connect)
+    //   RECONNECT  — was online, link dropped
+    //   SETUP      — online, not yet added: guide the user to add it in HA
+    //   READY      — handled by poll() (reloads into the dashboard)
     function applyState(state) {
-      const spinner = document.getElementById("spinner");
-      const title = document.getElementById("title");
-      const subtitle = document.getElementById("subtitle");
-      const qr = document.getElementById("qr");
       const setup = state === "SETUP";
-      // In SETUP nothing is progressing — we're waiting on the user, so drop the
-      // spinner and show the QR to the seed-file guide instead.
-      spinner.style.display = setup ? "none" : "";
-      qr.classList.toggle("show", setup);
+      $("spinner").style.display = setup ? "none" : "";
+      $("steps").classList.toggle("show", setup);
+
       if (setup) {
-        title.textContent = "Awaiting configuration";
-        subtitle.innerHTML =
-          "This device hasn't been set up yet. Create a seed file named " +
-          "<code>dashboard-assistant.yaml</code> and provide it on a USB stick or the " +
-          "boot partition — scan the code below for step-by-step instructions.";
+        $("title").textContent = "Add this device in Home Assistant";
+        $("subtitle").textContent = "It's online and ready. Add it to Home Assistant — no token to type:";
+        $("devname").textContent = device && device.name ? " — “" + device.name + "” — " : " ";
+        $("qrcap").textContent = "New to this? Scan for the setup guide";
+        $("qr").classList.add("show");
+      } else if (state === "RECONNECT") {
+        $("title").textContent = "Reconnecting to your network…";
+        $("subtitle").textContent = "The dashboard will reappear automatically once the connection is back.";
+        $("qr").classList.remove("show");
       } else {
-        title.textContent = "Reconnecting to your network…";
-        subtitle.textContent = "The dashboard will appear automatically once the connection is back.";
+        // CONNECTING (or anything pre-READY): first-time connect. Offer the seed
+        // guide as a fallback for a device that can't reach the network (Wi-Fi).
+        $("title").textContent = "Connecting to your network…";
+        $("subtitle").textContent = "Your dashboard will load automatically once the device is online.";
+        $("qrcap").textContent = "No network? Set up Wi-Fi with a seed file — scan for how";
+        $("qr").classList.add("show");
       }
     }
 
-    // Poll state; when READY, the kiosk unit gets restarted server-side, but
-    // reload as a fallback so the splash doesn't linger.
+    // Poll state; when READY, the daemon relaunches the kiosk into the dashboard,
+    // but reload as a fallback so the splash doesn't linger.
     async function poll() {
       try {
         const { state } = await (await fetch("/api/state")).json();

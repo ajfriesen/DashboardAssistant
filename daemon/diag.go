@@ -129,7 +129,7 @@ func diagnosticsText() string {
 		{"serial", readSerial()},
 		{"version", installedVersion()},
 		{"ha_url", haURL},
-		{"mqtt_broker", loadMQTTConfig().Broker},
+		{"node_id", nodeID()},
 	} {
 		fmt.Fprintf(&b, "%-13s %s\n", kv[0]+":", kv[1])
 	}
@@ -162,8 +162,8 @@ var jwtRe = regexp.MustCompile(`eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]
 // their values are dropped even if the daemon doesn't know the exact string.
 var kvSecretRe = regexp.MustCompile(`(?i)((?:psk|passwd|password|token|secret)["']?\s*[=:]\s*)\S+`)
 
-// redact removes secrets the daemon knows (the stored HA token and MQTT
-// password) plus anything matching the generic secret patterns.
+// redact removes secrets the daemon knows (the stored HA token and the device
+// API token) plus anything matching the generic secret patterns.
 func redact(s string) string {
 	for _, secret := range knownSecrets() {
 		s = strings.ReplaceAll(s, secret, "«redacted»")
@@ -177,13 +177,12 @@ func redact(s string) string {
 // be scrubbed by exact match wherever they appear.
 func knownSecrets() []string {
 	var out []string
-	if b, err := os.ReadFile(tokenFile); err == nil {
-		if tok := strings.TrimSpace(string(b)); tok != "" {
-			out = append(out, tok)
+	for _, path := range []string{tokenFile, apiTokenFile} {
+		if b, err := os.ReadFile(path); err == nil {
+			if tok := strings.TrimSpace(string(b)); tok != "" {
+				out = append(out, tok)
+			}
 		}
-	}
-	if pw := loadMQTTConfig().Password; pw != "" {
-		out = append(out, pw)
 	}
 	return out
 }

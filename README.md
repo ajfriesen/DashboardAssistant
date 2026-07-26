@@ -2,15 +2,16 @@
 
 **A declarative, unbreakable Home Assistant Kiosk OS built on NixOS.** Flash it to
 a mini-PC or tablet, point it at your Home Assistant, and get a self-contained
-wall dashboard that integrates *back* into HA over MQTT — so the screen itself
-becomes something you can see and control from your automations.
+wall dashboard that integrates *back* into HA through a native custom integration
+(installable via HACS) — so the screen itself becomes something you can see and
+control from your automations.
 
 
 <p align="center">
   <img src="docs/img/home-assistant.jpg" width="49%" alt="Dashboard View">
   <img src="docs/img/keyboard.jpg" width="49%" alt="Keyboard View">
   <img src="docs/img/recovery.jpg" width="49%" alt="Recovery View">
-  <img src="docs/img/mqtt_control.png" width="49%" alt="MQTT Control"> 
+  <img src="docs/img/mqtt_control.png" width="49%" alt="Home Assistant Control"> 
   <img src="docs/img/shopping-list.jpg" width="49%" alt="Web application View">
   <img src="docs/img/website.jpg" width="49%" alt="Website View">
 </p>
@@ -52,15 +53,18 @@ The motivation was born to make this easier, with no Linux knowledge needed.
   automatically if a switch goes wrong (and you can roll back by hand).
 - **Two-way Home Assistant integration.** Most kiosks *show* HA. This one also
   *appears in* HA: the display, brightness, zoom, theme, power, current page and
-  device health are all MQTT entities you can automate. Turn off your display after sme time and turn on when motion has been detected.
+  device health are all entities you can automate, via a native integration
+  (installable through HACS) — no MQTT broker needed. Turn off your display after
+  some time and turn it on when motion has been detected.
 
 
 ## Features
 
 Full-screen Chromium locked to your dashboard, multiple cyclable URLs, touch
 wake, an on-screen keyboard, token auto-login, failed-boot rollback, atomic OTA
-updates, and a first-boot Wi-Fi/HA setup wizard — all controllable from Home
-Assistant, which auto-discovers the device as a set of MQTT entities.
+updates, and seed-file provisioning — all controllable from Home Assistant, which
+discovers the device over mDNS via the native integration (installable through
+HACS).
 
 See the [**Features**](https://ajfriesen.github.io/dashboard-assistant/features/)
 page for the full list and the complete Home Assistant entity reference

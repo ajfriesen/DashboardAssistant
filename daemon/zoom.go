@@ -10,7 +10,7 @@ import (
 )
 
 // Zoom levels, in percent, matching touchkio's range: 25%..400%. 100% is no
-// zoom. HA's number entity exposes these in 5% steps (see mqtt.go).
+// zoom. HA's number entity exposes these in 5% steps.
 const (
 	zoomMin     = 25
 	zoomMax     = 400
@@ -22,7 +22,7 @@ const (
 // state dir and an agent inside the Sway session applies it over Chromium's CDP
 // port (CSS zoom). See kiosk.nix for that agent. The level is persisted so it
 // survives a reboot (there's no readback from the browser), and an observer is
-// notified after any change so the MQTT bridge republishes it.
+// notified after any change so the HA hub broadcasts it.
 type Zoom struct {
 	mu       sync.Mutex
 	pct      int
@@ -42,7 +42,7 @@ func NewZoom() *Zoom {
 }
 
 // SetObserver registers a callback fired (outside the lock) after any change, so
-// the MQTT bridge can republish the level.
+// the HA hub can broadcast the level.
 func (z *Zoom) SetObserver(f func()) {
 	z.mu.Lock()
 	z.observer = f
@@ -59,7 +59,7 @@ func (z *Zoom) Level() int {
 // Set requests an absolute zoom level (25..400), persists it, and drives the
 // in-session agent over the FIFO. Writing is non-blocking: if the kiosk session
 // isn't up there's no reader, and we report that rather than hang the caller (an
-// MQTT command handler) — the persisted value is still restored on next launch.
+// API command handler) — the persisted value is still restored on next launch.
 func (z *Zoom) Set(pct int) error {
 	pct = clampZoom(pct)
 	z.mu.Lock()

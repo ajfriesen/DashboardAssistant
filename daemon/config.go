@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -17,14 +18,15 @@ import (
 var stateDir = envOr("DASHBOARD_ASSISTANT_STATE_DIR", "/var/lib/dashboard-assistant")
 
 var (
-	runtimeEnv  = stateDir + "/runtime.env"
-	markerFile  = stateDir + "/provisioned"
-	tokenFile   = stateDir + "/token"        // long-lived HA token for kiosk login injection
-	displayFifo = stateDir + "/display.fifo" // daemon writes on/off; kiosk agent applies via swaymsg
+	runtimeEnv   = stateDir + "/runtime.env"
+	markerFile   = stateDir + "/provisioned"
+	onlineMarker = stateDir + "/online-once"  // set the first time the device is on the network; separates first-connect from a real reconnect
+	tokenFile    = stateDir + "/token"        // long-lived HA token for kiosk login injection
+	displayFifo  = stateDir + "/display.fifo" // daemon writes on/off; kiosk agent applies via swaymsg
 	// Reverse channel: in-session agents write the *actual* power state here and
 	// the daemon publishes it, so HA stays in sync with out-of-band changes.
 	displayStateFifo = stateDir + "/display-state.fifo"
-	mqttFile         = stateDir + "/mqtt.env"   // runtime MQTT settings, written by the web UI / config import
+	apiTokenFile     = stateDir + "/api-token"  // device HA API token, generated on first boot / written by config import
 	urlsFile         = stateDir + "/urls.json"  // pushable page list (name+url), web UI / config import
 	navFifo          = stateDir + "/nav.fifo"   // daemon writes a URL; in-session agent navigates Chromium there
 	zoomFifo         = stateDir + "/zoom.fifo"  // daemon writes "zoom <pct>"; in-session agent applies CSS zoom over CDP
@@ -43,18 +45,13 @@ func envOr(key, def string) string {
 	return def
 }
 
-// Provisioned reports whether the device has ever completed setup. It is the
-// sticky bit that separates a fresh device (SETUP) from a set-up-but-offline
-// one (RECONNECT) — deliberately independent of live network state.
+// Provisioned reports whether the device has ever completed setup. Once online,
+// it is the sticky bit that separates a never-configured device (SETUP — the
+// guided add-to-HA screen) from a configured one (READY). Independent of live
+// network state, which deriveState checks first.
 func Provisioned() bool {
 	_, err := os.Stat(markerFile)
 	return err == nil
-}
-
-// ConfigValid reports whether runtime.env parses and carries a non-empty HA_URL.
-func ConfigValid() bool {
-	url, err := readHAURL()
-	return err == nil && url != ""
 }
 
 func readHAURL() (string, error) {
@@ -127,6 +124,26 @@ func writeToken(tok string) error {
 // markProvisioned drops the sticky marker. Also called by the flash-time seed.
 func markProvisioned() error {
 	return os.WriteFile(markerFile, []byte("1\n"), 0o664)
+}
+
+// WasOnline reports whether the device has reached the network at least once.
+// It separates a fresh, seeded-but-never-online device (which is *connecting*
+// for the first time) from a provisioned one that dropped its link (which is
+// *reconnecting*), so the waiting splash can say the accurate thing.
+func WasOnline() bool {
+	_, err := os.Stat(onlineMarker)
+	return err == nil
+}
+
+// markOnline drops the sticky "has been online" marker, idempotently — cheap to
+// call repeatedly since it no-ops once the file exists.
+func markOnline() {
+	if WasOnline() {
+		return
+	}
+	if err := os.WriteFile(onlineMarker, []byte("1\n"), 0o664); err != nil {
+		log.Printf("mark online: %v", err)
+	}
 }
 
 // restartKiosk restarts the greetd session over the systemd D-Bus API. A scoped

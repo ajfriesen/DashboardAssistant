@@ -72,6 +72,7 @@
     </span>
     <nav class="tabs">
       <a id="tab-btn-info" class="tab active">Info</a>
+      <a id="tab-btn-pair" class="tab">Add to HA</a>
       <a id="tab-btn-recovery" class="tab">Recovery</a>
       <a id="tab-btn-diag" class="tab hidden">Diagnostics</a>
     </nav>
@@ -86,6 +87,26 @@
       </p>
       <dl id="infoRows" class="info"></dl>
       <div id="infoMsg" class="msg"></div>
+    </div>
+
+    <div id="panel-pair" class="hidden">
+      <p class="hint">
+        Add this device to Home Assistant without typing the token. Press
+        <b>Pair</b> below, then within a minute and a half open Home Assistant →
+        <b>Settings → Devices &amp; services</b> and add the discovered
+        <b>Dashboard Assistant</b>. It connects automatically — no token to copy.
+      </p>
+
+      <button id="pairArm" type="button">Pair with Home Assistant</button>
+
+      <div id="pairOut" class="hidden">
+        <div class="diagbig code" id="pairCountdown"></div>
+        <p class="hint" style="text-align:center;margin-top:.75rem;">
+          Pairing is open. In Home Assistant, add the discovered
+          <b>Dashboard Assistant</b> now.
+        </p>
+      </div>
+      <div id="pairMsg" class="msg"></div>
     </div>
 
     <div id="panel-recovery" class="hidden">
@@ -126,16 +147,54 @@
 
     // Tabs: Info (read-only identity), Recovery (rollback), Diagnostics (opt-in).
     function showTab(name) {
-      for (const t of ["info", "recovery", "diag"]) {
+      for (const t of ["info", "pair", "recovery", "diag"]) {
         $("panel-" + t).classList.toggle("hidden", name !== t);
         $("tab-btn-" + t).classList.toggle("active", name === t);
       }
       if (name === "info") loadInfo();
       if (name === "recovery") loadGenerations();
+      if (name !== "pair") stopPairCountdown();
     }
     $("tab-btn-info").addEventListener("click", () => showTab("info"));
+    $("tab-btn-pair").addEventListener("click", () => showTab("pair"));
     $("tab-btn-recovery").addEventListener("click", () => showTab("recovery"));
     $("tab-btn-diag").addEventListener("click", () => showTab("diag"));
+
+    // Pairing: open a short window in which Home Assistant can fetch the API token
+    // over the LAN without anyone typing it. Being on this loopback screen is the
+    // physical-presence proof, so the button just arms the window and counts down.
+    let pairTimer = null;
+    const pmsg = (t, cls) => { const m = $("pairMsg"); m.textContent = t; m.className = "msg " + (cls || ""); };
+
+    function stopPairCountdown() {
+      if (pairTimer) { clearInterval(pairTimer); pairTimer = null; }
+      $("pairOut").classList.add("hidden");
+      $("pairArm").disabled = false;
+    }
+
+    async function armPairing() {
+      $("pairArm").disabled = true;
+      pmsg("Opening pairing…");
+      try {
+        const res = await fetch("/api/pair/arm", { method: "POST" });
+        if (!res.ok) throw new Error("Request failed (" + res.status + ").");
+        const d = await res.json();
+        pmsg("", "");
+        $("pairOut").classList.remove("hidden");
+        let left = d.expires_in || 90;
+        const tick = () => {
+          $("pairCountdown").textContent = left + "s";
+          if (left <= 0) { stopPairCountdown(); pmsg("Pairing window closed. Press Pair to try again."); return; }
+          left -= 1;
+        };
+        tick();
+        pairTimer = setInterval(tick, 1000);
+      } catch (e) {
+        pmsg("Could not open pairing: " + e.message, "err");
+        $("pairArm").disabled = false;
+      }
+    }
+    $("pairArm").addEventListener("click", armPairing);
 
     // Diagnostics: mint a one-time code + LAN URL the user opens on their phone.
     // The session endpoint only exists when the feature is enabled, so probe it
@@ -221,11 +280,13 @@
       ["mac", "MAC address"],
       ["ip", "IP address"],
       ["machine_id", "Machine ID"],
-      ["node_id", "MQTT node ID"],
+      ["node_id", "Device ID"],
       ["model", "Model"],
       ["serial", "Serial"],
       ["version", "Version"],
       ["ha_url", "Home Assistant URL"],
+      ["api_url", "Integration URL"],
+      ["api_token", "Integration token"],
     ];
     async function loadInfo() {
       const box = $("infoRows");

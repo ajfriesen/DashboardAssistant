@@ -21,15 +21,17 @@ icon: lucide/sparkles
 
 **Seed-file provisioning**
 
-- Configured entirely from a small YAML seed file (HA URL, token, Wi-Fi, MQTT,
-  dashboard URLs) dropped on a USB stick or the boot partition — no on-screen
-  wizard, so a person at the panel can't re-point the device.
+- Configured entirely from a small YAML seed file (HA URL, token, Wi-Fi,
+  dashboard URLs, optional integration token) dropped on a USB stick or the boot
+  partition — no on-screen wizard, so a person at the panel can't re-point the
+  device.
 - On-device ⚙ Config panel is read-only: Info and Recovery tabs only.
 
 ## Home Assistant integration
 
-Once you give the device your MQTT broker, it auto-discovers as a single
-**Dashboard Assistant** device with these entities:
+Install the first-party **Dashboard Assistant** integration (via HACS) and Home
+Assistant discovers the device over mDNS, pairing with the API token shown on the
+device's Config → Info screen. It appears as a single device with these entities:
 
 ### Controls
 

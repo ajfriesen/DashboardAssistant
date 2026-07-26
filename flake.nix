@@ -42,7 +42,7 @@
     {
       nixosConfigurations = {
         # Live ISO — boots from removable media (USB / SATA-via-USB adapter).
-        dashboard-assistant-x86 = lib.nixosSystem {
+        dashboard-assistant-x86-live= lib.nixosSystem {
           inherit system;
           specialArgs = { inherit impermanence version; };
           modules = [

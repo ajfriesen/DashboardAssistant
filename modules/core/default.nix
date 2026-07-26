@@ -5,7 +5,7 @@
     "${modulesPath}/profiles/minimal.nix"
     ./kiosk.nix
     ./daemon.nix
-    ./mqtt.nix
+    ./ha-api.nix
     ./update.nix
     ./configimport.nix
     ./diagnostics.nix

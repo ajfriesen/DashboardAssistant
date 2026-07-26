@@ -13,9 +13,9 @@ import (
 // browser directly, so it writes "theme <dark|light>" to a FIFO in the shared
 // state dir and an agent inside the Sway session flips HA's theme over
 // Chromium's CDP port (a `settheme` frontend event). See kiosk.nix for that
-// agent. The choice is persisted so the MQTT state survives a daemon restart (HA
-// itself persists the applied theme server-side), and an observer is notified
-// after any change so the MQTT bridge republishes it.
+// agent. The choice is persisted so the reported state survives a daemon restart
+// (HA itself persists the applied theme server-side), and an observer is notified
+// after any change so the HA hub broadcasts it.
 type Theme struct {
 	mu       sync.Mutex
 	dark     bool
@@ -34,7 +34,7 @@ func NewTheme() *Theme {
 }
 
 // SetObserver registers a callback fired (outside the lock) after any change, so
-// the MQTT bridge can republish the state.
+// the HA hub can broadcast the state.
 func (t *Theme) SetObserver(f func()) {
 	t.mu.Lock()
 	t.observer = f
@@ -51,7 +51,7 @@ func (t *Theme) Dark() bool {
 // Set requests dark (true) or light (false), persists it, and drives the
 // in-session agent over the FIFO. Writing is non-blocking: if the kiosk session
 // isn't up there's no reader, and we report that rather than hang the caller (an
-// MQTT command handler) — the persisted value is still restored on next launch.
+// API command handler) — the persisted value is still restored on next launch.
 func (t *Theme) Set(dark bool) error {
 	mode := "light"
 	if dark {

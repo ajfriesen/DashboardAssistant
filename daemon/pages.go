@@ -10,8 +10,8 @@ import (
 )
 
 // pageSlots is how many editable "Page N" text entities we expose to HA for
-// editing the list (each holds "Name | URL"). A fixed count because MQTT
-// discovery entities are static; bump it for more capacity.
+// editing the list (each holds "Name | URL"). A fixed count so the integration
+// creates a stable set of text entities; bump it for more capacity.
 const pageSlots = 10
 
 // Page is one entry in the pushable URL list exposed to Home Assistant as a
@@ -32,7 +32,7 @@ func (p Page) Label() string {
 
 // Pages holds the configured page list and the index currently pushed to the
 // display, and drives the in-session browser over the nav FIFO. Like Display it
-// notifies an observer after any change so the MQTT bridge can republish state.
+// notifies an observer after any change so the HA hub can broadcast state.
 type Pages struct {
 	mu       sync.Mutex
 	list     []Page
@@ -56,7 +56,7 @@ func NewPages() *Pages {
 }
 
 // SetObserver registers a callback fired (outside the lock) after any change, so
-// the MQTT bridge can republish the current page.
+// the HA hub can broadcast the current page.
 func (p *Pages) SetObserver(f func()) {
 	p.mu.Lock()
 	p.observer = f

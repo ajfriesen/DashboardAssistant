@@ -1,10 +1,10 @@
 # Show this help menu (default when `just` is run with no arguments).
 help:
-  @echo "ha-dashboard-os — just recipes"
+  @echo "dashboard-assistant OS — just recipes"
   @echo
   @echo "Build images:"
-  @echo "  build-image            Build the bootable installer ISO (x86)"
-  @echo "  build-disk             Build the installable raw disk image (btrfs+zstd)"
+  @echo "  build-live-iso            Build the bootable installer ISO (x86)"
+  @echo "  build-disk-image             Build the installable raw disk image (btrfs+zstd)"
   @echo "  build-rpi4             Build the Raspberry Pi 4 SD-card image (aarch64)"
   @echo
   @echo "Run / connect (QEMU):"
@@ -22,18 +22,23 @@ help:
   @echo "Run 'just --list' for the raw recipe list."
 
 [doc('Build the bootable installer ISO (x86)')]
-build-image:
-  nix build .#nixosConfigurations.dashboard-x86.config.system.build.isoImage
+build-live-iso:
+  nix build .#nixosConfigurations.dashboard-assistant-x86-live.config.system.build.isoImage
+  @iso=$(ls "$(readlink -f result)"/iso/*.iso); \
+    echo; \
+    echo "Image: $iso"; \
+    echo "Flash it to a USB stick (confirm the device first!):"; \
+    echo "  sudo dd if=$iso of=/dev/disk/by-id/ata-WDC_WDS100T2B0A-00SM50_195206A003DE bs=4M oflag=sync conv=fsync status=progress"
 
 # Build the installable raw disk image (btrfs+zstd, built by disko). dd
-# result/ha-dashboard.raw to the SSD, then boot it from the native SATA port.
+# result/dashboard-assistant.raw to the SSD, then boot it from the native SATA port.
 [doc('Build the installable raw disk image (btrfs+zstd)')]
-build-disk:
+build-disk-image:
   nix build .#disk-image
   @echo
-  @echo "Image: $(readlink -f result)/ha-dashboard.raw"
+  @echo "Image: $(readlink -f result)/dashboard-assistant.raw"
   @echo "Flash it (confirm the device first!):"
-  @echo "  sudo dd if=$(readlink -f result)/ha-dashboard.raw of=/dev/sdX bs=4M oflag=sync conv=fsync status=progress"
+  @echo "  sudo dd if=$(readlink -f result)/dashboard-assistant.raw of=/dev/disk/by-id/ata-WDC_WDS100T2B0A-00SM50_195206A003DE bs=4M oflag=sync conv=fsync status=progress"
 
 # Build the Raspberry Pi 4 (aarch64) SD-card image. On an x86 host this builds
 # via binfmt emulation, fetching most from the binary cache — the Pi kernel +
@@ -133,7 +138,7 @@ options:
     let
       f = builtins.getFlake (toString ./.);
       lib = f.inputs.nixpkgs.lib;
-      docs = lib.optionAttrSetToDocList f.nixosConfigurations.dashboard-x86-disk.options.dashboard;
+      docs = lib.optionAttrSetToDocList f.nixosConfigurations.dashboard-assistant-x86-disk.options.dashboardAssistant;
     in map (o: {
       name = o.name;
       type = o.type;

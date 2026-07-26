@@ -4,11 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
-	"time"
 
-	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/gorilla/websocket"
 )
 
@@ -48,9 +45,10 @@ func cdpPageWS(ctx context.Context) (string, error) {
 }
 
 // captureScreenshot grabs a JPEG of the current kiosk web page over CDP
-// (Page.captureScreenshot) and returns it base64-encoded — ready to publish to an
-// MQTT camera with image_encoding "b64". It needs the loopback CDP port to be
-// open (autoLogin with a staged token, or dev remote-debugging).
+// (Page.captureScreenshot) and returns it base64-encoded. The HA API decodes it
+// and caches the JPEG, which the integration's image entity fetches. It needs the
+// loopback CDP port to be open (autoLogin with a staged token, or dev
+// remote-debugging).
 func captureScreenshot(ctx context.Context) (string, error) {
 	wsURL, err := cdpPageWS(ctx)
 	if err != nil {
@@ -98,22 +96,4 @@ func captureScreenshot(ctx context.Context) (string, error) {
 		}
 		return resp.Result.Data, nil
 	}
-}
-
-// onScreenshot captures the web view and publishes it to the camera topic when
-// HA's "Take screenshot" button is pressed. Runs in a goroutine so the CDP
-// round-trip never blocks the MQTT handler; a failure (e.g. the debug port isn't
-// open) is logged and the camera simply keeps its previous image.
-func (b *Bridge) onScreenshot(client mqtt.Client, _ mqtt.Message) {
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-		img, err := captureScreenshot(ctx)
-		if err != nil {
-			log.Printf("mqtt: screenshot: %v", err)
-			return
-		}
-		// Retained so HA shows the most recent shot after its own restart.
-		b.publish(client, b.screenshotImageTopic, []byte(img), true)
-	}()
 }

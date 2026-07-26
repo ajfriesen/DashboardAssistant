@@ -27,7 +27,7 @@ A few looks at Dashboard Assistant running on real hardware.
 </figure>
 
 <figure markdown="span">
-  ![Controlling the panel from Home Assistant over MQTT](img/mqtt_control.png)
+  ![Controlling the panel from Home Assistant](img/mqtt_control.png)
   <figcaption>The panel exposed back to Home Assistant as a device — display, zoom, screenshot, updates and sensors.</figcaption>
 </figure>
 

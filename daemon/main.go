@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"embed"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -26,27 +27,37 @@ var webFS embed.FS
 type State string
 
 const (
-	StateSetup     State = "SETUP"     // fresh device — show the wizard
-	StateReconnect State = "RECONNECT" // provisioned but offline — show splash
-	StateReady     State = "READY"     // provisioned and online — show HA
+	StateSetup      State = "SETUP"      // fresh device — show the seed/awaiting-config splash
+	StateConnecting State = "CONNECTING" // provisioned but never yet online — first-time connect
+	StateReconnect  State = "RECONNECT"  // provisioned, was online, link dropped — reconnecting
+	StateReady      State = "READY"      // provisioned and online — show HA
 )
 
 type server struct {
 	nm    *NetworkManager // nil if no Wi-Fi device / D-Bus unavailable
-	mqtt  *MQTTManager    // owns the runtime-reconfigurable MQTT bridge
+	ha    *HAHub          // owns the HA API state + SSE subscribers
 	pages *Pages          // the pushable page list + current index
 	diag  *diagSession    // one-time code for the opt-in LAN diagnostics page
 }
 
 // deriveState implements the first-boot decision flow.
 func (s *server) deriveState() State {
-	if !Provisioned() {
-		return StateSetup
-	}
+	// Network first: a device that isn't on the network yet can't be shown a
+	// dashboard or added to Home Assistant, so offline always shows connect/
+	// reconnect — distinguished so a fresh device says "connecting", not the
+	// misleading "reconnecting".
 	if s.nm == nil || !s.nm.Connected() {
-		return StateReconnect
+		if WasOnline() {
+			return StateReconnect
+		}
+		return StateConnecting
 	}
-	if !ConfigValid() {
+	// Online but not yet added → the guided "add me in Home Assistant" screen
+	// (pairing pushes the login token, and optionally a URL). Once added the
+	// device is READY: the kiosk shows the configured dashboard URL, or the
+	// built-in default (http://homeassistant:8123/) when none was pushed — a
+	// present default never keeps a set-up device stuck on the add screen.
+	if !Provisioned() {
 		return StateSetup
 	}
 	return StateReady
@@ -73,27 +84,34 @@ func main() {
 	upd := NewUpdateChecker()
 	zoom := NewZoom()
 	theme := NewTheme()
-	srv := &server{nm: nm, mqtt: NewMQTTManager(disp, pages, act, upd, zoom, theme), pages: pages, diag: newDiagSession()}
+	hub := NewHAHub(loadAPIToken(), disp, pages, act, upd, zoom, theme)
+	srv := &server{nm: nm, ha: hub, pages: pages, diag: newDiagSession()}
 
-	// MQTT bridge to Home Assistant (opt-in: disabled unless a broker is set).
-	// Settings come from the environment overlaid by the runtime state file the
-	// setup UI / config import write, so this also picks up later changes.
-	srv.mqtt.Apply(loadMQTTConfig())
+	// Home Assistant API: an authenticated LAN listener the first-party HACS
+	// integration polls and subscribes to (SSE). Runs on its own port, separate
+	// from the loopback :8080 admin surface below.
+	go serveHAAPI(hub)
 
 	// Reverse channel: the in-session agents report the real display power state
 	// and touch activity here, keeping HA in sync with changes that never went
-	// through an MQTT command.
+	// through an API command (the hub observers broadcast them over SSE).
 	go watchDisplayState(disp, act)
 
-	// Poll the release source for the latest version; the checker fires the MQTT
-	// bridge's observer to republish the update entity whenever it changes.
+	// Move the kiosk off the "Reconnecting…" splash once the device becomes READY.
+	// The launcher only reads state once at session start, so a box that booted
+	// offline would otherwise sit on the splash forever after the network returns.
+	go watchReadyTransition(srv)
+
+	// Poll the release source for the latest version; the checker fires the hub's
+	// observer to push the update state whenever it changes.
 	go upd.Run()
 
 	// Refresh the periodic sensors on a ticker: the touch counter (so it climbs
-	// while idle; touches reset it to 0 immediately via the observer) and memory.
+	// while idle; touches reset it to 0 immediately via the observer), memory,
+	// disk and host diagnostics — broadcast to SSE subscribers.
 	go func() {
 		for range time.Tick(10 * time.Second) {
-			srv.mqtt.PublishTelemetry()
+			hub.broadcast()
 		}
 	}()
 
@@ -108,14 +126,19 @@ func main() {
 	// just the read-only Info and Recovery tabs, nothing that re-points the kiosk.
 	mux.Handle("/setup", loopbackOnly(http.HandlerFunc(srv.handleSetupPage)))
 	mux.Handle("/waiting", loopbackOnly(http.HandlerFunc(srv.handleWaitingPage)))
-	// Import a YAML config bundle (HA URL / token / Wi-Fi / MQTT / pages), fed by
-	// the USB and ESP importers. Loopback only. This is the sole config path.
+	// Import a YAML config bundle (HA URL / token / Wi-Fi / API token / pages), fed
+	// by the USB and ESP importers. Loopback only. This is the sole config path.
 	mux.Handle("/api/import", loopbackOnly(http.HandlerFunc(srv.handleImport)))
 	// Page navigation (waybar Prev/Next buttons). The page list itself is managed
-	// over MQTT (the "Page N" text slots), not through the web UI.
+	// through the HA integration (the "Page N" text slots), not the web UI.
 	mux.Handle("/api/nav", loopbackOnly(http.HandlerFunc(srv.handleNav)))
 	// Read-only device info for the setup UI's Info tab (identity + network).
 	mux.Handle("/api/info", loopbackOnly(http.HandlerFunc(srv.handleInfo)))
+	// Pairing: the Config screen's "Pair" button opens a short window during which
+	// Home Assistant can fetch the API token over the LAN listener without anyone
+	// typing it. Loopback only — reaching this is the physical-presence proof.
+	mux.Handle("/api/pair/arm", loopbackOnly(http.HandlerFunc(srv.handlePairArm)))
+	mux.Handle("/api/pair/status", loopbackOnly(http.HandlerFunc(srv.handlePairStatus)))
 	// Recovery: list bootable generations and roll back into one (reboots).
 	mux.Handle("/api/generations", loopbackOnly(http.HandlerFunc(srv.handleGenerations)))
 	mux.Handle("/api/rollback", loopbackOnly(http.HandlerFunc(srv.handleRollback)))
@@ -244,12 +267,50 @@ func (s *server) handleInfo(w http.ResponseWriter, r *http.Request) {
 		"mac":        primaryMAC(),
 		"ip":         primaryIP(),
 		"machine_id": machineID(),
-		"node_id":    loadMQTTConfig().NodeID,
+		"node_id":    s.ha.nodeID,
 		"model":      readModel(),
 		"serial":     readSerial(),
 		"version":    installedVersion(),
 		"ha_url":     haURL,
+		// Shown on the Config screen so the operator can add the device to Home
+		// Assistant: the API endpoint the integration connects to, and its token.
+		"api_url":   fmt.Sprintf("http://%s%s", primaryIP(), apiPort()),
+		"api_token": s.ha.token,
 	})
+}
+
+// handlePairArm opens the pairing window so Home Assistant can fetch the API
+// token without the operator typing it. Loopback-only: reaching this from the
+// on-screen Config panel is the physical-presence proof that authorises the
+// hand-off. Returns the seconds the window stays open.
+func (s *server) handlePairArm(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "POST only"})
+		return
+	}
+	s.ha.pair.Arm()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"armed":      true,
+		"expires_in": s.ha.pair.Remaining(),
+		"api_url":    fmt.Sprintf("http://%s%s", primaryIP(), apiPort()),
+	})
+}
+
+// handlePairStatus reports the remaining pairing window, for the Config screen's
+// live countdown.
+func (s *server) handlePairStatus(w http.ResponseWriter, r *http.Request) {
+	rem := s.ha.pair.Remaining()
+	writeJSON(w, http.StatusOK, map[string]any{"armed": rem > 0, "expires_in": rem})
+}
+
+// apiPort returns the ":<port>" suffix of the HA API listener for display in the
+// Config screen's connection hint.
+func apiPort() string {
+	addr := envOr("DASHBOARD_ASSISTANT_API_ADDR", ":8081")
+	if _, port, err := net.SplitHostPort(addr); err == nil && port != "" {
+		return ":" + port
+	}
+	return addr
 }
 
 // handleGenerations lists the bootable NixOS generations for the recovery UI.
@@ -293,7 +354,7 @@ func (s *server) handleRollback(w http.ResponseWriter, r *http.Request) {
 }
 
 // watchDisplayState tails the reverse FIFO, reporting each "on"/"off" line the
-// in-session agents write into the Display (which republishes over MQTT). The
+// in-session agents write into the Display (which broadcasts over SSE). The
 // FIFO is opened O_RDWR so the daemon always keeps a writer fd of its own —
 // reads then block for data instead of hitting EOF each time a writer closes,
 // and writers never get ENXIO for a missing reader. Reopens on any error.
@@ -326,6 +387,40 @@ func watchDisplayState(disp *Display, act *Activity) {
 		}
 		f.Close()
 		time.Sleep(time.Second)
+	}
+}
+
+// watchReadyTransition relaunches the kiosk when the device rises into READY from
+// any other state — the network came back, or a seed made the config valid. The
+// launcher (kiosk.nix) only reads /api/state once at startup and then execs
+// Chromium at a fixed URL, so without this a box that booted offline stays on the
+// waiting splash even after it reconnects. Restarting re-runs the state-aware
+// launcher (which now picks the dashboard) and, with it, a fresh autologin pass.
+//
+// It fires only on the rising edge into READY, and re-checks after a short settle
+// so a flapping link doesn't thrash the session. The initial state is seeded from
+// the current value, so a daemon (re)start while already READY doesn't relaunch.
+func watchReadyTransition(srv *server) {
+	last := srv.deriveState()
+	for range time.Tick(3 * time.Second) {
+		// Once the link is up, remember it — future offline spells are "reconnecting",
+		// not a first-time "connecting". Idempotent after the first write.
+		if srv.nm != nil && srv.nm.Connected() {
+			markOnline()
+		}
+		cur := srv.deriveState()
+		if cur == StateReady && last != StateReady {
+			time.Sleep(2 * time.Second) // let the link settle before disrupting the session
+			if srv.deriveState() != StateReady {
+				last = cur
+				continue
+			}
+			log.Printf("kiosk: device READY (was %s) — relaunching into the dashboard", last)
+			if err := restartKiosk(); err != nil {
+				log.Printf("kiosk: restart on ready: %v", err)
+			}
+		}
+		last = cur
 	}
 }
 

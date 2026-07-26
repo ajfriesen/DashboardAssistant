@@ -3,7 +3,7 @@
 # Reporting (all targets): bakes the release version into the image so the daemon
 # can tell Home Assistant which version is "installed", and points it at a
 # release source to discover the "latest". The daemon exposes both as a single HA
-# MQTT `update` entity (see daemon/update.go, daemon/mqtt.go).
+# `update` entity through the integration API (see daemon/update.go, daemon/ha.go).
 #
 # Applying (installable targets only — the persistent disk / SD image, not the
 # ephemeral ISO): a privileged, root-run `dashboard-assistant-update@<tag>.service` does the

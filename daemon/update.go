@@ -60,8 +60,8 @@ type UpdateState struct {
 }
 
 // UpdateChecker polls the release source for the newest version and holds the
-// result for the MQTT bridge to publish. It mirrors the Display/Activity
-// observer pattern: on a change it fires the observer so the bridge republishes.
+// result for the HA hub to publish. It mirrors the Display/Activity observer
+// pattern: on a change it fires the observer so the hub broadcasts fresh state.
 type UpdateChecker struct {
 	repo        string
 	apiBase     string
@@ -227,8 +227,8 @@ func normalizeVersion(s string) string {
 	return s
 }
 
-// summarise trims the release body and caps it, keeping the retained MQTT
-// payload small (HA shows it as the release notes).
+// summarise trims the release body and caps it, keeping the state payload small
+// (HA shows it as the release notes).
 func summarise(body string) string {
 	body = strings.TrimSpace(body)
 	if len(body) > releaseSummaryMax {

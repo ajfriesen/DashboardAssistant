@@ -18,7 +18,7 @@ let
   vboard = pkgs.callPackage ../../packages/vboard.nix { };
   # Fallback dashboard target if runtime.env is somehow missing. Normal config
   # lives in /var/lib/dashboard-assistant/runtime.env (HA_URL=...), written by the daemon.
-  defaultUrl = "http://homeassistant.local:8123";
+  defaultUrl = "http://homeassistant:8123/";
   daemonBase = "http://localhost:8080";
   # Long-lived HA token staged by the daemon (config import / seed).
   tokenPath = "/var/lib/dashboard-assistant/token";
@@ -26,19 +26,19 @@ let
   # clears it and powers the display back on when input (e.g. a touch) arrives.
   displayOffFlag = "/var/lib/dashboard-assistant/display-off";
   # Reverse status channel: the daemon can only track power changes it commands
-  # over MQTT, so anything that changes the panel in-session (Off button, wake-on-
+  # over its HA API, so anything that changes the panel in-session (Off button, wake-on-
   # touch, a session restart) must report the *actual* state here for the daemon
   # to republish — otherwise HA drifts out of sync. Best-effort, non-blocking:
   # timeout guards the rare window where the daemon isn't holding the FIFO open,
   # so reporting never wedges the caller. Read by watchDisplayState in the daemon.
   displayStateFifo = "/var/lib/dashboard-assistant/display-state.fifo";
-  # Browser zoom: the daemon writes "zoom <pct>" to this FIFO (backing the MQTT
+  # Browser zoom: the daemon writes "zoom <pct>" to this FIFO (backing the HA
   # "Zoom" number entity) and persists the chosen level to zoomFile so the kiosk
   # can restore it after a navigation or a session restart. See zoomAgent below.
   zoomFifo = "/var/lib/dashboard-assistant/zoom.fifo";
   zoomFile = "/var/lib/dashboard-assistant/zoom";
   # Dark/light mode: the daemon writes "theme <dark|light>" to this FIFO (backing
-  # the MQTT "Dark mode" switch) and persists the choice to themeFile so the kiosk
+  # the HA "Dark mode" switch) and persists the choice to themeFile so the kiosk
   # can re-assert it after a navigation or a session restart. See themeAgent below.
   themeFifo = "/var/lib/dashboard-assistant/theme.fifo";
   themeFile = "/var/lib/dashboard-assistant/theme";
@@ -118,7 +118,7 @@ let
   # Display power agent: the daemon (running as dashboard-assistant) can't reach Sway's
   # IPC socket under the kiosk user's 0700 runtime dir, so it writes "on"/"off"
   # to a shared FIFO and this in-session loop applies it via swaymsg. Backs the
-  # MQTT "Display" light entity. The FIFO is created by tmpfiles (see below);
+  # HA "Display" light entity. The FIFO is created by tmpfiles (see below);
   # the outer sleep just avoids a busy loop if it's briefly missing.
   displayAgent = pkgs.writeShellScript "ha-display-agent" ''
     # Sway does not reap its exec'd children, so a kiosk restart orphans the
@@ -147,8 +147,8 @@ let
     # becomes cmd=bright arg=40; "on"/"off" leave arg empty.
     while IFS=' ' read -r cmd arg <&3; do
       # Apply, then report the actual state back so HA reflects it — this also
-      # covers commands that originate outside MQTT. Arm/disarm the wake-on-touch
-      # flag here too (not just on the Off button), so an MQTT/HA power-off also
+      # covers commands that originate outside the HA API. Arm/disarm the wake-on-touch
+      # flag here too (not just on the Off button), so an HA power-off also
       # lets the next touch re-power the display.
       case "$cmd" in
         on)  ${pkgs.sway}/bin/swaymsg 'output * power on'  >/dev/null 2>&1 || true
@@ -322,7 +322,7 @@ let
     exec ${cdpNav} "$HA_URL"
   '';
 
-  # Navigation agent: the daemon writes a target URL to the nav FIFO — on an MQTT
+  # Navigation agent: the daemon writes a target URL to the nav FIFO — on an HA
   # page select / Next / Prev, or the waybar Prev/Next buttons (which POST to the
   # daemon) — and this in-session loop navigates the browser there via cdpNav.
   # Held open read-write (fd 3) for the whole session and de-orphaned on start,
@@ -382,7 +382,7 @@ let
     done
   '';
 
-  # Zoom agent: the daemon writes "zoom <pct>" to the zoom FIFO (backing the MQTT
+  # Zoom agent: the daemon writes "zoom <pct>" to the zoom FIFO (backing the HA
   # "Zoom" number entity) and this in-session loop applies it immediately. Held
   # open read-write (fd 3) for the whole session and de-orphaned on start, exactly
   # like the display and nav agents, so the daemon's writes never race a reopen.
@@ -440,7 +440,7 @@ let
   '';
 
   # Theme agent: the daemon writes "theme <dark|light>" to the theme FIFO (backing
-  # the MQTT "Dark mode" switch) and this in-session loop applies it immediately.
+  # the HA "Dark mode" switch) and this in-session loop applies it immediately.
   # Held open read-write (fd 3) for the whole session and de-orphaned on start,
   # exactly like the display, nav and zoom agents.
   themeAgent = pkgs.writeShellScript "ha-theme-agent" ''
@@ -470,7 +470,7 @@ let
   # Brightness backend, resolved once per session. There is no single "dim the
   # screen" on Linux — it depends on the panel — so a resolver detects which of
   # three tiers to use and stashes the choice in ${brightnessEnv}; brightnessSet
-  # (driven by the HA brightness slider over MQTT) reads that and acts. Detection
+  # (driven by the HA brightness slider) reads that and acts. Detection
   # runs once because ddcutil probing is slow; per-set we only source a tiny file.
   #   backlight → /sys/class/backlight exists (internal eDP/tablet panel):
   #               brightnessctl, via the video-group udev rule.
@@ -634,7 +634,7 @@ let
   # exclusive zone, so Sway reserves the strip and tiles Chromium into the space
   # above it — no manual splitting. The OSK stays on the "top" layer, so it still
   # overlays the bar when it pops. Power and brightness are controlled from Home
-  # Assistant (the MQTT Display light), so the bar only carries navigation and the
+  # Assistant (the HA Display light), so the bar only carries navigation and the
   # keyboard toggle. Each button is a custom module whose on-click runs a command
   # as the kiosk user.
   waybarConfig = pkgs.writeText "ha-kiosk-waybar.json" ''
@@ -738,19 +738,19 @@ let
     no_focus [app_id="${oskAppId}"]
     for_window [app_id="${oskAppId}"] floating enable, sticky enable, border none
 
-    # Applies display on/off requests from the daemon (MQTT "Display" light).
+    # Applies display on/off requests from the daemon (HA "Display" light).
     exec ${displayAgent}
 
-    # Navigates the browser when a page is pushed/cycled (MQTT select + Next/Prev,
+    # Navigates the browser when a page is pushed/cycled (HA select + Next/Prev,
     # or the waybar Prev/Next buttons).
     exec ${navAgent}
 
-    # Applies browser zoom changes from the MQTT "Zoom" number entity, and
+    # Applies browser zoom changes from the HA "Zoom" number entity, and
     # restores the persisted level to the browser once it has loaded at startup.
     exec ${zoomAgent}
     exec ${zoomRestore}
 
-    # Applies dark/light changes from the MQTT "Dark mode" switch, and re-asserts
+    # Applies dark/light changes from the HA "Dark mode" switch, and re-asserts
     # a persisted dark theme once the dashboard has loaded at startup.
     exec ${themeAgent}
     exec ${themeRestore}
@@ -873,7 +873,7 @@ in
       # FIFO the daemon writes display on/off to; the in-session agent reads it.
       "p /var/lib/dashboard-assistant/display.fifo 0660 dashboard-assistant dashboard-assistant - -"
       # Reverse FIFO: the in-session agents report the actual power state; the
-      # daemon reads it and republishes over MQTT so HA stays in sync.
+      # daemon reads it and broadcasts over SSE so HA stays in sync.
       "p /var/lib/dashboard-assistant/display-state.fifo 0660 dashboard-assistant dashboard-assistant - -"
       # Nav FIFO: the daemon writes a target URL; the in-session nav agent reads
       # it and navigates the browser.
