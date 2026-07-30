@@ -281,15 +281,20 @@ let
     }
 
     # Poll for up to ~120s. status = "<on-HA-origin>|<has-tokens>|<on-/auth/>".
-    i=0
+    # Don't exit on the first "looks logged in": right after the inject the app is
+    # briefly on the app root with tokens before it may bounce back to /auth (mid
+    # OAuth redirect, or a boot-time hiccup). Require a few *consecutive* logged-in
+    # reads so we only stop once it has genuinely settled on the dashboard, and
+    # re-inject if it slips back to the login screen.
+    i=0; ok=0
     while [ "$i" -lt 60 ]; do
       i=$((i + 1))
       st=$(cdp_eval 'String(location.origin==="'"$origin"'"?1:0)+"|"+(localStorage.getItem("hassTokens")?1:0)+"|"+(location.pathname.indexOf("/auth/")===0?1:0)') || st=""
       case "$st" in
         "")                        ${pkgs.coreutils}/bin/sleep 1; continue ;;  # no page yet
-        "1|1|0")                   exit 0 ;;                                     # logged in — done
-        "1|0|0" | "1|0|1" | "1|1|1") cdp_eval "$inject" >/dev/null ;;           # on origin — (re)inject
-        *)                         : ;;                                          # not committed yet — wait
+        "1|1|0")                   ok=$((ok + 1)); [ "$ok" -ge 3 ] && exit 0 ;; # settled on the dashboard
+        "1|0|0" | "1|0|1" | "1|1|1") ok=0; cdp_eval "$inject" >/dev/null ;;     # not logged in — (re)inject
+        *)                         ok=0 ;;                                       # not committed yet — wait
       esac
       ${pkgs.coreutils}/bin/sleep 2
     done

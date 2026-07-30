@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/godbus/dbus/v5"
 )
@@ -146,10 +148,47 @@ func markOnline() {
 	}
 }
 
+// clearProvisioningState wipes the device's provisioning + config for a factory
+// reset: the HA URL, kiosk login token, provisioned marker, the generated device
+// API token (regenerated fresh on the next start), and user prefs. Hardware files
+// (dmi.env) and runtime FIFOs are left alone; missing files are not an error. The
+// node id (machine-id) is untouched, so Home Assistant sees the same device when
+// it is re-added rather than a duplicate.
+func clearProvisioningState() error {
+	for _, p := range []string{
+		markerFile, runtimeEnv, tokenFile, apiTokenFile,
+		onlineMarker, urlsFile, zoomFile, themeFile,
+	} {
+		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove %s: %w", filepath.Base(p), err)
+		}
+	}
+	return nil
+}
+
+var (
+	kioskRestartMu   sync.Mutex
+	lastKioskRestart time.Time
+)
+
 // restartKiosk restarts the greetd session over the systemd D-Bus API. A scoped
 // polkit rule (see daemon.nix) grants dashboard-assistant rights to manage only this
 // unit. Restarting re-runs the state-aware launcher, which re-reads /api/state.
+//
+// Debounced: a single provisioning event can trigger two restart paths almost at
+// once — kiosk_login (or config import) staging the login, and the READY-transition
+// watcher reacting to the same SETUP→READY flip. Restarting twice tears the session
+// down mid-autologin, so collapse calls within a short window into one.
 func restartKiosk() error {
+	kioskRestartMu.Lock()
+	if time.Since(lastKioskRestart) < 8*time.Second {
+		kioskRestartMu.Unlock()
+		log.Printf("kiosk: restart skipped (debounced)")
+		return nil
+	}
+	lastKioskRestart = time.Now()
+	kioskRestartMu.Unlock()
+
 	conn, err := dbus.ConnectSystemBus()
 	if err != nil {
 		return fmt.Errorf("connect system bus: %w", err)

@@ -70,6 +70,7 @@ func randomToken() string {
 // nodeID derives a stable id from the machine-id (falling back to the hostname),
 // so a device keeps the same HA device/entities across reboots. It is the HA
 // device identifier and the unique_id namespace, as the MQTT node id was.
+// Machine-id (not the MAC) so a box with two NICs has one unambiguous identity.
 func nodeID() string {
 	if b, err := os.ReadFile("/etc/machine-id"); err == nil {
 		if id := strings.TrimSpace(string(b)); id != "" {
@@ -337,6 +338,7 @@ func (h *HAHub) routes() http.Handler {
 	mux.HandleFunc("/api/ha/zoom", h.auth(h.handleZoom))
 	mux.HandleFunc("/api/ha/theme", h.auth(h.handleTheme))
 	mux.HandleFunc("/api/ha/power", h.auth(h.handlePower))
+	mux.HandleFunc("/api/ha/reset", h.auth(h.handleReset))
 	mux.HandleFunc("/api/ha/update", h.auth(h.handleUpdate))
 	mux.HandleFunc("/api/ha/screenshot", h.auth(h.handleScreenshot))
 	mux.HandleFunc("/api/ha/screenshot.jpg", h.auth(h.handleScreenshotImage))
@@ -651,6 +653,32 @@ func (h *HAHub) handlePower(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": req.Action})
+}
+
+// handleReset factory-resets the device: it clears the provisioning + config
+// state (HA URL, kiosk login token, device API token, prefs) and reboots, so the
+// box comes back on the onboarding screen ready to be added again. Because the
+// API token is regenerated on the next boot, Home Assistant's current entry stops
+// working — remove it and re-add (re-pair) the device. The node id is preserved,
+// so it re-adds as the same device, not a duplicate.
+func (h *HAHub) handleReset(w http.ResponseWriter, r *http.Request) {
+	if !requirePost(w, r) {
+		return
+	}
+	if err := clearProvisioningState(); err != nil {
+		writeErr(w, err)
+		return
+	}
+	log.Printf("ha: factory reset — provisioning cleared, rebooting")
+	writeJSON(w, http.StatusOK, map[string]string{"status": "resetting"})
+	// Reboot after the response flushes so the caller gets its 200 before the box
+	// goes down; the fresh boot regenerates the API token and shows onboarding.
+	go func() {
+		time.Sleep(time.Second)
+		if err := systemReboot(); err != nil {
+			log.Printf("ha: reboot after reset: %v", err)
+		}
+	}()
 }
 
 // handleUpdate applies the latest release (reuses the update state machine). It
