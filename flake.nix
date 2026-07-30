@@ -2,7 +2,7 @@
   description = "Dashboard Assistant OS — declarative single-purpose Home Assistant kiosk";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
 
     # Wired for the future on-disk install path (tmpfs root + ext4 /persist).
     # Not heavily used yet: the live ISO already provides an ephemeral root.

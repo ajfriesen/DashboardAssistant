@@ -59,15 +59,19 @@
   boot.loader.systemd-boot.configurationLimit = 3;
   boot.loader.efi.canTouchEfiVariables = false;
 
-  # Automatic Boot Assessment: a new generation boots with a counter and is only
-  # marked good once it reaches boot-complete.target; if it never does, across a
-  # few boots systemd-boot reverts to the previous generation. The safety net for
-  # updates so broken the box won't come up healthily — no network/daemon needed.
-  boot.loader.systemd-boot.bootCounting.enable = true;
+  # Automatic Boot Assessment (a new generation boots with a counter and is only
+  # marked good once it reaches boot-complete.target, otherwise systemd-boot
+  # reverts to the previous generation) is NOT enabled here: the
+  # `boot.loader.systemd-boot.bootCounting` option only exists on nixpkgs-unstable
+  # and was not backported to the nixos-26.05 branch this flake pins. Recovery from
+  # a broken update is therefore manual, via the recovery UI. Re-enable once the
+  # option lands in the stable channel (or backport the tries mechanism):
+  #   boot.loader.systemd-boot.bootCounting.enable = true;
 
   # Gate "boot succeeded" on the dashboard actually being up: the boot is blessed
-  # only once the daemon answers /healthz and the kiosk session is active. So an
-  # update that crashes the daemon or the session fails to bless and auto-reverts.
+  # only once the daemon answers /healthz and the kiosk session is active. Kept in
+  # place so it works the moment boot counting is re-enabled — until then it runs
+  # but nothing acts on the result (no counter to bless).
   # Deliberately NOT gated on Home Assistant reachability (which can be down for
   # unrelated reasons) — a functional-but-buggy build (e.g. broken integration
   # logic) still boots healthy here and is rolled back manually from the recovery
