@@ -23,6 +23,13 @@
     }
   );
 
+  # disko's image-builder VM only auto-loads a fixed rootModules list (virtio, 9p,
+  # virtiofs, +zfs when used) — btrfs is not among them, and the minimal VM has no
+  # on-demand modprobe. So mounting the freshly-formatted btrfs root falls back to
+  # a FUSE handler and fails ("fuseblk: Unknown parameter 'subvol'"), aborting the
+  # image build. Load the btrfs module in the builder VM so it can mount our root.
+  disko.imageBuilder.extraRootModules = [ "btrfs" ];
+
   imports = [
     # btrfs+zstd disk layout (disko). Provides fileSystems."/" and "/boot".
     ./disk-layout.nix
