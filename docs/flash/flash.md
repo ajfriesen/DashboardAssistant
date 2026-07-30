@@ -4,6 +4,13 @@ If you can reach the target's storage medium (an internal SSD, a removable SD
 card, or a drive in a USB adapter), the quickest path is to flash the disk image
 directly.
 
+!!! tip "No reader for the internal disk? Install from a USB stick"
+    If the target's storage is soldered-down eMMC (or otherwise not removable)
+    and you have no way to write to it directly, use the **installer ISO**
+    instead. Flash the ISO to any spare USB stick, boot the machine from it, and
+    it lists the internal disks and asks which one to install onto. See
+    [Install from a USB stick](../installer/installer.md#install-from-a-usb-stick).
+
 ## Requirements
 
 Depending on your hardware you'll need a way to write to the target disk:

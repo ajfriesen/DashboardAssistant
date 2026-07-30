@@ -41,15 +41,19 @@
     in
     {
       nixosConfigurations = {
-        # Live ISO — boots from removable media (USB / SATA-via-USB adapter).
-        dashboard-assistant-x86-live= lib.nixosSystem {
+        # Installer ISO — boots from removable media (a spare USB stick) into a
+        # console installer that asks which internal disk to erase, then writes
+        # the persistent system below onto it. Deliberately does NOT run the
+        # kiosk itself, and does NOT take localModules: the installer needs none
+        # of the seed/kiosk options, and the system it writes carries them.
+        dashboard-assistant-x86-live = lib.nixosSystem {
           inherit system;
           specialArgs = { inherit impermanence version; };
           modules = [
             ./modules/hardware/generic-x86.nix
-            ./modules/core/default.nix
-          ]
-          ++ localModules;
+            ./modules/installer/installer.nix
+            { installer.diskSystem = self.nixosConfigurations.dashboard-assistant-x86-disk; }
+          ];
         };
 
         # Installed system — persistent, boots from a fixed SATA disk, updatable

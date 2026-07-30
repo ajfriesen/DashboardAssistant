@@ -3,7 +3,7 @@ help:
   @echo "dashboard-assistant OS — just recipes"
   @echo
   @echo "Build images:"
-  @echo "  build-live-iso            Build the bootable installer ISO (x86)"
+  @echo "  build-live-iso            Build the installer ISO (x86)"
   @echo "  build-disk-image             Build the installable raw disk image (btrfs+zstd)"
   @echo "  build-rpi4             Build the Raspberry Pi 4 SD-card image (aarch64)"
   @echo
@@ -21,14 +21,17 @@ help:
   @echo
   @echo "Run 'just --list' for the raw recipe list."
 
-[doc('Build the bootable installer ISO (x86)')]
+[doc('Build the installer ISO (x86)')]
 build-live-iso:
   nix build .#nixosConfigurations.dashboard-assistant-x86-live.config.system.build.isoImage
   @iso=$(ls "$(readlink -f result)"/iso/*.iso); \
     echo; \
     echo "Image: $iso"; \
-    echo "Flash it to a USB stick (confirm the device first!):"; \
-    echo "  sudo dd if=$iso of=/dev/disk/by-id/ata-WDC_WDS100T2B0A-00SM50_195206A003DE bs=4M oflag=sync conv=fsync status=progress"
+    echo "Flash it to a spare USB stick (confirm the device first!):"; \
+    echo "  sudo dd if=$iso of=/dev/disk/by-id/ata-WDC_WDS100T2B0A-00SM50_195206A003DE bs=4M oflag=sync conv=fsync status=progress"; \
+    echo; \
+    echo "Then boot the target from that USB: it lists the internal disks, asks"; \
+    echo "which one to erase, installs onto it, and powers off to swap the stick."
 
 # Build the installable raw disk image (btrfs+zstd, built by disko). dd
 # result/dashboard-assistant.raw to the SSD, then boot it from the native SATA port.
