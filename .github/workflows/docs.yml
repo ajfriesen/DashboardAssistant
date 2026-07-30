@@ -1,9 +1,14 @@
 name: Documentation
 on:
+  workflow_dispatch:
   push:
-    workflow_dispatch:
     branches:
       - main
+    paths:
+      - 'docs/**'
+      - 'overrides/**'
+      - 'zensical.toml'
+      - '.github/workflows/docs.yml'
 permissions:
   contents: read
   pages: write
