@@ -19,11 +19,7 @@ control from your automations.
 
 > [!WARNING]
 > This is in early development. Expect lots of changes.
-> However, I am using this myself every day.
-
-> [!NOTE]
-> I am using AI and I disclose that.
-> If you do not like that, close this tab and go touch grass.
+> Not recommended for daily use as of now.
 
 > [!IMPORTANT]
 > This is not affiliated to the Open Home Foundation or Home Assistant.
