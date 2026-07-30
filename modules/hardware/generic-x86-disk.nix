@@ -103,7 +103,10 @@
     };
   };
 
-  # Enough to bring up SATA/NVMe/USB storage and HID in early boot.
+  # Enough to bring up SATA/NVMe/eMMC/USB storage and HID in early boot. The eMMC
+  # set (sdhci* + mmc_block + cqhci) is essential on boards that boot from soldered
+  # eMMC like the ODROID H2 — without it the initrd never sees /dev/mmcblkN and the
+  # by-partlabel root device times out into emergency mode.
   boot.initrd.availableKernelModules = [
     "ahci"
     "ata_piix"
@@ -113,6 +116,13 @@
     "usb_storage"
     "sd_mod"
     "usbhid"
+    # eMMC / SD (Intel Gemini Lake LPSS controller on the ODROID H2 is sdhci-pci
+    # or sdhci-acpi; cqhci backs the eMMC command queue).
+    "sdhci"
+    "sdhci_pci"
+    "sdhci_acpi"
+    "cqhci"
+    "mmc_block"
   ];
   boot.kernelModules = [ "kvm-intel" ];
 
