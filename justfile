@@ -43,12 +43,17 @@ build-disk-image:
   @echo "Flash it (confirm the device first!):"
   @echo "  sudo dd if=$(readlink -f result)/dashboard-assistant.raw of=/dev/disk/by-id/ata-WDC_WDS100T2B0A-00SM50_195206A003DE bs=4M oflag=sync conv=fsync status=progress"
 
-# Build the Raspberry Pi 4 (aarch64) SD-card image. On an x86 host this builds
-# via binfmt emulation, fetching most from the binary cache — the Pi kernel +
-# image assembly still build locally, so it's slow. Then flash it to an SD card.
+# Build the Raspberry Pi 4 (aarch64) SD-card image. On an x86 host the aarch64
+# closure builds via binfmt emulation — but once CI has populated the public
+# Attic cache (.github/workflows/cache-rpi.yml), --accept-flake-config lets the
+# flake's extra-substituter pull the kernel + system instead of recompiling it,
+# so this is a download rather than a slow emulated build. Falls back to building
+# if the cache is cold or unreachable. Then flash the image to an SD card.
+# Note: the flake substituter is only honoured if you're a trusted Nix user
+# (nix.settings.trusted-users on this workstation).
 [doc('Build the Raspberry Pi 4 SD-card image (aarch64)')]
 build-rpi4:
-  nix build .#packages.aarch64-linux.rpi4-image --out-link result-rpi4
+  nix build .#packages.aarch64-linux.rpi4-image --accept-flake-config --out-link result-rpi4
   @echo
   @echo "Image: $(readlink -f result-rpi4)/sd-image/"*.img.zst
   @echo "Flash it (confirm the device first!):"

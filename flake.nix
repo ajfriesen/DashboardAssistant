@@ -1,6 +1,19 @@
 {
   description = "Dashboard Assistant OS — declarative single-purpose Home Assistant kiosk";
 
+  # Public Attic (Nix binary cache on Cloudflare R2) so local builds — notably
+  # `just build-rpi4`, whose aarch64 kernel is otherwise compiled under slow
+  # binfmt emulation — download the closure instead of rebuilding it. This is the
+  # dev-workstation counterpart of modules/core/binary-cache.nix (which bakes the
+  # same cache into deployed images). Nix only honours these for a trusted user,
+  # so builds pass `--accept-flake-config` (see the justfile) and you must be in
+  # nix.settings.trusted-users on your workstation. Keep in sync with
+  # modules/core/binary-cache.nix (which bakes the same cache into images).
+  nixConfig = {
+    extra-substituters = [ "https://nix-cache.dashboardassistant.org/dashboardassistant" ];
+    extra-trusted-public-keys = [ "dashboardassistant:qyNbqk1+S/2a2dqe7XcDfCGnSGT6ACBXgPr5/4BNLYU=" ];
+  };
+
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
 

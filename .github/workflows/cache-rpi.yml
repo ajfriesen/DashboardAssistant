@@ -1,0 +1,86 @@
+name: cache-rpi
+
+# Build the aarch64 Raspberry Pi 4 system on a *native* arm64 runner and push the
+# whole build closure — most importantly the linux-rpi kernel, which otherwise
+# compiles under slow binfmt emulation on an x86 dev box — to the public Attic
+# (Nix binary cache) server backed by Cloudflare R2. Once this has run, a local
+# `just build-rpi4` (and any deployed system's OTA update) substitutes the kernel
+# + system closure from the cache instead of recompiling it. The consuming side
+# is wired up in flake.nix (nixConfig) and modules/core/binary-cache.nix.
+#
+# Native arm64 (ubuntu-24.04-arm) is free for public repos and builds the kernel
+# in real time instead of emulating it, so this workflow is the fast path even
+# for the very build it exists to accelerate.
+#
+# The cache endpoint + name are public (baked into the images), so they live here
+# as plain env. Only the push token is secret:
+#   Secret ATTIC_TOKEN — an Attic token with push access to the cache
+#     (atticadm make-token --sub ci --validity 1y --pull dashboardassistant \
+#        --push dashboardassistant).
+# The push step only runs on the canonical repo, so forks build (and get the SD
+# image artifact) without needing the secret.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+# One in-flight run per branch is enough; a newer push supersedes an older cache
+# populate rather than queueing behind it.
+concurrency:
+  group: cache-rpi-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ATTIC_ENDPOINT: https://nix-cache.dashboardassistant.org
+  ATTIC_CACHE: dashboardassistant
+
+jobs:
+  build:
+    name: Build Pi system and push to Attic
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      # attic-client is prebuilt in nixpkgs, so this pulls the binary from
+      # cache.nixos.org instead of compiling the client on the runner.
+      - name: Install Attic client
+        run: nix profile install github:NixOS/nixpkgs/nixos-26.05#attic-client
+
+      # Build the full system toplevel first: its closure references the kernel,
+      # initrd and every system package. The SD image blob itself does NOT retain
+      # store references to the kernel (it's baked into the image bytes), so the
+      # toplevel closure — not the image — is what makes a later local build a
+      # cache hit. We build the image too so we can hand it out as an artifact.
+      - name: Build Pi system + image
+        run: |
+          nix build --print-build-logs \
+            .#nixosConfigurations.dashboard-assistant-rpi4.config.system.build.toplevel \
+            --out-link result-toplevel
+          nix build --print-build-logs \
+            .#packages.aarch64-linux.rpi4-image \
+            --out-link result-rpi4
+
+      - name: Push closures to Attic
+        if: ${{ github.repository == 'ajfriesen/dashboard-assistant' }}
+        env:
+          ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
+        run: |
+          set -euo pipefail
+          attic login ci "$ATTIC_ENDPOINT" "$ATTIC_TOKEN"
+          # Pushing the toplevel closure carries the kernel + full system; adding
+          # result-rpi4 tops up the image-assembly outputs too. attic push walks
+          # and uploads the runtime closure of each path.
+          attic push "ci:$ATTIC_CACHE" result-toplevel result-rpi4
+
+      - name: Upload SD image artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: dashboard-assistant-rpi4-image
+          path: result-rpi4/sd-image/*.img.zst
+          if-no-files-found: error
