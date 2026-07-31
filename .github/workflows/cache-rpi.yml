@@ -66,6 +66,15 @@ jobs:
             .#packages.aarch64-linux.rpi4-image \
             --out-link result-rpi4
 
+      # Capture the image as an artifact BEFORE the push, so a cache-push
+      # hiccup never costs us the built image.
+      - name: Upload SD image artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: dashboard-assistant-rpi4-image
+          path: result-rpi4/sd-image/*.img.zst
+          if-no-files-found: error
+
       - name: Push closures to Attic
         if: ${{ github.repository == 'ajfriesen/dashboard-assistant' }}
         env:
@@ -73,14 +82,10 @@ jobs:
         run: |
           set -euo pipefail
           attic login ci "$ATTIC_ENDPOINT" "$ATTIC_TOKEN"
-          # Pushing the toplevel closure carries the kernel + full system; adding
-          # result-rpi4 tops up the image-assembly outputs too. attic push walks
-          # and uploads the runtime closure of each path.
-          attic push "ci:$ATTIC_CACHE" result-toplevel result-rpi4
-
-      - name: Upload SD image artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: dashboard-assistant-rpi4-image
-          path: result-rpi4/sd-image/*.img.zst
-          if-no-files-found: error
+          # Push ONLY the system toplevel closure — the kernel, its modules and
+          # every system package. We deliberately do NOT push result-rpi4: the SD
+          # image blob doesn't retain store references to the kernel, so it's
+          # useless as a substitution target and it's the single largest object
+          # (routinely >100 MB), which is exactly what the ingress chokes on. It
+          # still ships as the artifact above for flashing.
+          attic push "ci:$ATTIC_CACHE" result-toplevel
