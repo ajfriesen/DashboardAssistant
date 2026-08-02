@@ -6,7 +6,9 @@ help:
   @echo "  build-live-iso            Build the installer ISO (x86)"
   @echo "  build-disk-image             Build the stable raw disk image (btrfs+zstd)"
   @echo "  build-disk-image-dev         Build the dev raw disk image (SSH + debugging)"
+  @echo "  build-disk-image-unstable    Build the raw disk image against nixos-unstable"
   @echo "  build-rpi4             Build the Raspberry Pi 4 SD-card image (aarch64)"
+  @echo "  build-rpi5             Build the Raspberry Pi 5 SD-card image (aarch64, unstable)"
   @echo
   @echo "Run / connect (QEMU):"
   @echo "  qemu-run               Boot the built ISO in QEMU"
@@ -56,6 +58,18 @@ build-disk-image-dev:
   @echo "Flash it (confirm the device first!):"
   @echo "  sudo dd if=$(readlink -f result)/dashboard-assistant.raw of=/dev/disk/by-id/ata-WDC_WDS100T2B0A-00SM50_195206A003DE bs=4M oflag=sync conv=fsync status=progress"
 
+# Build the stable raw disk image against nixos-unstable instead of the pinned
+# 26.05. --override-input swaps the flake's nixpkgs (disko follows it, so its
+# closure moves too); nothing is written to flake.lock. The same trick flips any
+# other recipe: append `--override-input nixpkgs github:NixOS/nixpkgs/nixos-unstable`.
+[doc('Build the stable raw disk image against nixos-unstable')]
+build-disk-image-unstable:
+  nix build .#disk-image --override-input nixpkgs github:NixOS/nixpkgs/nixos-unstable
+  @echo
+  @echo "Image: $(readlink -f result)/dashboard-assistant.raw"
+  @echo "Flash it (confirm the device first!):"
+  @echo "  sudo dd if=$(readlink -f result)/dashboard-assistant.raw of=/dev/disk/by-id/ata-WDC_WDS100T2B0A-00SM50_195206A003DE bs=4M oflag=sync conv=fsync status=progress"
+
 # Build the Raspberry Pi 4 (aarch64) SD-card image. On an x86 host the aarch64
 # closure builds via binfmt emulation — but once CI has populated the public
 # Attic cache (.github/workflows/cache-rpi.yml), --accept-flake-config lets the
@@ -71,6 +85,18 @@ build-rpi4:
   @echo "Image: $(readlink -f result-rpi4)/sd-image/"*.img.zst
   @echo "Flash it (confirm the device first!):"
   @echo "  zstdcat result-rpi4/sd-image/*.img.zst | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync"
+
+# Build the Raspberry Pi 5 (aarch64) SD-card image. Always built from
+# nixos-unstable (pinned in flake.nix, not via override): the Pi 5 kernel and
+# the sd-image pi5 support are newer than the pinned 26.05. Same emulated-build /
+# binary-cache story as build-rpi4. Then flash the image to an SD card.
+[doc('Build the Raspberry Pi 5 SD-card image (aarch64, unstable)')]
+build-rpi5:
+  nix build .#packages.aarch64-linux.rpi5-image --accept-flake-config --out-link result-rpi5
+  @echo
+  @echo "Image: $(readlink -f result-rpi5)/sd-image/"*.img.zst
+  @echo "Flash it (confirm the device first!):"
+  @echo "  zstdcat result-rpi5/sd-image/*.img.zst | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync"
 
 # Boot the built ISO. The virtio-net NIC gets DHCP from QEMU's user-mode
 # network, so NetworkManager auto-connects it — first boot lands in the setup

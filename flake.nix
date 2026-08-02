@@ -17,6 +17,13 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
 
+    # Second channel for targets that need newer bits than the pinned stable
+    # release. The Raspberry Pi 5 image is built from this (its kernel/firmware
+    # and the sd-image pi5 support only landed post-26.05). The x86 / Pi 4
+    # targets stay on nixpkgs (26.05) by default but can be flipped to unstable
+    # per build with `--override-input nixpkgs` — see the *-unstable just recipes.
+    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
+
     # Wired for the future on-disk install path (tmpfs root + ext4 /persist).
     # Not heavily used yet: the live ISO already provides an ephemeral root.
     impermanence.url = "github:nix-community/impermanence";
@@ -33,6 +40,7 @@
     {
       self,
       nixpkgs,
+      nixpkgs-unstable,
       impermanence,
       disko,
       nixos-hardware,
@@ -111,6 +119,22 @@
           ]
           ++ localModules;
         };
+
+        # Raspberry Pi 5 (aarch64) — SD-card image. Built from nixpkgs-unstable
+        # (its lib.nixosSystem, so it is pinned to unstable regardless of any
+        # `--override-input nixpkgs` on the other targets): the Pi 5 kernel and
+        # the sd-image pi5 support are newer than the pinned 26.05. Build the
+        # flashable image via `.#rpi5-image`.
+        dashboard-assistant-rpi5 = nixpkgs-unstable.lib.nixosSystem {
+          system = "aarch64-linux";
+          specialArgs = { inherit impermanence version; };
+          modules = [
+            nixos-hardware.nixosModules.raspberry-pi-5
+            ./modules/hardware/rpi5.nix
+            ./modules/core/default.nix
+          ]
+          ++ localModules;
+        };
       };
 
       # Raw btrfs+zstd EFI disk image built by disko: `nix build .#disk-image`
@@ -118,7 +142,8 @@
       # layout lives in modules/hardware/disk-layout.nix.
       packages.${system} = {
         disk-image = self.nixosConfigurations.dashboard-assistant-x86-disk.config.system.build.diskoImages;
-        disk-image-dev = self.nixosConfigurations.dashboard-assistant-x86-disk-dev.config.system.build.diskoImages;
+        disk-image-dev =
+          self.nixosConfigurations.dashboard-assistant-x86-disk-dev.config.system.build.diskoImages;
 
         # vboard (on-screen keyboard) is packaged from source — not in nixpkgs.
         # Exposed here so it can be built/tested standalone (`nix build .#vboard`);
@@ -130,6 +155,11 @@
       # result/sd-image/*.img.zst to the card (zstdcat | dd, or unzstd first).
       packages.aarch64-linux.rpi4-image =
         self.nixosConfigurations.dashboard-assistant-rpi4.config.system.build.sdImage;
+
+      # Raspberry Pi 5 SD-card image (built from unstable): `nix build .#rpi5-image`,
+      # then flash result/sd-image/*.img.zst to the card (same as the Pi 4).
+      packages.aarch64-linux.rpi5-image =
+        self.nixosConfigurations.dashboard-assistant-rpi5.config.system.build.sdImage;
 
       devShells.${system}.default = pkgs.mkShell {
         packages = [

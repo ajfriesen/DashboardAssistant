@@ -1,12 +1,18 @@
 name: cache-rpi
 
-# Build the aarch64 Raspberry Pi 4 system on a *native* arm64 runner and push the
+# Build the aarch64 Raspberry Pi systems on a *native* arm64 runner and push the
 # whole build closure — most importantly the linux-rpi kernel, which otherwise
 # compiles under slow binfmt emulation on an x86 dev box — to the public Attic
 # (Nix binary cache) server backed by Cloudflare R2. Once this has run, a local
-# `just build-rpi4` (and any deployed system's OTA update) substitutes the kernel
-# + system closure from the cache instead of recompiling it. The consuming side
-# is wired up in flake.nix (nixConfig) and modules/core/binary-cache.nix.
+# `just build-rpi4` / `just build-rpi5` (and any deployed system's OTA update)
+# substitutes the kernel + system closure from the cache instead of recompiling
+# it. The consuming side is wired up in flake.nix (nixConfig) and
+# modules/core/binary-cache.nix.
+#
+# Both boards run as a matrix. The Pi 4 builds from the pinned nixpkgs (26.05);
+# the Pi 5 is pinned to nixpkgs-unstable in flake.nix (its kernel + sd-image pi5
+# support are newer than 26.05) — nothing board-specific is needed here, the
+# flake attrs already carry that.
 #
 # Native arm64 (ubuntu-24.04-arm) is free for public repos and builds the kernel
 # in real time instead of emulating it, so this workflow is the fast path even
@@ -37,15 +43,28 @@ env:
 
 jobs:
   build:
-    name: Build Pi system and push to Attic
+    name: Build ${{ matrix.model }} system and push to Attic
     runs-on: ubuntu-24.04-arm
+    strategy:
+      # Don't let a Pi 5 build break cancel an already-succeeding Pi 4 push (or
+      # vice versa); each board's cache populate is independent.
+      fail-fast: false
+      matrix:
+        model: [rpi4, rpi5]
     steps:
       - uses: actions/checkout@v7
 
+      # Register the public Attic cache as a system-level substituter (same
+      # values as flake.nix nixConfig / modules/core/binary-cache.nix). At system
+      # level it's honoured unconditionally, so the pull doesn't depend on the CI
+      # user being a trusted Nix user — an already-pushed toplevel substitutes
+      # instead of recompiling.
       - uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
             experimental-features = nix-command flakes
+            extra-substituters = https://nix-cache.dashboardassistant.org/dashboardassistant
+            extra-trusted-public-keys = dashboardassistant:qyNbqk1+S/2a2dqe7XcDfCGnSGT6ACBXgPr5/4BNLYU=
 
       # attic-client is prebuilt in nixpkgs, so this pulls the binary from
       # cache.nixos.org instead of compiling the client on the runner.
@@ -57,22 +76,26 @@ jobs:
       # store references to the kernel (it's baked into the image bytes), so the
       # toplevel closure — not the image — is what makes a later local build a
       # cache hit. We build the image too so we can hand it out as an artifact.
+      # --accept-flake-config honours the flake's Attic substituter (same as the
+      # justfile recipes), so an already-cached toplevel — e.g. the Pi 4 closure a
+      # previous run pushed — is substituted instead of recompiled. Only a
+      # not-yet-cached board (a fresh Pi 5, or after a nixpkgs bump) compiles.
       - name: Build Pi system + image
         run: |
-          nix build --print-build-logs \
-            .#nixosConfigurations.dashboard-assistant-rpi4.config.system.build.toplevel \
+          nix build --print-build-logs --accept-flake-config \
+            .#nixosConfigurations.dashboard-assistant-${{ matrix.model }}.config.system.build.toplevel \
             --out-link result-toplevel
-          nix build --print-build-logs \
-            .#packages.aarch64-linux.rpi4-image \
-            --out-link result-rpi4
+          nix build --print-build-logs --accept-flake-config \
+            .#packages.aarch64-linux.${{ matrix.model }}-image \
+            --out-link result-${{ matrix.model }}
 
       # Capture the image as an artifact BEFORE the push, so a cache-push
       # hiccup never costs us the built image.
       - name: Upload SD image artifact
         uses: actions/upload-artifact@v7
         with:
-          name: dashboard-assistant-rpi4-image
-          path: result-rpi4/sd-image/*.img.zst
+          name: dashboard-assistant-${{ matrix.model }}-image
+          path: result-${{ matrix.model }}/sd-image/*.img.zst
           if-no-files-found: error
 
       - name: Push closures to Attic
@@ -83,7 +106,7 @@ jobs:
           set -euo pipefail
           attic login ci "$ATTIC_ENDPOINT" "$ATTIC_TOKEN"
           # Push ONLY the system toplevel closure — the kernel, its modules and
-          # every system package. We deliberately do NOT push result-rpi4: the SD
+          # every system package. We deliberately do NOT push the image: the SD
           # image blob doesn't retain store references to the kernel, so it's
           # useless as a substitution target and it's the single largest object
           # (routinely >100 MB), which is exactly what the ingress chokes on. It
