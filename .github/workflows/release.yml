@@ -34,7 +34,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ASSET: dashboard-assistant-${{ github.ref_name }}-x86_64.raw.zst
-      R2_ENDPOINT: https://${{ vars.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+      # EU-jurisdiction R2 endpoint, matching build.yml / cache-rpi.yml so all
+      # three workflows write to the same bucket. (Was the non-".eu." host, which
+      # would miss an EU bucket — flip both back if the bucket is not EU.)
+      R2_ENDPOINT: https://${{ vars.R2_ACCOUNT_ID }}.eu.r2.cloudflarestorage.com
     steps:
       - uses: actions/checkout@v4
         with:

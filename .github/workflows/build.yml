@@ -1,22 +1,44 @@
 name: build
 
-# Manual dev builds. Produces the same flashable x86_64 disk image as the
-# release workflow (disko btrfs+zstd raw, zstd-compressed), but stamps it with the
-# build date + commit SHA and publishes it to a separate `dev/` prefix in R2
-# (never a tag, never a GitHub Release). Set an R2 lifecycle rule to expire
-# objects under `dev/` so these snapshots clean themselves up.
+# Regular (non-release) x86_64 image builds. On every push to main (and on manual
+# dispatch) this builds the flashable on-disk disk images and publishes them to
+# the same Cloudflare R2 bucket as the tagged releases, under a dev/ prefix keyed
+# by build date + short commit SHA (never a tag, never a GitHub Release). Set an
+# R2 lifecycle rule to expire objects under dev/ so these snapshots self-clean.
+#
+# Two variants build in a matrix:
+#   x86_64      — the stable disk image (.#disk-image)
+#   x86_64-dev  — the dev disk image (.#disk-image-dev). NOTE this bakes root SSH
+#                 keys + remote debugging into a PUBLIC download. It is published
+#                 on regular builds only; tagged releases (release.yml) ship the
+#                 stable image alone.
 #
 # Uses the same repo config as release.yml (vars R2_ACCOUNT_ID / R2_BUCKET /
-# R2_PUBLIC_URL, secrets R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY). The R2 upload
-# is skipped when R2_BUCKET is unset, so contributors without those secrets
-# still get the ISO as a workflow artifact.
+# R2_PUBLIC_URL, secrets R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY). Without
+# R2_BUCKET the R2 step is skipped and the image falls back to a (slow) workflow
+# artifact so contributors without secrets still get something flashable.
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+
+# One in-flight run per branch is enough; a newer push supersedes an older build.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  iso:
-    name: Build x86_64 live ISO
+  image:
+    name: Build ${{ matrix.name }} disk image
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: x86_64
+            flake: disk-image
+          - name: x86_64-dev
+            flake: disk-image-dev
     env:
       R2_ENDPOINT: https://${{ vars.R2_ACCOUNT_ID }}.eu.r2.cloudflarestorage.com
     steps:
@@ -27,11 +49,8 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
-      - name: Flake check
-        run: nix flake check --no-build
-
       - name: Build disk image
-        run: nix build .#disk-image
+        run: nix build .#${{ matrix.flake }}
 
       # Date first so the bucket listing sorts chronologically; short SHA pins it
       # to the exact commit. Compress straight from the Nix store so we never
@@ -40,19 +59,12 @@ jobs:
         id: stage
         run: |
           set -euo pipefail
-          asset="dashboard-assistant-$(date -u +%Y-%m-%d)-${GITHUB_SHA::7}-x86_64.raw.zst"
+          asset="dashboard-assistant-$(date -u +%Y-%m-%d)-${GITHUB_SHA::7}-${{ matrix.name }}.raw.zst"
           zstd -19 -T0 -c "$(readlink -f result)/dashboard-assistant.raw" > "$asset"
           echo "asset=$asset" >> "$GITHUB_OUTPUT"
 
-      - name: Upload image artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: dashboard-assistant-x86-image
-          path: ${{ steps.stage.outputs.asset }}
-          if-no-files-found: error
-
       # Publish under dev/ (separate from tagged releases). Skipped without R2
-      # config so the build still succeeds and leaves the artifact above.
+      # config, in which case the artifact fallback below runs instead.
       - name: Upload dev build to R2
         if: ${{ vars.R2_BUCKET != '' }}
         env:
@@ -66,7 +78,17 @@ jobs:
           aws s3 cp "$asset" "s3://$bucket/dev/$asset" \
             --endpoint-url "$R2_ENDPOINT"
           {
-            echo "### 📦 Dev build published"
+            echo "### 📦 ${{ matrix.name }} dev build published"
             echo
             echo "**[$asset](${{ vars.R2_PUBLIC_URL }}/dev/$asset)** — commit ${GITHUB_SHA::7}"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # Fallback for forks without R2 config so the build still leaves something
+      # flashable (slower to download than R2).
+      - name: Upload image artifact
+        if: ${{ vars.R2_BUCKET == '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: dashboard-assistant-${{ matrix.name }}-image
+          path: ${{ steps.stage.outputs.asset }}
+          if-no-files-found: error

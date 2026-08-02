@@ -23,13 +23,23 @@ name: cache-rpi
 #   Secret ATTIC_TOKEN — an Attic token with push access to the cache
 #     (atticadm make-token --sub ci --validity 1y --pull dashboardassistant \
 #        --push dashboardassistant).
-# The push step only runs on the canonical repo, so forks build (and get the SD
-# image artifact) without needing the secret.
+# The Attic push only runs on the canonical repo; forks build without it.
+#
+# The flashable SD images are also published to the same Cloudflare R2 bucket the
+# x86 images use (GitHub Actions artifacts are far too slow to download at image
+# sizes). Regular pushes land under dev/ keyed by date + short commit SHA; a v*
+# tag lands under the tag name plus a stable *-latest-<model> alias — mirroring
+# build.yml and release.yml. Requires the same repo config as those workflows
+# (vars R2_ACCOUNT_ID / R2_BUCKET / R2_PUBLIC_URL, secrets R2_ACCESS_KEY_ID /
+# R2_SECRET_ACCESS_KEY). Without R2_BUCKET the R2 step is skipped and the image
+# falls back to a (slow) workflow artifact so forks still get something flashable.
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
+    tags:
+      - "v*"
 
 # One in-flight run per branch is enough; a newer push supersedes an older cache
 # populate rather than queueing behind it.
@@ -40,6 +50,9 @@ concurrency:
 env:
   ATTIC_ENDPOINT: https://nix-cache.dashboardassistant.org
   ATTIC_CACHE: dashboardassistant
+  # EU-jurisdiction R2 endpoint, matching build.yml. NOTE: release.yml uses the
+  # non-".eu." host — one of the two is stale; reconcile them for the same bucket.
+  R2_ENDPOINT: https://${{ vars.R2_ACCOUNT_ID }}.eu.r2.cloudflarestorage.com
 
 jobs:
   build:
@@ -71,11 +84,17 @@ jobs:
       - name: Install Attic client
         run: nix profile install github:NixOS/nixpkgs/nixos-26.05#attic-client
 
+      # aws CLI isn't guaranteed on the arm64 runner image, so pull the prebuilt
+      # binary from cache.nixos.org (only needed when we actually upload to R2).
+      - name: Install AWS CLI
+        if: ${{ vars.R2_BUCKET != '' }}
+        run: nix profile install github:NixOS/nixpkgs/nixos-26.05#awscli2
+
       # Build the full system toplevel first: its closure references the kernel,
       # initrd and every system package. The SD image blob itself does NOT retain
       # store references to the kernel (it's baked into the image bytes), so the
       # toplevel closure — not the image — is what makes a later local build a
-      # cache hit. We build the image too so we can hand it out as an artifact.
+      # cache hit. We build the image too so we can publish it to R2 below.
       # --accept-flake-config honours the flake's Attic substituter (same as the
       # justfile recipes), so an already-cached toplevel — e.g. the Pi 4 closure a
       # previous run pushed — is substituted instead of recompiled. Only a
@@ -89,9 +108,42 @@ jobs:
             .#packages.aarch64-linux.${{ matrix.model }}-image \
             --out-link result-${{ matrix.model }}
 
-      # Capture the image as an artifact BEFORE the push, so a cache-push
-      # hiccup never costs us the built image.
+      # Publish the flashable SD image to R2. Regular pushes go under dev/ keyed by
+      # date + short SHA (mirrors build.yml; set an R2 lifecycle rule to expire
+      # dev/); a v* tag goes to the tag name plus a stable *-latest-<model> alias
+      # (mirrors release.yml). The sd-image is already zstd-compressed, so we cp it
+      # straight to R2. Skipped without R2_BUCKET (see the artifact fallback below).
+      - name: Publish SD image to R2
+        if: ${{ vars.R2_BUCKET != '' }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          set -euo pipefail
+          model="${{ matrix.model }}"
+          bucket="${{ vars.R2_BUCKET }}"
+          img=$(ls result-"$model"/sd-image/*.img.zst)
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            key="dashboard-assistant-${GITHUB_REF_NAME}-${model}.img.zst"
+            aws s3 cp "$img" "s3://$bucket/$key" --endpoint-url "$R2_ENDPOINT"
+            aws s3 cp "$img" "s3://$bucket/dashboard-assistant-latest-${model}.img.zst" \
+              --endpoint-url "$R2_ENDPOINT"
+          else
+            key="dev/dashboard-assistant-$(date -u +%Y-%m-%d)-${GITHUB_SHA::7}-${model}.img.zst"
+            aws s3 cp "$img" "s3://$bucket/$key" --endpoint-url "$R2_ENDPOINT"
+          fi
+          size=$(du -h "$img" | cut -f1)
+          {
+            echo "### 📦 $model image published"
+            echo
+            echo "**[$key](${{ vars.R2_PUBLIC_URL }}/$key)** ($size)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Fallback for forks without R2 config: hand the image out as a (slow)
+      # workflow artifact so there's still something flashable.
       - name: Upload SD image artifact
+        if: ${{ vars.R2_BUCKET == '' }}
         uses: actions/upload-artifact@v7
         with:
           name: dashboard-assistant-${{ matrix.model }}-image
@@ -109,6 +161,6 @@ jobs:
           # every system package. We deliberately do NOT push the image: the SD
           # image blob doesn't retain store references to the kernel, so it's
           # useless as a substitution target and it's the single largest object
-          # (routinely >100 MB), which is exactly what the ingress chokes on. It
-          # still ships as the artifact above for flashing.
+          # (routinely >100 MB), which is exactly what the ingress chokes on. The
+          # flashable image itself is published to R2 above.
           attic push "ci:$ATTIC_CACHE" result-toplevel
