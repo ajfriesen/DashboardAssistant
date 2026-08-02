@@ -4,7 +4,8 @@ help:
   @echo
   @echo "Build images:"
   @echo "  build-live-iso            Build the installer ISO (x86)"
-  @echo "  build-disk-image             Build the installable raw disk image (btrfs+zstd)"
+  @echo "  build-disk-image             Build the stable raw disk image (btrfs+zstd)"
+  @echo "  build-disk-image-dev         Build the dev raw disk image (SSH + debugging)"
   @echo "  build-rpi4             Build the Raspberry Pi 4 SD-card image (aarch64)"
   @echo
   @echo "Run / connect (QEMU):"
@@ -33,11 +34,23 @@ build-live-iso:
     echo "Then boot the target from that USB: it lists the internal disks, asks"; \
     echo "which one to erase, installs onto it, and powers off to swap the stick."
 
-# Build the installable raw disk image (btrfs+zstd, built by disko). dd
+# Build the stable installable raw disk image (btrfs+zstd, built by disko). No
+# SSH daemon; reconfigure a deployed device only via the USB seed file. dd
 # result/dashboard-assistant.raw to the SSD, then boot it from the native SATA port.
-[doc('Build the installable raw disk image (btrfs+zstd)')]
+[doc('Build the stable raw disk image (btrfs+zstd)')]
 build-disk-image:
   nix build .#disk-image
+  @echo
+  @echo "Image: $(readlink -f result)/dashboard-assistant.raw"
+  @echo "Flash it (confirm the device first!):"
+  @echo "  sudo dd if=$(readlink -f result)/dashboard-assistant.raw of=/dev/disk/by-id/ata-WDC_WDS100T2B0A-00SM50_195206A003DE bs=4M oflag=sync conv=fsync status=progress"
+
+# Build the dev raw disk image — same as build-disk-image plus modules/dev.nix
+# (root SSH access, diagnostics, Chromium remote debugging). For bench/field
+# debugging only; never flash this onto a released device.
+[doc('Build the dev raw disk image (SSH + debugging)')]
+build-disk-image-dev:
+  nix build .#disk-image-dev
   @echo
   @echo "Image: $(readlink -f result)/dashboard-assistant.raw"
   @echo "Flash it (confirm the device first!):"

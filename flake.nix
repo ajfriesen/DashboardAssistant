@@ -51,6 +51,22 @@
       # Optional per-build overrides (e.g. a seeded HA URL / debug flags). See
       # modules/local.example.nix. Must be git-tracked to be picked up.
       localModules = lib.optional (builtins.pathExists ./modules/local.nix) ./modules/local.nix;
+
+      # The on-disk x86 system, parameterised by a list of extra modules so we
+      # can cut both a stable and a dev flavour from the same base.
+      mkDiskSystem =
+        extraModules:
+        lib.nixosSystem {
+          inherit system;
+          specialArgs = { inherit impermanence version; };
+          modules = [
+            disko.nixosModules.disko
+            ./modules/hardware/generic-x86-disk.nix
+            ./modules/core/default.nix
+          ]
+          ++ localModules
+          ++ extraModules;
+        };
     in
     {
       nixosConfigurations = {
@@ -69,18 +85,18 @@
           ];
         };
 
-        # Installed system — persistent, boots from a fixed SATA disk, updatable
-        # with `nixos-rebuild switch`. Build a flashable image via `.#disk-image`.
-        dashboard-assistant-x86-disk = lib.nixosSystem {
-          inherit system;
-          specialArgs = { inherit impermanence version; };
-          modules = [
-            disko.nixosModules.disko
-            ./modules/hardware/generic-x86-disk.nix
-            ./modules/core/default.nix
-          ]
-          ++ localModules;
-        };
+        # Stable release — persistent, boots from a fixed SATA disk, updatable
+        # with `nixos-rebuild switch`. No SSH daemon at all (overrides the
+        # convenience default in core/default.nix): a released device is
+        # reconfigured only via the USB seed file. Build via `.#disk-image`.
+        dashboard-assistant-x86-disk = mkDiskSystem [
+          { services.openssh.enable = lib.mkForce false; }
+        ];
+
+        # Dev flavour of the on-disk system — same base plus modules/dev.nix
+        # (diagnostics, Chromium remote debugging, root SSH access). Build via
+        # `.#disk-image-dev`.
+        dashboard-assistant-x86-disk-dev = mkDiskSystem [ ./modules/dev.nix ];
 
         # Raspberry Pi 4 (aarch64) — SD-card image, for bring-up/testing on a Pi.
         # Build the flashable image via `.#rpi4-image` (aarch64; this host builds
@@ -102,6 +118,7 @@
       # layout lives in modules/hardware/disk-layout.nix.
       packages.${system} = {
         disk-image = self.nixosConfigurations.dashboard-assistant-x86-disk.config.system.build.diskoImages;
+        disk-image-dev = self.nixosConfigurations.dashboard-assistant-x86-disk-dev.config.system.build.diskoImages;
 
         # vboard (on-screen keyboard) is packaged from source — not in nixpkgs.
         # Exposed here so it can be built/tested standalone (`nix build .#vboard`);

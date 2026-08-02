@@ -12,7 +12,6 @@
   ...
 }:
 let
-  dbg = config.dashboardAssistant.debug.chromiumRemoteDebugging;
   autoLogin = config.dashboardAssistant.kiosk.autoLogin;
   # On-screen keyboard, packaged from source (not in nixpkgs). See packages/vboard.nix.
   vboard = pkgs.callPackage ../../packages/vboard.nix { };
@@ -77,16 +76,13 @@ let
       ${pkgs.spice-vdagent}/bin/spice-vdagent || true
     fi
 
-    # Open Chromium's loopback CDP port when either dev remote-debugging is on,
-    # or auto-login has a token to inject. set -f keeps the `*` in
+    # Always open Chromium's CDP port. It binds to 127.0.0.1 only (loopback, not a
+    # network exposure), and every waybar button (Config, Home, Prev/Next) plus the
+    # auto-login token injector drives the running browser over it — so the on-screen
+    # controls work even on a stable, unprovisioned device. set -f keeps the `*` in
     # --remote-allow-origins from glob-expanding during word splitting.
     set -f
-    DEBUG_FLAGS="${lib.optionalString dbg cdpArgs}"
-    ${lib.optionalString autoLogin ''
-      if [ -z "$DEBUG_FLAGS" ] && [ -r ${tokenPath} ]; then
-        DEBUG_FLAGS="${cdpArgs}"
-      fi
-    ''}
+    DEBUG_FLAGS="${cdpArgs}"
 
     # Chromium refuses to launch when its SingletonLock names a different host
     # ("profile in use by another computer") — which happens once the MAC-derived
@@ -302,8 +298,8 @@ let
 
   # Navigate the already-running kiosk browser to a URL via Chromium's loopback
   # CDP port (same mechanism as the token injector) — no relaunch, just a
-  # top-level location change. The port is open whenever autoLogin is on (its
-  # default) or dev remote-debugging is enabled; if neither, these are no-ops.
+  # top-level location change. The port is always open (see the launcher), so
+  # this works regardless of provisioning state.
   cdpNav = pkgs.writeShellScript "ha-kiosk-nav" ''
     set -u
     url="$1"
@@ -789,11 +785,11 @@ in
     default = true;
     description = ''
       Auto-log the kiosk into Home Assistant with the long-lived token staged at
-      ${tokenPath} (from config import / seed). When a token is present the
-      browser gets a loopback-only Chromium remote-debug port and an in-session
-      helper injects the token (sets localStorage hassTokens, navigates to the
-      app root). No token means no port and no-op. Disabling turns off both the
-      injection and the loopback debug port.
+      ${tokenPath} (from config import / seed). When a token is present an
+      in-session helper injects it over the loopback CDP port (sets localStorage
+      hassTokens, navigates to the app root); no token means the injector is a
+      no-op. The CDP port itself is always open (the waybar buttons need it), so
+      disabling this only turns off the token injection.
     '';
   };
 

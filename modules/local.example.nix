@@ -19,11 +19,9 @@
   # "provisioned", so first boot goes straight to the dashboard and skips setup.
   dashboardAssistant.seed.haUrl = "http://homeassistant.local:8123";
 
-  # DEV ONLY: expose Chromium remote debugging on 127.0.0.1:9222 so you can drive
-  # the kiosk browser from host DevTools over `just qemu-ssh` (tunnels 9222).
-  # Lets you paste a long token/password with the host clipboard. Leave off for
-  # real images.
-  # dashboardAssistant.debug.chromiumRemoteDebugging = true;
+  # Chromium's CDP port is always open on 127.0.0.1:9222 (the waybar buttons need
+  # it), so you can drive the kiosk browser from host DevTools over `just qemu-ssh`
+  # (tunnels 9222) without any extra option.
 
   # DEV ONLY: allow root SSH login with these keys (needed for `just qemu-ssh` /
   # `just net-check`; the live ISO has no root password). Paste your pubkey(s).

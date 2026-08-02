@@ -5,16 +5,6 @@ let
 in
 {
   options.dashboardAssistant.debug = {
-    chromiumRemoteDebugging = lib.mkEnableOption ''
-      Chromium remote debugging on 127.0.0.1:9222 (DEV ONLY).
-
-      Drive the kiosk's browser from a host DevTools session over an SSH tunnel
-      (ssh -L 9222:localhost:9222). Because it runs in the kiosk page's context you
-      can paste a long password/token with the *host* clipboard, or seed an auth
-      token into localStorage — no guest clipboard needed. The port binds to
-      loopback, so it is only reachable through the tunnel
-    '';
-
     rootAuthorizedKeys = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [ ];
