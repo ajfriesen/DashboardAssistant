@@ -11,7 +11,7 @@
 # nixos-hardware `firmware.uboot` config.txt kernel= hack the Pi 4 profile uses.
 # Like the Pi 4 there's no systemd-boot, so the ABA auto-rollback (bootCounting)
 # doesn't apply — manual rollback from the recovery UI still works.
-{ modulesPath, lib, ... }:
+{ modulesPath, ... }:
 {
   imports = [
     "${modulesPath}/installer/sd-card/sd-image-aarch64.nix"
@@ -24,26 +24,18 @@
   dashboardAssistant.update.installable = true;
   dashboardAssistant.update.flakeAttr = "dashboard-assistant-rpi5";
 
-  # sd-image-aarch64 sets hardware.enableAllHardware, which pulls in a broad
-  # initrd module list. That list is what makes the SD card usable (it names the
-  # MMC block layer that exposes /dev/mmcblk0, plus the Pi 5's nvme/pcie/rp1
-  # modules added by the nixos-hardware profile). The catch is it also names
-  # DRM/SoC modules the linux-rpi kernel doesn't ship, so the initrd
-  # module-closure fails at build time ("Module dw-hdmi not found"). Rather than
-  # clearing the whole list (which also loses mmc_block), disable only the
-  # offending modules and keep everything else.
-  # See https://github.com/NixOS/nixpkgs/issues/154163
-  boot.initrd.availableKernelModules = {
-    dw-hdmi = lib.mkForce false;
-    dw-mipi-dsi = lib.mkForce false;
-    rockchipdrm = lib.mkForce false;
-    rockchip-rga = lib.mkForce false;
-    phy-rockchip-pcie = lib.mkForce false;
-    pcie-rockchip-host = lib.mkForce false;
-    pwm-sun4i = lib.mkForce false;
-    sun4i-drm = lib.mkForce false;
-    sun8i-mixer = lib.mkForce false;
-  };
+  # sd-image-aarch64 sets hardware.enableAllHardware, whose broad initrd module
+  # list assumes a mainline kernel and names many modules the stripped linux-rpi
+  # kernel doesn't ship (tpm-crb, dw-hdmi, the generic SATA/SCSI drivers, ...), so
+  # the initrd module-closure fails at build time ("Module tpm-crb not found").
+  # The Pi 5 only needs its own boot modules — mmc_block for the SD card plus the
+  # nvme/pcie/rp1 set the nixos-hardware profile already lists, all of which the
+  # linux-rpi kernel *does* ship. Rather than chasing an ever-shifting disable
+  # list across unstable kernel bumps (as the Pi 4 profile does for its pinned
+  # 26.05 kernel), let the closure skip the modules this kernel lacks: the
+  # genuinely-needed ones are present and stay included.
+  # See boot.initrd.allowMissingModules and https://github.com/NixOS/nixpkgs/issues/154163
+  boot.initrd.allowMissingModules = true;
 
   # Broad Wi-Fi / device firmware, plus the Pi's own firmware blobs.
   hardware.enableRedistributableFirmware = true;
