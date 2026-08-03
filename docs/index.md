@@ -35,6 +35,7 @@ HACS).
     - brightness
     - zoom
     - dark mode
+    - rotation
     - screenshot
     - reboot/shutdown
     - update

@@ -41,6 +41,12 @@ let
   # can re-assert it after a navigation or a session restart. See themeAgent below.
   themeFifo = "/var/lib/dashboard-assistant/theme.fifo";
   themeFile = "/var/lib/dashboard-assistant/theme";
+  # Display rotation: the daemon writes "rotate <deg>" to this FIFO (backing the
+  # HA "Rotation" select) and persists the angle to rotationFile so the kiosk can
+  # re-assert it at session start. Unlike zoom/theme (browser-level, over CDP),
+  # rotation is a compositor-level Sway output transform. See rotationAgent below.
+  rotationFifo = "/var/lib/dashboard-assistant/rotation.fifo";
+  rotationFile = "/var/lib/dashboard-assistant/rotation";
   reportDisplayState = pkgs.writeShellScript "ha-report-display-state" ''
     ${pkgs.coreutils}/bin/printf '%s\n' "$*" \
       | ${pkgs.coreutils}/bin/timeout 1 ${pkgs.coreutils}/bin/tee ${displayStateFifo} >/dev/null 2>&1 || true
@@ -456,6 +462,50 @@ let
     done
   '';
 
+  # Apply an absolute display rotation (degrees clockwise) as a Sway output
+  # transform on every output. 0° maps to Sway's "normal"; the others pass
+  # through unchanged. Rotating an output also remaps absolute (touch) input to
+  # match, so taps on a rotated panel still land under the finger. An unsupported
+  # value is ignored rather than handed to swaymsg.
+  swayRotate = pkgs.writeShellScript "ha-kiosk-rotate" ''
+    set -u
+    case "''${1:-}" in
+      0)   t=normal ;;
+      90)  t=90 ;;
+      180) t=180 ;;
+      270) t=270 ;;
+      *)   exit 0 ;;
+    esac
+    ${pkgs.sway}/bin/swaymsg output '*' transform "$t" >/dev/null 2>&1 || true
+  '';
+
+  # Re-assert the persisted rotation once at session start — the compositor always
+  # comes up at 0°. A missing file or an empty/0°/invalid value is a no-op
+  # (swayRotate ignores it). Unlike zoom/theme this needs no per-navigation
+  # restore: an output transform is a compositor property, untouched by page loads.
+  rotationRestore = pkgs.writeShellScript "ha-rotation-restore" ''
+    set -u
+    [ -r ${rotationFile} ] || exit 0
+    d=$(${pkgs.coreutils}/bin/cat ${rotationFile} 2>/dev/null | ${pkgs.coreutils}/bin/tr -d '[:space:]')
+    ${swayRotate} "$d"
+  '';
+
+  # Rotation agent: the daemon writes "rotate <deg>" to the rotation FIFO (backing
+  # the HA "Rotation" select) and this in-session loop applies it immediately.
+  # Held open read-write (fd 3) for the whole session and de-orphaned on start,
+  # exactly like the display, nav, zoom and theme agents.
+  rotationAgent = pkgs.writeShellScript "ha-rotation-agent" ''
+    for pid in $(${pkgs.procps}/bin/pgrep -f ha-rotation-agent); do
+      [ "$pid" = "$$" ] || kill "$pid" 2>/dev/null || true
+    done
+    exec 3<> ${rotationFifo}
+    while IFS=' ' read -r cmd arg <&3; do
+      case "$cmd" in
+        rotate) ${swayRotate} "$arg" >/dev/null 2>&1 || true ;;
+      esac
+    done
+  '';
+
   # Waybar Prev/Next: cycle the pushable page list. They POST to the daemon — the
   # single owner of the list and current index — which navigates the browser and
   # republishes the current page to HA, so the bar and the HA select stay in sync.
@@ -756,6 +806,12 @@ let
     exec ${themeAgent}
     exec ${themeRestore}
 
+    # Applies display-rotation changes from the HA "Rotation" select, and
+    # re-asserts the persisted angle once at session start (the compositor comes
+    # up at 0°).
+    exec ${rotationAgent}
+    exec ${rotationRestore}
+
     # Re-powers the display on the next input event after the Off button blanks it.
     exec ${wakeAgent}
 
@@ -885,6 +941,9 @@ in
       # Theme FIFO: the daemon writes "theme <dark|light>"; the in-session theme
       # agent reads it and flips HA's frontend theme over Chromium's CDP port.
       "p /var/lib/dashboard-assistant/theme.fifo 0660 dashboard-assistant dashboard-assistant - -"
+      # Rotation FIFO: the daemon writes "rotate <deg>"; the in-session rotation
+      # agent reads it and applies a Sway output transform.
+      "p /var/lib/dashboard-assistant/rotation.fifo 0660 dashboard-assistant dashboard-assistant - -"
     ];
 
     hardware.graphics.enable = true;

@@ -84,7 +84,8 @@ func main() {
 	upd := NewUpdateChecker()
 	zoom := NewZoom()
 	theme := NewTheme()
-	hub := NewHAHub(loadAPIToken(), disp, pages, act, upd, zoom, theme)
+	rot := NewRotation()
+	hub := NewHAHub(loadAPIToken(), disp, pages, act, upd, zoom, theme, rot)
 	srv := &server{nm: nm, ha: hub, pages: pages, diag: newDiagSession()}
 
 	// Home Assistant API: an authenticated LAN listener the first-party HACS

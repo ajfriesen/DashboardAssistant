@@ -21,6 +21,7 @@ the device's Config → Info screen to pair. From there you can:
 
 - Turn the **display** on/off and set **brightness**.
 - Adjust **zoom** and flip **dark mode**.
+- **Rotate** the display to 0, 90, 180 or 270°.
 - Take a **screenshot** of the current view on demand.
 - Switch the active **page**, or edit the list of dashboard URLs.
 - **Reboot** or **shut down** the device.

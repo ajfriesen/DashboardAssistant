@@ -28,14 +28,16 @@ var (
 	// Reverse channel: in-session agents write the *actual* power state here and
 	// the daemon publishes it, so HA stays in sync with out-of-band changes.
 	displayStateFifo = stateDir + "/display-state.fifo"
-	apiTokenFile     = stateDir + "/api-token"  // device HA API token, generated on first boot / written by config import
-	urlsFile         = stateDir + "/urls.json"  // pushable page list (name+url), web UI / config import
-	navFifo          = stateDir + "/nav.fifo"   // daemon writes a URL; in-session agent navigates Chromium there
-	zoomFifo         = stateDir + "/zoom.fifo"  // daemon writes "zoom <pct>"; in-session agent applies CSS zoom over CDP
-	zoomFile         = stateDir + "/zoom"       // persisted browser zoom percent, restored by the kiosk on launch
-	themeFifo        = stateDir + "/theme.fifo" // daemon writes "theme <dark|light>"; in-session agent flips HA's theme over CDP
-	themeFile        = stateDir + "/theme"      // persisted dark/light choice, restored by the kiosk on launch
-	dmiFile          = stateDir + "/dmi.env"    // hardware serial, written by the daemon's root ExecStartPre (DMI is root-only)
+	apiTokenFile     = stateDir + "/api-token"     // device HA API token, generated on first boot / written by config import
+	urlsFile         = stateDir + "/urls.json"     // pushable page list (name+url), web UI / config import
+	navFifo          = stateDir + "/nav.fifo"      // daemon writes a URL; in-session agent navigates Chromium there
+	zoomFifo         = stateDir + "/zoom.fifo"     // daemon writes "zoom <pct>"; in-session agent applies CSS zoom over CDP
+	zoomFile         = stateDir + "/zoom"          // persisted browser zoom percent, restored by the kiosk on launch
+	themeFifo        = stateDir + "/theme.fifo"    // daemon writes "theme <dark|light>"; in-session agent flips HA's theme over CDP
+	themeFile        = stateDir + "/theme"         // persisted dark/light choice, restored by the kiosk on launch
+	rotationFifo     = stateDir + "/rotation.fifo" // daemon writes "rotate <deg>"; in-session agent applies a Sway output transform
+	rotationFile     = stateDir + "/rotation"      // persisted display rotation (degrees), restored by the kiosk on launch
+	dmiFile          = stateDir + "/dmi.env"       // hardware serial, written by the daemon's root ExecStartPre (DMI is root-only)
 )
 
 const sessionUnit = "greetd.service" // the Sway kiosk session; restart relaunches it
@@ -157,7 +159,7 @@ func markOnline() {
 func clearProvisioningState() error {
 	for _, p := range []string{
 		markerFile, runtimeEnv, tokenFile, apiTokenFile,
-		onlineMarker, urlsFile, zoomFile, themeFile,
+		onlineMarker, urlsFile, zoomFile, themeFile, rotationFile,
 	} {
 		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("remove %s: %w", filepath.Base(p), err)

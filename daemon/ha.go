@@ -138,6 +138,10 @@ type stateSnapshot struct {
 	Theme struct {
 		Dark bool `json:"dark"`
 	} `json:"theme"`
+	Rotation struct {
+		Current int   `json:"current"`
+		Options []int `json:"options"`
+	} `json:"rotation"`
 	Host struct {
 		IP     string `json:"ip"`
 		Uptime int    `json:"uptime"`
@@ -172,6 +176,7 @@ type HAHub struct {
 	upd   *UpdateChecker
 	zoom  *Zoom
 	theme *Theme
+	rot   *Rotation
 
 	mu   sync.Mutex
 	subs map[chan []byte]struct{}
@@ -184,7 +189,7 @@ type HAHub struct {
 // NewHAHub wires the object observers to broadcast a fresh snapshot to every SSE
 // subscriber, keeping HA in sync with both API commands and out-of-band changes
 // reported over the reverse channel (display power, touch, brightness).
-func NewHAHub(token string, disp *Display, pages *Pages, act *Activity, upd *UpdateChecker, zoom *Zoom, theme *Theme) *HAHub {
+func NewHAHub(token string, disp *Display, pages *Pages, act *Activity, upd *UpdateChecker, zoom *Zoom, theme *Theme, rot *Rotation) *HAHub {
 	h := &HAHub{
 		token:  token,
 		nodeID: nodeID(),
@@ -195,6 +200,7 @@ func NewHAHub(token string, disp *Display, pages *Pages, act *Activity, upd *Upd
 		upd:    upd,
 		zoom:   zoom,
 		theme:  theme,
+		rot:    rot,
 		subs:   map[chan []byte]struct{}{},
 	}
 	obs := func() { h.broadcast() }
@@ -204,6 +210,7 @@ func NewHAHub(token string, disp *Display, pages *Pages, act *Activity, upd *Upd
 	upd.SetObserver(obs)
 	zoom.SetObserver(obs)
 	theme.SetObserver(obs)
+	rot.SetObserver(obs)
 	return h
 }
 
@@ -290,6 +297,8 @@ func (h *HAHub) snapshot() stateSnapshot {
 
 	s.Zoom = h.zoom.Level()
 	s.Theme.Dark = h.theme.Dark()
+	s.Rotation.Current = h.rot.Degrees()
+	s.Rotation.Options = h.rot.Options()
 
 	s.Host.IP = primaryIP()
 	if up, err := readUptime(); err == nil {
@@ -337,6 +346,7 @@ func (h *HAHub) routes() http.Handler {
 	mux.HandleFunc("/api/ha/page_slot", h.auth(h.handlePageSlot))
 	mux.HandleFunc("/api/ha/zoom", h.auth(h.handleZoom))
 	mux.HandleFunc("/api/ha/theme", h.auth(h.handleTheme))
+	mux.HandleFunc("/api/ha/rotation", h.auth(h.handleRotation))
 	mux.HandleFunc("/api/ha/power", h.auth(h.handlePower))
 	mux.HandleFunc("/api/ha/reset", h.auth(h.handleReset))
 	mux.HandleFunc("/api/ha/update", h.auth(h.handleUpdate))
@@ -621,6 +631,28 @@ func (h *HAHub) handleTheme(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.theme.Set(req.Dark); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, h.snapshot())
+}
+
+// handleRotation sets the display orientation in degrees ({"degrees": 0|90|180|
+// 270}). An unsupported angle is a client error; a session-not-ready failure from
+// Set (the kiosk isn't up yet) is a server error, mirroring handleZoom — the
+// persisted angle is still restored on the next launch.
+func (h *HAHub) handleRotation(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Degrees int `json:"degrees"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if !validRotation(req.Degrees) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "degrees must be one of 0, 90, 180, 270"})
+		return
+	}
+	if err := h.rot.Set(req.Degrees); err != nil {
 		writeErr(w, err)
 		return
 	}

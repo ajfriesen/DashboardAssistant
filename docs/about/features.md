@@ -40,6 +40,7 @@ device's Config → Info screen. It appears as a single device with these entiti
 | Display | `light` | Turn the panel on/off (DPMS) and set brightness |
 | Zoom | `number` | Browser zoom, 25–400 % |
 | Dark mode | `switch` | Flip the Home Assistant frontend dark/light |
+| Rotation | `select` | Rotate the display 0 / 90 / 180 / 270° |
 | Screenshot | `button` + `image` | Capture the current web view on demand; the latest shot shows as an image you can click to enlarge |
 | Page | `select` | Jump to one of your configured dashboard URLs |
 | Next / Previous page | `button` | Cycle through the dashboard URLs |
