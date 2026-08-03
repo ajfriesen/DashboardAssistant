@@ -172,6 +172,9 @@
           pkgs.websocat
           # Static site generator for the docs/ site (`zensical serve`/`build`).
           pkgs.zensical
+          # Conventional Commits: `cz commit` for a guided message, `cz check` to
+          # lint one. Matches the integration repo's dev shell.
+          pkgs.commitizen
         ];
       };
 
