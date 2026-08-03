@@ -200,12 +200,17 @@ func readDMI(field string) string {
 	return strings.TrimSpace(string(b))
 }
 
-// readModel is the DMI board model, e.g. "HARDKERNEL ODROID-H2" (both fields are
-// world-readable, unlike the serial).
+// readModel is the board model, e.g. "HARDKERNEL ODROID-H2" on x86 (DMI) or
+// "Raspberry Pi 4 Model B Rev 1.4" on a Pi (device tree). Both sources are
+// world-readable, unlike the serial. DMI is x86-only; ARM boards like the Pi
+// expose their model in the device tree instead, so fall back there when DMI is
+// empty — otherwise the HA Model sensor is blank on every Pi.
 func readModel() string {
 	name := readDMI("product_name")
 	vendor := readDMI("sys_vendor")
 	switch {
+	case name == "" && vendor == "":
+		return readDeviceTreeModel()
 	case name == "":
 		return vendor
 	case vendor == "" || strings.Contains(strings.ToLower(name), strings.ToLower(vendor)):
@@ -213,6 +218,17 @@ func readModel() string {
 	default:
 		return vendor + " " + name
 	}
+}
+
+// readDeviceTreeModel returns the device-tree model string (Raspberry Pi and
+// other ARM boards). The value is NUL-terminated in sysfs, so trim the trailing
+// NUL(s) as well as whitespace. "" when there is no device tree.
+func readDeviceTreeModel() string {
+	b, err := os.ReadFile("/sys/firmware/devicetree/base/model")
+	if err != nil {
+		return ""
+	}
+	return strings.Trim(string(b), "\x00 \t\r\n")
 }
 
 // readSerial returns the hardware serial the root ExecStartPre helper stashed in
