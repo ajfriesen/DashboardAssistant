@@ -5,12 +5,10 @@
 # release. Board specifics (linux-rpi kernel, RP1 southbridge, PCIe/NVMe, v3d
 # GPU) come from the nixos-hardware raspberry-pi-5 module wired in via flake.nix.
 #
-# Boot chain differs from the Pi 4: the unstable sd-image-aarch64 builder drops a
-# generic u-boot.bin on the firmware partition and the Pi 5 firmware chains
-# start*.elf → u-boot.bin → extlinux.conf → Linux, so we do NOT need the
-# nixos-hardware `firmware.uboot` config.txt kernel= hack the Pi 4 profile uses.
-# Like the Pi 4 there's no systemd-boot, so the ABA auto-rollback (bootCounting)
-# doesn't apply — manual rollback from the recovery UI still works.
+# Boot chain is the same as the Pi 4: the GPU firmware can't read extlinux.conf,
+# so it needs U-Boot as an intermediary. Like the Pi 4 there's no systemd-boot,
+# so the ABA auto-rollback (bootCounting) doesn't apply — manual rollback from the
+# recovery UI still works.
 { modulesPath, ... }:
 {
   imports = [
@@ -23,6 +21,15 @@
   # auto-rollback here (extlinux), but manual rollback from the recovery UI works.
   dashboardAssistant.update.installable = true;
   dashboardAssistant.update.flakeAttr = "dashboard-assistant-rpi5";
+
+  # Boot chain: copy u-boot.bin onto the firmware partition and point config.txt's
+  # kernel= at it (plus arm_64bit=1), so start*.elf → u-boot.bin → extlinux.conf →
+  # Linux. nixos-hardware's firmware.nix mkForce-overrides the sd-image builder's
+  # own populateFirmwareCommands and only stages U-Boot / writes kernel= when this
+  # is set — without it there is no kernel on the FAT partition and the Pi flashes
+  # the green LED 7 times ("kernel image not found") with a black screen, exactly
+  # as the Pi 4 profile documents.
+  hardware.raspberry-pi.firmware.uboot.enable = true;
 
   # sd-image-aarch64 sets hardware.enableAllHardware, whose broad initrd module
   # list assumes a mainline kernel and names many modules the stripped linux-rpi
