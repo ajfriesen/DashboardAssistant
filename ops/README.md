@@ -34,8 +34,11 @@ One-time setup with the `pass` provider:
 # 1. A GPG key + an initialised pass store: pass init <your-gpg-id>
 # 2. Point secretspec at the pass provider (writes ~/.config/secretspec/config.toml):
 secretspec config init            # pick "pass"
-# 3. Store the values (prompts, encrypted into pass). `check` fills any missing:
-secretspec check                  # or: secretspec set R2_ACCOUNT_ID, etc.
+# 3. Store the values (prompts, encrypted into pass). They're optional (ops-only),
+#    so set them explicitly rather than via `check`:
+secretspec set R2_ACCOUNT_ID
+secretspec set AWS_ACCESS_KEY_ID
+secretspec set AWS_SECRET_ACCESS_KEY
 ```
 
 Then apply / inspect the policy:
