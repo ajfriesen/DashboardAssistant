@@ -137,13 +137,24 @@ jobs:
           case "$GITHUB_REF_NAME" in *-*) channel=pre-release ;; *) channel=release ;; esac
           name="dashboard-assistant-${version}.img.zst"
           dir="$channel/$model"
-          aws s3 cp "$img" "s3://$bucket/$dir/$name"          --endpoint-url "$R2_ENDPOINT"
-          aws s3 cp "$img" "s3://$bucket/$dir/latest.img.zst" --endpoint-url "$R2_ENDPOINT"
+          nixos=$(nix eval --raw ".#nixosConfigurations.dashboard-assistant-${model}.config.system.nixos.version")
+          sha=$(sha256sum "$img" | cut -d' ' -f1)
+          built=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          # Metadata (x-amz-meta-*) attached to both objects; see release-image.yml.
+          meta="board=$model,arch=aarch64,channel=$channel,version=$version,tag=$GITHUB_REF_NAME,commit=$GITHUB_SHA,nixos-version=$nixos,built=$built,sha256=$sha,run-url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          for key in "$dir/$name" "$dir/latest.img.zst"; do
+            aws s3 cp "$img" "s3://$bucket/$key" \
+              --endpoint-url "$R2_ENDPOINT" \
+              --content-type application/zstd \
+              --metadata "$meta"
+          done
           size=$(du -h "$img" | cut -f1)
           {
             echo "### 📦 $model image published to $dir/"
             echo
             echo "**[$name](${{ vars.R2_PUBLIC_URL }}/$dir/$name)** ($size)"
+            echo
+            echo "nixos \`$nixos\` · commit \`${GITHUB_SHA::7}\` · sha256 \`$sha\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       # Fallback for forks without R2 config building a tag: hand the release image
