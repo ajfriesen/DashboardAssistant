@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0-rc.1 (2026-08-04)
+
+
+### Miscellaneous
+
+* reset version baseline and release 0.1.0-rc.1 ([9c35b2f](https://github.com/ajfriesen/DashboardAssistant/commit/9c35b2f084af76375339760a98c79f8732e9af33))
+
+## Changelog
+
 This file is generated from [Conventional Commit](https://www.conventionalcommits.org/)
 messages by [release-please](https://github.com/googleapis/release-please). New
 versions are added above automatically when a release PR is merged — write clear
