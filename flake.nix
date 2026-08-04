@@ -180,6 +180,13 @@
           # Manage the Cloudflare R2 images bucket over its S3 API — notably apply
           # the lifecycle policy in ops/r2-lifecycle.json (`just r2-lifecycle-apply`).
           pkgs.awscli2
+          # Declarative secrets: secretspec.toml declares the R2 credentials the
+          # ops recipes need; `secretspec run -- <cmd>` resolves them from the
+          # configured provider (pass/GPG) and injects them as env vars. pass +
+          # gnupg back the default provider choice. See ops/README.md.
+          pkgs.secretspec
+          pkgs.pass
+          pkgs.gnupg
         ];
 
         # Point git at the version-controlled hook (.githooks/commit-msg) so every

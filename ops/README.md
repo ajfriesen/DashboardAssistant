@@ -22,19 +22,32 @@ Current rules:
 
 ## Applying it
 
-From the dev shell (which provides `awscli2`), with R2 S3 credentials in the
-environment:
+Credentials come from [secretspec](https://secretspec.dev) (declared in
+`../secretspec.toml`), so nothing sensitive is typed on the command line or kept
+in the repo — values live in your provider (e.g. `pass`/GPG) and are injected as
+env vars only for the duration of the command. Everything below runs from the dev
+shell, which provides `secretspec`, `aws`, `pass` and `gnupg`.
+
+One-time setup with the `pass` provider:
 
 ```sh
-export R2_ACCOUNT_ID=<cloudflare-account-id>
-export R2_BUCKET=dashboard-assistant            # optional; this is the default
-export AWS_ACCESS_KEY_ID=<r2-s3-token-id>
-export AWS_SECRET_ACCESS_KEY=<r2-s3-token-secret>
-
-just r2-lifecycle-apply   # apply ops/r2-lifecycle.json
-just r2-lifecycle-show    # print the policy currently on the bucket
+# 1. A GPG key + an initialised pass store: pass init <your-gpg-id>
+# 2. Point secretspec at the pass provider (writes ~/.config/secretspec/config.toml):
+secretspec config init            # pick "pass"
+# 3. Store the values (prompts, encrypted into pass). `check` fills any missing:
+secretspec check                  # or: secretspec set R2_ACCOUNT_ID, etc.
 ```
 
-The R2 S3 API token needs object + bucket-config write on this bucket. The
-account id and bucket name mirror the `R2_ACCOUNT_ID` / `R2_BUCKET` Actions
-variables.
+Then apply / inspect the policy:
+
+```sh
+secretspec run -- just r2-lifecycle-apply   # apply ops/r2-lifecycle.json
+secretspec run -- just r2-lifecycle-show    # print the policy on the bucket
+```
+
+`secretspec run` resolves the declared secrets and runs the recipe with them in
+the environment; `just` then invokes `aws`. The R2 S3 API token needs object +
+bucket-config write on this bucket. The account id and bucket name mirror the
+`R2_ACCOUNT_ID` / `R2_BUCKET` Actions variables; `R2_BUCKET` isn't secret and
+defaults in the recipe. The provider is your machine's choice — swap `pass` for
+any secretspec backend via `secretspec config init` without touching the repo.
