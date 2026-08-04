@@ -9,15 +9,5 @@ Changes are grouped by commit type (Features, Bug Fixes, …). The hardware targ
 is the commit **scope**, so a board's changes read as e.g. `feat(rpi5):` /
 `fix(x86):`; use `daemon`/`core` (or no scope) for changes that apply everywhere.
 
-`0.2.0` is the documented starting point; automated releases begin with the next
-version.
-
-## [0.2.0] - 2026-08-04
-
-### Summary
-
-Baseline release of Dashboard Assistant OS — the declarative, single-purpose
-Home Assistant kiosk for x86_64, Raspberry Pi 4 and Raspberry Pi 5. Includes
-first-boot provisioning, the management daemon and its Home Assistant
-integration (display, brightness, zoom, dark mode, rotation, pages, screenshot,
-updates and sensors), in-place OTA updates, and generation rollback/recovery.
+No public release has been cut yet; the first is `0.1.0`, reached via
+`0.1.0-rc.x` prereleases.
