@@ -25,16 +25,17 @@ name: cache-rpi
 #        --push dashboardassistant).
 # The Attic push only runs on the canonical repo; forks build without it.
 #
-# The flashable SD images are also published to the same Cloudflare R2 bucket the
-# x86 images use (GitHub Actions artifacts are far too slow to download at image
-# sizes), channel/board-structured: a v* tag lands under release/<model>/ (or
-# pre-release/<model>/ for a hyphened prerelease tag) as an immutable versioned
-# object plus a `latest.img.zst`; regular pushes land under development/<model>/
-# keyed by date + short SHA plus its own `latest` — mirroring release-image.yml
-# and build.yml. Requires the same repo config as those workflows (vars
-# R2_ACCOUNT_ID / R2_BUCKET / R2_PUBLIC_URL, secrets R2_ACCESS_KEY_ID /
-# R2_SECRET_ACCESS_KEY). Without R2_BUCKET the R2 step is skipped and the image
-# falls back to a (slow) workflow artifact so forks still get something flashable.
+# On a v* tag the flashable SD image is also published to the same Cloudflare R2
+# bucket the x86 image uses (GitHub Actions artifacts are far too slow to download
+# at image sizes), channel/board-structured: release/<model>/ (or pre-release/
+# <model>/ for a hyphened prerelease tag) as an immutable versioned object plus a
+# `latest.img.zst` — mirroring release-image.yml. There are no development images:
+# a regular push only warms the Attic cache above (local `just build-rpi*` and
+# SSH-based updates substitute from it). Requires the same repo config as the
+# release workflow (vars R2_ACCOUNT_ID / R2_BUCKET / R2_PUBLIC_URL, secrets
+# R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY). Without R2_BUCKET the R2 step is
+# skipped and the image falls back to a (slow) workflow artifact so forks building
+# a tag still get something flashable.
 
 on:
   workflow_dispatch:
@@ -52,8 +53,8 @@ concurrency:
 env:
   ATTIC_ENDPOINT: https://nix-cache.dashboardassistant.org
   ATTIC_CACHE: dashboardassistant
-  # EU-jurisdiction R2 endpoint, matching build.yml. NOTE: release.yml uses the
-  # non-".eu." host — one of the two is stale; reconcile them for the same bucket.
+  # EU-jurisdiction R2 endpoint, matching release-image.yml so both write to the
+  # same bucket. Flip back to the non-".eu." host if the bucket is not EU.
   R2_ENDPOINT: https://${{ vars.R2_ACCOUNT_ID }}.eu.r2.cloudflarestorage.com
 
 jobs:
@@ -92,32 +93,37 @@ jobs:
         if: ${{ vars.R2_BUCKET != '' }}
         run: nix profile install github:NixOS/nixpkgs/nixos-26.05#awscli2
 
-      # Build the full system toplevel first: its closure references the kernel,
-      # initrd and every system package. The SD image blob itself does NOT retain
-      # store references to the kernel (it's baked into the image bytes), so the
-      # toplevel closure — not the image — is what makes a later local build a
-      # cache hit. We build the image too so we can publish it to R2 below.
+      # Build the full system toplevel: its closure references the kernel, initrd
+      # and every system package, and that closure — not the image — is what makes
+      # a later local build (or an OTA update) a cache hit. This runs on every push
+      # so the cache stays warm for local `just build-rpi*` and SSH-based updates.
       # --accept-flake-config honours the flake's Attic substituter (same as the
       # justfile recipes), so an already-cached toplevel — e.g. the Pi 4 closure a
       # previous run pushed — is substituted instead of recompiled. Only a
       # not-yet-cached board (a fresh Pi 5, or after a nixpkgs bump) compiles.
-      - name: Build Pi system + image
+      - name: Build Pi system (populate the cache)
         run: |
           nix build --print-build-logs --accept-flake-config \
             .#nixosConfigurations.dashboard-assistant-${{ matrix.model }}.config.system.build.toplevel \
             --out-link result-toplevel
+
+      # The flashable image is only built (and published) for a v* tag release —
+      # there are no development images, so a regular push just warms the cache
+      # above.
+      - name: Build Pi image
+        if: ${{ github.ref_type == 'tag' }}
+        run: |
           nix build --print-build-logs --accept-flake-config \
             .#packages.aarch64-linux.${{ matrix.model }}-image \
             --out-link result-${{ matrix.model }}
 
-      # Publish the flashable SD image to R2, channel/board-structured (mirrors
-      # release-image.yml). A v* tag goes to release/ or pre-release/ (a hyphen in
-      # the tag => prerelease) as an immutable versioned object plus a `latest`
-      # pointer; regular pushes go to development/<model>/ keyed by date + short SHA
-      # plus its own `latest`. The sd-image is already zstd-compressed, so we cp it
-      # straight to R2. Skipped without R2_BUCKET (see the artifact fallback below).
+      # Publish the flashable SD image to R2 on a v* tag, channel/board-structured
+      # (mirrors release-image.yml): release/<model>/ or pre-release/<model>/ for a
+      # hyphened prerelease tag, as an immutable versioned object plus a `latest`
+      # pointer. The sd-image is already zstd-compressed, so we cp it straight to
+      # R2. Skipped without R2_BUCKET (see the artifact fallback below).
       - name: Publish SD image to R2
-        if: ${{ vars.R2_BUCKET != '' }}
+        if: ${{ github.ref_type == 'tag' && vars.R2_BUCKET != '' }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -127,14 +133,9 @@ jobs:
           model="${{ matrix.model }}"
           bucket="${{ vars.R2_BUCKET }}"
           img=$(ls result-"$model"/sd-image/*.img.zst)
-          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            version="${GITHUB_REF_NAME#v}"
-            case "$GITHUB_REF_NAME" in *-*) channel=pre-release ;; *) channel=release ;; esac
-            name="dashboard-assistant-${version}.img.zst"
-          else
-            channel="development"
-            name="dashboard-assistant-$(date -u +%Y-%m-%d)-${GITHUB_SHA::7}.img.zst"
-          fi
+          version="${GITHUB_REF_NAME#v}"
+          case "$GITHUB_REF_NAME" in *-*) channel=pre-release ;; *) channel=release ;; esac
+          name="dashboard-assistant-${version}.img.zst"
           dir="$channel/$model"
           aws s3 cp "$img" "s3://$bucket/$dir/$name"          --endpoint-url "$R2_ENDPOINT"
           aws s3 cp "$img" "s3://$bucket/$dir/latest.img.zst" --endpoint-url "$R2_ENDPOINT"
@@ -145,10 +146,10 @@ jobs:
             echo "**[$name](${{ vars.R2_PUBLIC_URL }}/$dir/$name)** ($size)"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # Fallback for forks without R2 config: hand the image out as a (slow)
-      # workflow artifact so there's still something flashable.
+      # Fallback for forks without R2 config building a tag: hand the release image
+      # out as a (slow) workflow artifact so there's still something flashable.
       - name: Upload SD image artifact
-        if: ${{ vars.R2_BUCKET == '' }}
+        if: ${{ github.ref_type == 'tag' && vars.R2_BUCKET == '' }}
         uses: actions/upload-artifact@v7
         with:
           name: dashboard-assistant-${{ matrix.model }}-image
