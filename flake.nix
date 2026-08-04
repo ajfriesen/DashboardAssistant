@@ -177,6 +177,9 @@
           # Conventional Commits: `cz commit` for a guided message, `cz check` to
           # lint one. Matches the integration repo's dev shell.
           pkgs.commitizen
+          # Manage the Cloudflare R2 images bucket over its S3 API — notably apply
+          # the lifecycle policy in ops/r2-lifecycle.json (`just r2-lifecycle-apply`).
+          pkgs.awscli2
         ];
 
         # Point git at the version-controlled hook (.githooks/commit-msg) so every

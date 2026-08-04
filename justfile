@@ -22,6 +22,10 @@ help:
   @echo "Introspect:"
   @echo "  options                List the dashboard.* NixOS config options"
   @echo
+  @echo "R2 images bucket:"
+  @echo "  r2-lifecycle-apply     Apply ops/r2-lifecycle.json to the bucket"
+  @echo "  r2-lifecycle-show      Print the bucket's current lifecycle policy"
+  @echo
   @echo "Run 'just --list' for the raw recipe list."
 
 [doc('Build the installer ISO (x86)')]
@@ -174,6 +178,40 @@ cdp-eval expr:
   jq -cn --arg e '{{expr}}' \
     '{id:1,method:"Runtime.evaluate",params:{expression:$e,returnByValue:true}}' \
     | timeout 5 websocat "$ws" || true
+
+# Apply the R2 bucket lifecycle policy from ops/r2-lifecycle.json (R2 speaks the
+# S3 PutBucketLifecycleConfiguration API). Needs R2 S3 credentials + account id in
+# the environment; R2_BUCKET defaults to the images bucket. See ops/README.md.
+#   export R2_ACCOUNT_ID=... AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=...
+#   just r2-lifecycle-apply
+[doc('Apply ops/r2-lifecycle.json to the R2 images bucket')]
+r2-lifecycle-apply:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  : "${R2_ACCOUNT_ID:?set R2_ACCOUNT_ID (Cloudflare account id)}"
+  : "${AWS_ACCESS_KEY_ID:?set AWS_ACCESS_KEY_ID (R2 S3 token id)}"
+  : "${AWS_SECRET_ACCESS_KEY:?set AWS_SECRET_ACCESS_KEY (R2 S3 token secret)}"
+  bucket="${R2_BUCKET:-dashboard-assistant}"
+  aws s3api put-bucket-lifecycle-configuration \
+    --bucket "$bucket" \
+    --lifecycle-configuration file://ops/r2-lifecycle.json \
+    --endpoint-url "https://${R2_ACCOUNT_ID}.eu.r2.cloudflarestorage.com" \
+    --region auto
+  echo "Applied ops/r2-lifecycle.json to bucket '$bucket'."
+
+# Print the lifecycle policy currently applied to the R2 images bucket.
+[doc("Print the R2 images bucket's current lifecycle policy")]
+r2-lifecycle-show:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  : "${R2_ACCOUNT_ID:?set R2_ACCOUNT_ID (Cloudflare account id)}"
+  : "${AWS_ACCESS_KEY_ID:?set AWS_ACCESS_KEY_ID (R2 S3 token id)}"
+  : "${AWS_SECRET_ACCESS_KEY:?set AWS_SECRET_ACCESS_KEY (R2 S3 token secret)}"
+  bucket="${R2_BUCKET:-dashboard-assistant}"
+  aws s3api get-bucket-lifecycle-configuration \
+    --bucket "$bucket" \
+    --endpoint-url "https://${R2_ACCOUNT_ID}.eu.r2.cloudflarestorage.com" \
+    --region auto
 
 # List the dashboard.* config options this OS defines (name, type, default,
 # description). Introspects the NixOS module options via optionAttrSetToDocList.

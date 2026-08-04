@@ -1,0 +1,22 @@
+{
+  "Rules": [
+    {
+      "ID": "abort-incomplete-multipart-uploads",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "" },
+      "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 3 }
+    },
+    {
+      "ID": "expire-development",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "development/" },
+      "Expiration": { "Days": 7 }
+    },
+    {
+      "ID": "expire-pre-releases",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "pre-release/" },
+      "Expiration": { "Days": 90 }
+    }
+  ]
+}
