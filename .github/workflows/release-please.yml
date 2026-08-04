@@ -19,6 +19,15 @@ name: release-please
 on:
   push:
     branches: [main]
+    # Docs-only pushes can't produce a release (docs: commits don't bump the
+    # version), so skip the release-please run for them. These paths are owned by
+    # docs.yml. A later feat:/fix: run still sees any skipped docs commits, since
+    # release-please reads the full commit history when it runs.
+    paths-ignore:
+      - 'docs/**'
+      - 'overrides/**'
+      - 'zensical.toml'
+      - '.github/workflows/docs.yml'
 
 permissions:
   contents: write # create the release PR, tag and GitHub Release
