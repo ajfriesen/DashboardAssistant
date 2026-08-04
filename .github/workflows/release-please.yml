@@ -1,0 +1,55 @@
+name: release-please
+
+# Automates versioning + releases from Conventional Commit messages, reading the
+# commit history on `main` — so it picks up commits pushed straight to main *and*
+# commits that arrive via a merged branch/PR (message must follow feat:/fix:/…).
+#
+# On every push to main it opens/updates a single "release PR" that bumps
+# CHANGELOG.md and flake.nix's version. Merging it creates the vX.Y.Z tag and
+# GitHub Release; the `image` job below then builds and attaches the x86_64 disk
+# image (in the same run, so the default GITHUB_TOKEN's release event doesn't need
+# to start a separate workflow). Use the hardware target as the commit scope
+# (feat(rpi5):/fix(x86):); daemon/core (or no scope) for changes that apply to all.
+#
+# Prereleases: force one with a `Release-As: 0.3.0-rc.1` commit footer. The step
+# below flags any release whose tag has a SemVer prerelease suffix (a hyphen) as a
+# GitHub pre-release; those never reach devices (which track the stable channel).
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write # create the release PR, tag and GitHub Release
+  pull-requests: write # open/update the release PR
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v5
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      # Flag prerelease versions (tag contains a hyphen) as GitHub pre-releases and
+      # drop them from "latest", so they stay off the stable update path.
+      - name: Mark prereleases
+        if: ${{ steps.release.outputs.release_created == 'true' && contains(steps.release.outputs.tag_name, '-') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease --latest=false
+
+  # Build + attach the disk image only when a release was actually cut. Runs in
+  # this same workflow run, gated on the release-please job's output.
+  image:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    uses: ./.github/workflows/release-image.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+    secrets: inherit

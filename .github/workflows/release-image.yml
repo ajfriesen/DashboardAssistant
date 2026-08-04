@@ -1,0 +1,121 @@
+name: release image
+
+# Build the flashable x86_64 disk image for a release and attach it. Invoked by
+# the release-please workflow right after it publishes a release (workflow_call),
+# so release-please owns the tag/release/changelog and this only adds the image.
+# Running it in the same workflow run (rather than on a `release`/tag trigger)
+# sidesteps the rule that events raised by the default GITHUB_TOKEN don't start
+# new workflow runs.
+#
+# We ship the on-disk image (disko btrfs+zstd raw, zstd-compressed), not the live
+# ISO — only the on-disk system persists OTA updates. Even compressed it can
+# approach GitHub's ~2 GiB per-asset cap, so it goes to a Cloudflare R2 bucket
+# (free egress) and is linked from the release notes.
+#
+# Required repo config (Settings -> Secrets and variables -> Actions):
+#   Variables: R2_ACCOUNT_ID, R2_BUCKET, R2_PUBLIC_URL
+#   Secrets:   R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to build and attach the image to (e.g. v0.3.0).
+        required: true
+        type: string
+
+permissions:
+  contents: write # edit the release notes to add the download link
+
+jobs:
+  image:
+    name: Build disk image and attach to release
+    runs-on: ubuntu-latest
+    env:
+      ASSET: dashboard-assistant-${{ inputs.tag }}-x86_64.raw.zst
+      # EU-jurisdiction R2 endpoint, matching build.yml / cache-rpi.yml so all
+      # workflows write to the same bucket. Flip back to the non-".eu." host if
+      # the bucket is not EU.
+      R2_ENDPOINT: https://${{ vars.R2_ACCOUNT_ID }}.eu.r2.cloudflarestorage.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }} # build the tagged tree, not main
+          fetch-depth: 0
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      # Guard: the baked version must match the tag. release-please bumps flake.nix
+      # in the release PR, so this always holds — it just catches a mistake.
+      - name: Verify baked version matches tag
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          baked=$(nix eval --raw \
+            '.#nixosConfigurations.dashboard-assistant-x86-disk.config.environment.etc."dashboard-assistant/version".text')
+          tag="${TAG#v}"
+          echo "baked version = $baked, tag = $tag"
+          if [ "$baked" != "$tag" ]; then
+            echo "::error::flake.nix version ($baked) != release tag ($tag)"
+            exit 1
+          fi
+
+      # Build first so a build failure aborts before we touch R2 or edit the
+      # release. This is the flashable on-disk system (disko btrfs+zstd raw image).
+      - name: Build x86_64 disk image
+        run: nix build .#disk-image
+
+      # Compress straight from the Nix store to the versioned name so we never keep
+      # a second uncompressed copy of the multi-GB raw on the runner.
+      - name: Compress disk image under a versioned name
+        run: |
+          set -euo pipefail
+          zstd -19 -T0 -c "$(readlink -f result)/dashboard-assistant.raw" > "$ASSET"
+
+      # Push the versioned object always; only move the stable "latest" alias for a
+      # real release — a tag with a hyphen (e.g. -rc.1) is a prerelease and must
+      # not clobber the image that stable devices track.
+      - name: Upload image to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          bucket="${{ vars.R2_BUCKET }}"
+          aws s3 cp "$ASSET" "s3://$bucket/$ASSET" --endpoint-url "$R2_ENDPOINT"
+          case "$TAG" in
+            *-*) echo "prerelease $TAG — leaving the 'latest' alias untouched" ;;
+            *)   aws s3 cp "$ASSET" "s3://$bucket/dashboard-assistant-latest-x86_64.raw.zst" \
+                   --endpoint-url "$R2_ENDPOINT" ;;
+          esac
+
+      # release-please already created the release with the changelog notes; prepend
+      # the download block to that body rather than replacing it.
+      - name: Add download link to the release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          url="${{ vars.R2_PUBLIC_URL }}/$ASSET"
+          size=$(du -h "$ASSET" | cut -f1)
+          body=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body -q .body)
+          notes=$(mktemp)
+          {
+            echo "## 📥 Download"
+            echo
+            echo "**[$ASSET]($url)** ($size) — x86_64 flashable disk image (zstd-compressed)"
+            echo
+            echo "Flash it to the target's internal disk (confirm the device first!):"
+            echo '```'
+            echo "curl -L \"$url\" | zstd -dc | sudo dd of=/dev/sdX bs=4M oflag=sync conv=fsync status=progress"
+            echo '```'
+            echo
+            printf '%s\n' "$body"
+          } > "$notes"
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$notes"

@@ -1,0 +1,38 @@
+name: PR title
+
+# Guardrail for the release-please flow: a squash-merged PR uses the PR *title* as
+# its commit message, and release-please derives the changelog + version bump from
+# it. So the title must be a valid Conventional Commit, e.g. "feat(rpi5): chainload
+# U-Boot" or "fix(daemon): handle missing battery".
+#
+# (Commits pushed straight to main can't be checked before they land — this only
+# covers branch work that arrives via a PR. Keep those direct commits Conventional
+# by hand; the local .githooks/commit-msg hook helps.)
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Allowed types — keep in step with release-please's changelog-sections.
+          types: |
+            feat
+            fix
+            docs
+            chore
+            refactor
+            perf
+            test
+            build
+            ci
+            style
+            revert

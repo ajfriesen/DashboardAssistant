@@ -1,0 +1,7 @@
+[tool.commitizen]
+# Conventional Commits ruleset for `cz commit` (guided prompt) and `cz check`
+# (validation, run from .githooks/commit-msg). Versioning and the changelog are
+# owned by release-please in CI, so commitizen is used only to author and lint
+# messages here. Use the hardware target as the scope, e.g. feat(rpi5):/fix(x86):,
+# and daemon/core (or no scope) for changes that apply everywhere.
+name = "cz_conventional_commits"

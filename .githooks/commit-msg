@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Validate the commit message against Conventional Commits with commitizen, so
+# release-please can derive the version and changelog from it. This runs on every
+# commit — including ones pushed straight to main, which the CI PR-title check
+# can't cover.
+#
+# Skips auto-generated messages (merges, reverts, fixup/squash), and no-ops when
+# commitizen isn't on PATH (e.g. committing outside the Nix dev shell) so it never
+# blocks a commit just because the tooling isn't loaded.
+set -euo pipefail
+
+msg_file="$1"
+first_line=$(head -n1 "$msg_file")
+case "$first_line" in
+  "Merge "* | "Revert "* | "Reapply "* | "fixup! "* | "squash! "*) exit 0 ;;
+esac
+
+if ! command -v cz >/dev/null 2>&1; then
+  echo "commit-msg: commitizen (cz) not on PATH; skipping Conventional Commit check." >&2
+  echo "            run 'direnv allow' or 'nix develop' to enable it." >&2
+  exit 0
+fi
+
+exec cz check --commit-msg-file "$msg_file"

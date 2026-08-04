@@ -52,9 +52,11 @@
 
       # Release version baked into every image. The daemon reports this to Home
       # Assistant as the "installed" version and compares it against the newest
-      # GitHub release tag to advertise updates. Bump it in lockstep with the
-      # release tag you cut (tags may carry a leading "v"; the daemon strips it).
-      version = "0.2.0";
+      # GitHub release tag to advertise updates. release-please bumps this line in
+      # the release PR to match the tag it cuts (via the x-release-please-version
+      # annotation; tags may carry a leading "v", which the daemon strips) — don't
+      # edit it by hand.
+      version = "0.2.0"; # x-release-please-version
 
       # Optional per-build overrides (e.g. a seeded HA URL / debug flags). See
       # modules/local.example.nix. Must be git-tracked to be picked up.
@@ -176,6 +178,15 @@
           # lint one. Matches the integration repo's dev shell.
           pkgs.commitizen
         ];
+
+        # Point git at the version-controlled hook (.githooks/commit-msg) so every
+        # commit is checked against Conventional Commits locally, not just PRs in
+        # CI. Idempotent — safe to re-run on each shell entry.
+        shellHook = ''
+          if [ -d .git ]; then
+            git config core.hooksPath .githooks
+          fi
+        '';
       };
 
       formatter.${system} = pkgs.nixfmt;
