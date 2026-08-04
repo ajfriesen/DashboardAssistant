@@ -27,10 +27,12 @@ name: cache-rpi
 #
 # The flashable SD images are also published to the same Cloudflare R2 bucket the
 # x86 images use (GitHub Actions artifacts are far too slow to download at image
-# sizes). Regular pushes land under dev/ keyed by date + short commit SHA; a v*
-# tag lands under the tag name plus a stable *-latest-<model> alias — mirroring
-# build.yml and release.yml. Requires the same repo config as those workflows
-# (vars R2_ACCOUNT_ID / R2_BUCKET / R2_PUBLIC_URL, secrets R2_ACCESS_KEY_ID /
+# sizes), channel/board-structured: a v* tag lands under release/<model>/ (or
+# pre-release/<model>/ for a hyphened prerelease tag) as an immutable versioned
+# object plus a `latest.img.zst`; regular pushes land under development/<model>/
+# keyed by date + short SHA plus its own `latest` — mirroring release-image.yml
+# and build.yml. Requires the same repo config as those workflows (vars
+# R2_ACCOUNT_ID / R2_BUCKET / R2_PUBLIC_URL, secrets R2_ACCESS_KEY_ID /
 # R2_SECRET_ACCESS_KEY). Without R2_BUCKET the R2 step is skipped and the image
 # falls back to a (slow) workflow artifact so forks still get something flashable.
 
@@ -108,10 +110,11 @@ jobs:
             .#packages.aarch64-linux.${{ matrix.model }}-image \
             --out-link result-${{ matrix.model }}
 
-      # Publish the flashable SD image to R2. Regular pushes go under dev/ keyed by
-      # date + short SHA (mirrors build.yml; set an R2 lifecycle rule to expire
-      # dev/); a v* tag goes to the tag name plus a stable *-latest-<model> alias
-      # (mirrors release.yml). The sd-image is already zstd-compressed, so we cp it
+      # Publish the flashable SD image to R2, channel/board-structured (mirrors
+      # release-image.yml). A v* tag goes to release/ or pre-release/ (a hyphen in
+      # the tag => prerelease) as an immutable versioned object plus a `latest`
+      # pointer; regular pushes go to development/<model>/ keyed by date + short SHA
+      # plus its own `latest`. The sd-image is already zstd-compressed, so we cp it
       # straight to R2. Skipped without R2_BUCKET (see the artifact fallback below).
       - name: Publish SD image to R2
         if: ${{ vars.R2_BUCKET != '' }}
@@ -125,19 +128,21 @@ jobs:
           bucket="${{ vars.R2_BUCKET }}"
           img=$(ls result-"$model"/sd-image/*.img.zst)
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            key="dashboard-assistant-${GITHUB_REF_NAME}-${model}.img.zst"
-            aws s3 cp "$img" "s3://$bucket/$key" --endpoint-url "$R2_ENDPOINT"
-            aws s3 cp "$img" "s3://$bucket/dashboard-assistant-latest-${model}.img.zst" \
-              --endpoint-url "$R2_ENDPOINT"
+            version="${GITHUB_REF_NAME#v}"
+            case "$GITHUB_REF_NAME" in *-*) channel=pre-release ;; *) channel=release ;; esac
+            name="dashboard-assistant-${version}.img.zst"
           else
-            key="dev/dashboard-assistant-$(date -u +%Y-%m-%d)-${GITHUB_SHA::7}-${model}.img.zst"
-            aws s3 cp "$img" "s3://$bucket/$key" --endpoint-url "$R2_ENDPOINT"
+            channel="development"
+            name="dashboard-assistant-$(date -u +%Y-%m-%d)-${GITHUB_SHA::7}.img.zst"
           fi
+          dir="$channel/$model"
+          aws s3 cp "$img" "s3://$bucket/$dir/$name"          --endpoint-url "$R2_ENDPOINT"
+          aws s3 cp "$img" "s3://$bucket/$dir/latest.img.zst" --endpoint-url "$R2_ENDPOINT"
           size=$(du -h "$img" | cut -f1)
           {
-            echo "### 📦 $model image published"
+            echo "### 📦 $model image published to $dir/"
             echo
-            echo "**[$key](${{ vars.R2_PUBLIC_URL }}/$key)** ($size)"
+            echo "**[$name](${{ vars.R2_PUBLIC_URL }}/$dir/$name)** ($size)"
           } >> "$GITHUB_STEP_SUMMARY"
 
       # Fallback for forks without R2 config: hand the image out as a (slow)

@@ -2,9 +2,10 @@ name: build
 
 # Regular (non-release) x86_64 image builds. On every push to main (and on manual
 # dispatch) this builds the flashable on-disk disk images and publishes them to
-# the same Cloudflare R2 bucket as the tagged releases, under a dev/ prefix keyed
-# by build date + short commit SHA (never a tag, never a GitHub Release). Set an
-# R2 lifecycle rule to expire objects under dev/ so these snapshots self-clean.
+# the same Cloudflare R2 bucket as the tagged releases, under development/<board>/
+# keyed by build date + short commit SHA plus a `latest` pointer (never a tag,
+# never a GitHub Release). Set an R2 lifecycle rule to expire the dated objects
+# under development/ so these snapshots self-clean.
 #
 # Two variants build in a matrix:
 #   x86_64      — the stable disk image (.#disk-image)
@@ -59,12 +60,15 @@ jobs:
         id: stage
         run: |
           set -euo pipefail
-          asset="dashboard-assistant-$(date -u +%Y-%m-%d)-${GITHUB_SHA::7}-${{ matrix.name }}.raw.zst"
+          asset="dashboard-assistant-$(date -u +%Y-%m-%d)-${GITHUB_SHA::7}.raw.zst"
           zstd -19 -T0 -c "$(readlink -f result)/dashboard-assistant.raw" > "$asset"
           echo "asset=$asset" >> "$GITHUB_OUTPUT"
 
-      # Publish under dev/ (separate from tagged releases). Skipped without R2
-      # config, in which case the artifact fallback below runs instead.
+      # Publish under development/<board>/ (separate from tagged releases): the
+      # immutable dated object plus a `latest.raw.zst` pointer. Skipped without R2
+      # config, in which case the artifact fallback below runs instead. Set an R2
+      # lifecycle rule to expire the dated objects under development/ (the `latest`
+      # keys are stable and can be excluded).
       - name: Upload dev build to R2
         if: ${{ vars.R2_BUCKET != '' }}
         env:
@@ -75,12 +79,13 @@ jobs:
           set -euo pipefail
           asset="${{ steps.stage.outputs.asset }}"
           bucket="${{ vars.R2_BUCKET }}"
-          aws s3 cp "$asset" "s3://$bucket/dev/$asset" \
-            --endpoint-url "$R2_ENDPOINT"
+          dir="development/${{ matrix.name }}"
+          aws s3 cp "$asset" "s3://$bucket/$dir/$asset"         --endpoint-url "$R2_ENDPOINT"
+          aws s3 cp "$asset" "s3://$bucket/$dir/latest.raw.zst" --endpoint-url "$R2_ENDPOINT"
           {
-            echo "### 📦 ${{ matrix.name }} dev build published"
+            echo "### 📦 ${{ matrix.name }} dev build published to $dir/"
             echo
-            echo "**[$asset](${{ vars.R2_PUBLIC_URL }}/dev/$asset)** — commit ${GITHUB_SHA::7}"
+            echo "**[$asset](${{ vars.R2_PUBLIC_URL }}/$dir/$asset)** — commit ${GITHUB_SHA::7}"
           } >> "$GITHUB_STEP_SUMMARY"
 
       # Fallback for forks without R2 config so the build still leaves something

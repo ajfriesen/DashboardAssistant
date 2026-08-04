@@ -6,14 +6,16 @@ name: release-please
 #
 # On every push to main it opens/updates a single "release PR" that bumps
 # CHANGELOG.md and flake.nix's version. Merging it creates the vX.Y.Z tag and
-# GitHub Release; the `image` job below then builds and attaches the x86_64 disk
-# image (in the same run, so the default GITHUB_TOKEN's release event doesn't need
-# to start a separate workflow). Use the hardware target as the commit scope
-# (feat(rpi5):/fix(x86):); daemon/core (or no scope) for changes that apply to all.
+# GitHub Release. It authenticates with a PAT (RELEASE_PLEASE_TOKEN) so that tag
+# *does* start the tag-triggered image builds (release-image.yml for x86_64,
+# cache-rpi.yml for the Pis) — a tag made by the default GITHUB_TOKEN wouldn't.
+# Use the hardware target as the commit scope (feat(rpi5):/fix(x86):); daemon/core
+# (or no scope) for changes that apply to all.
 #
 # Prereleases: force one with a `Release-As: 0.3.0-rc.1` commit footer. The step
 # below flags any release whose tag has a SemVer prerelease suffix (a hyphen) as a
-# GitHub pre-release; those never reach devices (which track the stable channel).
+# GitHub pre-release; its images go to pre-release/ (not release/), off the stable
+# update path.
 on:
   push:
     branches: [main]
@@ -25,13 +27,14 @@ permissions:
 jobs:
   release-please:
     runs-on: ubuntu-latest
-    outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - uses: googleapis/release-please-action@v5
         id: release
         with:
+          # PAT so the created tag triggers the image build workflows. Falls back
+          # to the default token if the secret isn't set (releases still work, but
+          # the image builds won't start until RELEASE_PLEASE_TOKEN is configured).
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
@@ -44,12 +47,46 @@ jobs:
           TAG: ${{ steps.release.outputs.tag_name }}
         run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease --latest=false
 
-  # Build + attach the disk image only when a release was actually cut. Runs in
-  # this same workflow run, gated on the release-please job's output.
-  image:
-    needs: release-please
-    if: ${{ needs.release-please.outputs.release_created == 'true' }}
-    uses: ./.github/workflows/release-image.yml
-    with:
-      tag: ${{ needs.release-please.outputs.tag_name }}
-    secrets: inherit
+      # Write the per-board download links into the release notes. URLs are
+      # deterministic from the tag + channel, so we write them here once (no race
+      # between the parallel image workflows); the objects appear a few minutes
+      # later as those builds finish. Skipped without R2_PUBLIC_URL (e.g. forks).
+      - name: Add image download links to the release notes
+        if: ${{ steps.release.outputs.release_created == 'true' && vars.R2_PUBLIC_URL != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+          R2_PUBLIC_URL: ${{ vars.R2_PUBLIC_URL }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          case "$TAG" in *-*) channel=pre-release ;; *) channel=release ;; esac
+          base="$R2_PUBLIC_URL/$channel"
+          x86="$base/x86_64/dashboard-assistant-$version.raw.zst"
+          pi5="$base/rpi5/dashboard-assistant-$version.img.zst"
+          body=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body -q .body)
+          notes=$(mktemp)
+          {
+            echo "## 📥 Download & flash"
+            echo
+            echo "Flashable images (published to R2 within a few minutes of this release):"
+            echo
+            echo "| Board | Image |"
+            echo "|---|---|"
+            echo "| x86_64 | [\`dashboard-assistant-$version.raw.zst\`]($x86) |"
+            echo "| Raspberry Pi 4 | [\`dashboard-assistant-$version.img.zst\`]($base/rpi4/dashboard-assistant-$version.img.zst) |"
+            echo "| Raspberry Pi 5 | [\`dashboard-assistant-$version.img.zst\`]($pi5) |"
+            echo
+            echo "x86_64 — write to the target's internal disk (confirm the device first!):"
+            echo '```'
+            echo "curl -L \"$x86\" | zstd -dc | sudo dd of=/dev/sdX bs=4M oflag=sync conv=fsync status=progress"
+            echo '```'
+            echo
+            echo "Raspberry Pi — write the SD image:"
+            echo '```'
+            echo "curl -L \"$pi5\" | zstd -dc | sudo dd of=/dev/mmcblkX bs=4M oflag=sync conv=fsync status=progress"
+            echo '```'
+            echo
+            printf '%s\n' "$body"
+          } > "$notes"
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$notes"
