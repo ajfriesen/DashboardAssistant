@@ -46,10 +46,10 @@ let
     version = "0.1.0";
     src = ../../daemon;
 
-    # godbus + gorilla/websocket + yaml.v3 + golang.org/x/*. Recompute after
-    # changing go.mod/go.sum by setting this to lib.fakeHash and reading the
-    # expected hash from the build.
-    vendorHash = "sha256-CJD3Wta4CXbFzQo0NxMlVqIifh6bdMQIA1/9KbKmAEA=";
+    # godbus + yaml.v3 + golang.org/x/*. Recompute after changing go.mod/go.sum
+    # by setting this to a bogus hash (e.g. sha256-AAAA…) and reading the
+    # expected hash from the build failure.
+    vendorHash = "sha256-DOCuNyMF5VRpScRzggfebVM9G2Arh9KauuB4hWgl+58=";
 
     meta.mainProgram = "dashboard-assistant-api";
   };
