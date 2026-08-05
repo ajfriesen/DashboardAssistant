@@ -28,7 +28,7 @@ a reboot. Dashboard Assistant takes the opposite approach:
 
 Dashboard Assistant is under active development. x86_64 is the primary, tested
 target today; Raspberry Pi and other aarch64 boards are a work in progress. See
-[Hardware Support](../hardware-support.md) for the current state.
+[Hardware Support](../hardware-support/index.md) for the current state.
 
 The project is developed in the open on
 [GitHub](https://github.com/ajfriesen/DashboardAssistant) — issues and pull

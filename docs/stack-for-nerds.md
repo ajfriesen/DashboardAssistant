@@ -60,7 +60,7 @@ panel can't re-point the device. The on-device Config panel is read-only.
 ## Hardware
 
 x86_64 is the primary, tested target today. Raspberry Pi and other aarch64
-boards are a work in progress — see [Hardware Support](hardware-support.md) for
+boards are a work in progress — see [Hardware Support](hardware-support/index.md) for
 the current state.
 
 ## Development

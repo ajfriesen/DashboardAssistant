@@ -55,23 +55,33 @@ nav = [
       "about/why.md",
       "about/about.md",
       "about/features.md",
+      "stack-for-nerds.md",
   ]},
-  { "In Action" = "in-action.md" },
-  { "Hardware Support" = "hardware-support.md" },
-  { "Stack for Nerds" = "stack-for-nerds.md" },
-  { "Sponsor" = "sponsor.md" },
   # Drafts live in the repo-level drafts/ folder (outside docs/) so Zensical
   # doesn't publish them — it has no draft flag, and builds everything under
-  # docs/. To publish one, move it into docs/ and add it to this nav:
+  # docs/. To publish one, move it into docs/ and add it to the nav below:
   #   drafts/installer/installer.md  — live installer (not working yet)
-  {"Flash" = [
-     "flash/flash.md",
-     "flash/seed.md",
+  {"Getting Started" = [
+     "getting-started.md",
+     {"Flash" = [
+        "flash/flash.md",
+        "flash/seed.md",
+     ]},
+     {"Usage" = [
+        "usage/usage.md",
+        "usage/diagnostics.md",
+     ]},
   ]},
-    {"Usage" = [
-     "usage/usage.md",
-     "usage/diagnostics.md",
-  ]}
+  { "In Action" = "in-action.md" },
+  {"Hardware Support" = [
+     "hardware-support/index.md",
+     "hardware-support/x86.md",
+     "hardware-support/raspberry-pi.md",
+     "hardware-support/touchscreens.md",
+     "hardware-support/dimming.md",
+  ]},
+  { "Sponsor" = "sponsor.md" },
+  { "For Business" = "business.md" },
 ]
 
 # With the "extra_css" option you can add your own CSS styling to customize
