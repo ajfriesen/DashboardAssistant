@@ -66,8 +66,12 @@
 
 /* --------------------------------------------------------------------------
    Buttons
+   --------------------------------------------------------------------------
+   Selectors are scoped under `.md-typeset` so they out-specify Material's
+   default `.md-typeset a` link color — otherwise the button label inherits the
+   indigo link color and vanishes on the primary button's indigo background.
    -------------------------------------------------------------------------- */
-.da-btn {
+.md-typeset .da-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
@@ -76,28 +80,33 @@
   font-weight: 700;
   font-size: 0.85rem;
   text-decoration: none;
-  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease,
+    color 120ms ease, border-color 120ms ease;
 }
 
-.da-btn:hover { transform: translateY(-1px); }
+.md-typeset .da-btn:hover { transform: translateY(-1px); }
 
-.da-btn--primary {
+.md-typeset .da-btn--primary,
+.md-typeset .da-btn--primary:hover {
   color: var(--md-primary-bg-color);
   background: var(--md-primary-fg-color);
+}
+
+.md-typeset .da-btn--primary {
   box-shadow: 0 6px 18px color-mix(in srgb, var(--md-primary-fg-color) 35%, transparent);
 }
 
-.da-btn--primary:hover {
+.md-typeset .da-btn--primary:hover {
   box-shadow: 0 8px 22px color-mix(in srgb, var(--md-primary-fg-color) 45%, transparent);
 }
 
-.da-btn--ghost {
+.md-typeset .da-btn--ghost {
   color: var(--md-default-fg-color);
   background: transparent;
   border: 1px solid var(--md-default-fg-color--lighter);
 }
 
-.da-btn--ghost:hover {
+.md-typeset .da-btn--ghost:hover {
   border-color: var(--md-primary-fg-color);
   color: var(--md-primary-fg-color);
 }
