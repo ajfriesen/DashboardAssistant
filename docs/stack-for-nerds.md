@@ -66,5 +66,5 @@ the current state.
 ## Development
 
 Dashboard Assistant is under active development on
-[GitHub](https://github.com/ajfriesen/dashboard-assistant) — issues and pull
+[GitHub](https://github.com/ajfriesen/DashboardAssistant) — issues and pull
 requests are welcome.

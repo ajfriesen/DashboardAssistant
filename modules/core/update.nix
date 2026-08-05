@@ -37,7 +37,7 @@ in
   options.dashboardAssistant.update = {
     repo = lib.mkOption {
       type = lib.types.str;
-      default = "ajfriesen/dashboard-assistant";
+      default = "ajfriesen/DashboardAssistant";
       description = ''
         owner/repo whose newest release advertises the latest available version.
         The daemon polls <apiBase>/repos/<repo>/releases/latest.
@@ -77,7 +77,7 @@ in
       type = lib.types.str;
       default = "github:${cfg.repo}";
       defaultText = lib.literalExpression ''"github:''${config.dashboardAssistant.update.repo}"'';
-      example = "git+https://git.ajfriesen.com/ajfriesen/dashboard-assistant";
+      example = "git+https://git.ajfriesen.com/ajfriesen/DashboardAssistant";
       description = ''
         Flake reference the update rebuild pulls from. The target release tag is
         appended as `<flakeRef>/<tag>`. Defaults to the GitHub mirror of `repo`.

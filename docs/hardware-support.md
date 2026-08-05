@@ -29,5 +29,5 @@ Raspberry Pi 4 support exists as a separate SD-card image and is used for
 development. It is not yet a polished, release-grade target — expect rough edges.
 
 Raspberry Pi 5 is on the roadmap and is actively being worked on. Follow the
-project on [GitHub](https://github.com/ajfriesen/dashboard-assistant) for
+project on [GitHub](https://github.com/ajfriesen/DashboardAssistant) for
 progress on both boards.

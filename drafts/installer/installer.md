@@ -1,7 +1,11 @@
 ---
 icon: material/usb-flash-drive
-draft: true
 ---
+
+<!-- DRAFT — the live installer isn't working yet, so this page lives outside
+     docs/ and is NOT published (Zensical has no draft flag; anything under
+     docs/ gets built). To publish: move this file back to
+     docs/installer/installer.md and add it to the nav in zensical.toml. -->
 
 # Live Installer & First-Boot Setup
 
@@ -13,7 +17,7 @@ for it — you can't [flash the disk image](../flash/flash.md) directly. The
 boot the machine from it, and it installs the full system onto the internal disk.
 
 Grab the installer ISO from the
-[GitHub releases page](https://github.com/ajfriesen/dashboard-assistant/releases/latest)
+[GitHub releases page](https://github.com/ajfriesen/DashboardAssistant/releases/latest)
 and write it to a USB stick like any bootable image:
 
 ```bash
@@ -58,8 +62,8 @@ boot partition. The device applies it on first boot and goes straight to your
 dashboard.
 
 See [Seed File](../flash/seed.md) for the full schema and the two ways to apply
-it, and [Get a Home Assistant Token](../flash/home-assistant-setup.md) for how to
-generate the access token.
+it. The kiosk login is provisioned automatically by the Dashboard Assistant
+integration, so you don't need to generate a token by hand.
 
 ## The on-device panel
 

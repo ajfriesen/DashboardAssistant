@@ -3,13 +3,13 @@
 A **seed file** is how you provision a freshly flashed device — it's the only
 configuration path (there is no on-screen setup wizard). Drop a
 `dashboard-assistant.yaml` next to the image and the device picks up its Home
-Assistant URL, access token and Wi-Fi on first boot — handy for field deploys or
-flashing several tablets at once.
+Assistant URL and Wi-Fi on first boot — handy for field deploys or flashing
+several tablets at once.
 
 !!! warning "Physical access = full trust"
-    Any USB stick carrying a `dashboard-assistant.yaml` is applied automatically, and
-    the file holds a long-lived token in plain text. Only use seed files on
-    hardware and networks you control, and wipe the stick afterwards.
+    Any USB stick carrying a `dashboard-assistant.yaml` is applied automatically,
+    and the file can carry a long-lived token in plain text. Only use seed files
+    on hardware and networks you control, and wipe the stick afterwards.
 
 ## Populate Seed File
 
@@ -20,8 +20,9 @@ only what you want to provision:
 # Home Assistant base URL the kiosk should open.
 ha_url: "https://homeassistant.local:8123"
 
-# Long-lived access token used to sign in to Home Assistant. See
-# "Get a Home Assistant Token" for how to generate one.
+# Optional long-lived access token for kiosk auto-login. You normally don't
+# need this — the Dashboard Assistant integration provisions a login for the
+# device automatically. Only set it to preset a token yourself.
 token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiIyZWRlNGE0ZTFjNmQ0ZDY3OTY4ODhmMTk5OGNhNWVjMSIsImlhdCI6MTc4NDcxODk3MywiZXhwIjoyMTAwMDc4OTczfQ.Rd92pdzdYkC8HI3buVO6m9EVVI71Ye-MP_1nwogfOgU"
 
 # Optional Wi-Fi credentials. Omit the whole block on a wired device.
@@ -33,7 +34,7 @@ wifi:
 | Key         | Required | Description                                                      |
 | ----------- | -------- | ---------------------------------------------------------------- |
 | `ha_url`    | no       | Home Assistant base URL the dashboard loads on boot.             |
-| `token`     | no       | Long-lived access token, stored and injected to auto-login.      |
+| `token`     | no       | Optional. Kiosk login token; normally provisioned by the integration. |
 | `wifi.ssid` | no       | Wi-Fi network name to join.                                      |
 | `wifi.psk`  | no       | Wi-Fi pre-shared key (password).                                 |
 

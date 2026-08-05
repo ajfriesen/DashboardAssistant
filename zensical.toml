@@ -31,8 +31,8 @@ site_url = "https://dashboard-assistant.com/"
 
 # Repository link + edit/view buttons in the header.
 # Read more: https://zensical.org/docs/setup/repository/
-repo_url = "https://github.com/ajfriesen/dashboard-assistant"
-repo_name = "ajfriesen/dashboard-assistant"
+repo_url = "https://github.com/ajfriesen/DashboardAssistant"
+repo_name = "ajfriesen/DashboardAssistant"
 
 # The copyright notice appears in the page footer and can contain an HTML
 # fragment.
@@ -57,15 +57,18 @@ nav = [
       "about/features.md",
   ]},
   { "In Action" = "in-action.md" },
+  { "How It Compares" = "comparison.md" },
   { "Hardware Support" = "hardware-support.md" },
   { "Stack for Nerds" = "stack-for-nerds.md" },
+  { "❤️ Sponsor" = "sponsor.md" },
+  # Drafts live in the repo-level drafts/ folder (outside docs/) so Zensical
+  # doesn't publish them — it has no draft flag, and builds everything under
+  # docs/. To publish one, move it into docs/ and add it to this nav:
+  #   drafts/installer/installer.md  — live installer (not working yet)
   {"Flash" = [
      "flash/flash.md",
-     "flash/home-assistant-setup.md",
      "flash/seed.md",
   ]},
-  # "Live Installer" (installer/installer.md) is a draft — the installer isn't
-  # working yet, so the page is marked `draft: true` and kept out of the nav.
     {"Usage" = [
      "usage/usage.md",
      "usage/diagnostics.md",
@@ -325,7 +328,7 @@ toggle.name = "Switch to light mode"
 # ----------------------------------------------------------------------------
 [[project.extra.social]]
 icon = "fontawesome/brands/github"
-link = "https://github.com/ajfriesen/dashboard-assistant"
+link = "https://github.com/ajfriesen/DashboardAssistant"
 name = "Dashboard Assistant on GitHub"
 
 # ----------------------------------------------------------------------------

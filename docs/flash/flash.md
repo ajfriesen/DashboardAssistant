@@ -19,7 +19,7 @@ You'll also need `zstd` (Linux/macOS) or a GUI flasher such as
 ## Download the image
 
 Grab the latest x86_64 disk image from the
-[GitHub releases page](https://github.com/ajfriesen/dashboard-assistant/releases/latest).
+[GitHub releases page](https://github.com/ajfriesen/DashboardAssistant/releases/latest).
 The download link sits at the top of the release notes and points to a
 Cloudflare R2 bucket (GitHub can't host the multi-GB file directly).
 
