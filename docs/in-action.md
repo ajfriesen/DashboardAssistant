@@ -6,32 +6,56 @@ icon: simple/markdown
 
 A few looks at Dashboard Assistant running on real hardware.
 
-<figure markdown="span">
-  ![A wall tablet showing a Home Assistant dashboard](img/website.jpg)
+<figure class="da-tablet-figure">
+  <div class="da-tablet">
+    <div class="da-tablet__screen">
+      <img class="da-shot" src="img/home-assistant-light.jpeg" alt="The Home Assistant overview on the panel">
+    </div>
+  </div>
   <figcaption>Booted straight into a Home Assistant dashboard — no login, no desktop.</figcaption>
 </figure>
 
-<figure markdown="span">
-  ![The Home Assistant overview on the panel](img/home-assistant.jpg)
-  <figcaption>A full Home Assistant view running full-screen on the kiosk.</figcaption>
+<figure class="da-tablet-figure">
+  <div class="da-tablet">
+    <div class="da-tablet__screen">
+      <img class="da-shot" src="img/home-assistant-dark.jpeg" alt="The Home Assistant overview in dark mode">
+    </div>
+  </div>
+  <figcaption>The same overview in dark mode, running full-screen on the kiosk.</figcaption>
 </figure>
 
-<figure markdown="span">
-  ![A shopping list dashboard on the panel](img/shopping-list.jpg)
-  <figcaption>Any web dashboard works — here a shopping list, one of several pages you can cycle between.</figcaption>
+<figure class="da-tablet-figure">
+  <div class="da-tablet da-tablet--portrait">
+    <div class="da-tablet__screen">
+      <img class="da-shot" src="img/home-assistant-vertical.jpeg" alt="A Home Assistant dashboard on a panel mounted in portrait orientation">
+    </div>
+  </div>
+  <figcaption>Prefer portrait? The integration can rotate the display, so the same dashboard fills a panel mounted on its side.</figcaption>
 </figure>
 
-<figure markdown="span">
-  ![The on-screen keyboard on a touch-only device](img/keyboard.jpg)
+<figure class="da-tablet-figure">
+  <div class="da-tablet">
+    <div class="da-tablet__screen">
+      <img class="da-shot" src="img/random-website.jpeg" alt="Any web page shown full-screen on the panel">
+    </div>
+  </div>
+  <figcaption>Any web page works — not just Home Assistant, and you can cycle between several.</figcaption>
+</figure>
+
+<figure class="da-tablet-figure">
+  <div class="da-tablet">
+    <div class="da-tablet__screen">
+      <img class="da-shot" src="img/keyboard.jpeg" alt="The on-screen keyboard on a touch-only device">
+    </div>
+  </div>
   <figcaption>The on-screen keyboard for text entry on touch-only devices (experimental).</figcaption>
 </figure>
 
-<figure markdown="span">
-  ![Controlling the panel from Home Assistant](img/mqtt_control.png)
-  <figcaption>The panel exposed back to Home Assistant as a device — display, zoom, screenshot, updates and sensors.</figcaption>
-</figure>
-
-<figure markdown="span">
-  ![The on-screen recovery generation picker](img/recovery.jpg)
+<figure class="da-tablet-figure">
+  <div class="da-tablet">
+    <div class="da-tablet__screen">
+      <img class="da-shot" src="img/recovery.jpeg" alt="The on-screen recovery generation picker">
+    </div>
+  </div>
   <figcaption>The recovery picker — boot into an older NixOS generation if an update misbehaves.</figcaption>
 </figure>

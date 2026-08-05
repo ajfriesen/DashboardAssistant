@@ -33,9 +33,11 @@ wakes up as a Home Assistant dashboard on your wall or desk. No Linux knowledge,
 -->
 <div class="da-tablet">
   <div class="da-tablet__screen">
-    <img class="da-slide" src="img/home-assistant.jpg" alt="A Home Assistant overview running full-screen on the panel">
-    <img class="da-slide" src="img/shopping-list.jpg" alt="A shopping-list dashboard on the panel">
-    <img class="da-slide" src="img/website.jpg" alt="Any web page shown full-screen on the panel">
+    <img class="da-slide" src="img/home-assistant-light.jpeg" alt="A Home Assistant running in light mode">
+    <img class="da-slide" src="img/home-assistant-dark.jpeg" alt="A Home Assistant running in dark mode.">
+    <img class="da-slide" src="img/recovery.jpeg" alt="Shows the restore menu, to boot into an older verion.">
+    <img class="da-slide" src="img/keyboard.jpeg" alt="Use a touch keyboard if needed.">
+    <img class="da-slide" src="img/random-website.jpeg" alt="Shows any website.">
   </div>
 </div>
 
