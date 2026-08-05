@@ -14,9 +14,9 @@ hide:
 # Your smart home, <span class="da-accent">on the wall</span> {: .da-hero__title }
 
 <p class="da-hero__lead">
-Copy one file to a spare tablet or screen, and it turns into a Home Assistant
-dashboard on your wall or desk. No Linux, no login screens, no weekend of
-tinkering — it just switches on and shows your smart home.
+Download one image, flash it to an SD card or SSD, and power on your device — it
+wakes up as a Home Assistant dashboard on your wall or desk. No Linux, no login
+screens, no weekend of tinkering. Just your smart home, on the wall.
 </p>
 
 <div class="da-hero__cta" markdown>
@@ -50,9 +50,9 @@ tinkering — it just switches on and shows your smart home.
 
 <div class="da-card" markdown>
 <div class="da-card__icon">⚡</div>
-### Set up in minutes
-Copy one image to a tablet, mini-PC or Raspberry Pi and switch it on. No Linux
-knowledge, no complicated setup.
+### Download, flash, boot
+Write one image to an SD card or SSD, pop it into your tablet, mini-PC or
+Raspberry Pi, and power on. No Linux knowledge, no complicated setup.
 </div>
 
 <div class="da-card" markdown>
