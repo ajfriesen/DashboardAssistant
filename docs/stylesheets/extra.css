@@ -116,18 +116,18 @@
    --------------------------------------------------------------------------
    To change what shows on the screen, edit the <img> list inside
    `.da-tablet__screen` on the home page (docs/index.md). The crossfade timing
-   below is tuned for THREE slides; if you add or remove images, update the
-   `--da-slides` count and the `:nth-child` delays to match.
+   below is tuned for FIVE slides; if you add or remove images, update the
+   `--da-slides` count, the `:nth-child` delays, and the `da-fade` keyframe
+   percentages to match (each slide gets a 100% / --da-slides window).
    -------------------------------------------------------------------------- */
 .da-tablet {
-  --da-slides: 3;
+  --da-slides: 5;
   --da-slide-time: 6s;          /* seconds each slide stays on screen */
   position: relative;
   width: 100%;
   max-width: 560px;
   margin-inline: auto;
-  aspect-ratio: 16 / 10;
-  padding: 3.2% 3%;
+  padding: 3%;                  /* uniform bezel around the screen */
   border-radius: 1.4rem;
   background: linear-gradient(150deg, #34343a 0%, #17171b 60%, #0e0e11 100%);
   box-shadow:
@@ -167,7 +167,10 @@
 .da-tablet__screen {
   position: relative;
   width: 100%;
-  height: 100%;
+  /* Match the screenshots' native 1024x600 so they sit flush in the bezel,
+     with no letterboxing or cropping. The tablet body sizes itself from this
+     plus the uniform padding above. */
+  aspect-ratio: 1024 / 600;
   overflow: hidden;
   border-radius: 0.35rem;
   background: #000;
@@ -187,12 +190,14 @@
 .da-slide:nth-child(1) { animation-delay: calc(var(--da-slide-time) * 0); }
 .da-slide:nth-child(2) { animation-delay: calc(var(--da-slide-time) * 1); }
 .da-slide:nth-child(3) { animation-delay: calc(var(--da-slide-time) * 2); }
+.da-slide:nth-child(4) { animation-delay: calc(var(--da-slide-time) * 3); }
+.da-slide:nth-child(5) { animation-delay: calc(var(--da-slide-time) * 4); }
 
 @keyframes da-fade {
   0%   { opacity: 0; }
-  4%   { opacity: 1; }
-  29%  { opacity: 1; }
-  33%  { opacity: 0; }
+  3%   { opacity: 1; }
+  17%  { opacity: 1; }
+  20%  { opacity: 0; }
   100% { opacity: 0; }
 }
 
