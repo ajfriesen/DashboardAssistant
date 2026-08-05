@@ -25,6 +25,15 @@ A few looks at Dashboard Assistant running on real hardware.
 </figure>
 
 <figure class="da-tablet-figure">
+  <div class="da-tablet da-tablet--portrait">
+    <div class="da-tablet__screen">
+      <img class="da-shot" src="img/home-assistant-vertical.jpeg" alt="A Home Assistant dashboard on a panel mounted in portrait orientation">
+    </div>
+  </div>
+  <figcaption>Prefer portrait? The integration can rotate the display, so the same dashboard fills a panel mounted on its side.</figcaption>
+</figure>
+
+<figure class="da-tablet-figure">
   <div class="da-tablet">
     <div class="da-tablet__screen">
       <img class="da-shot" src="img/random-website.jpeg" alt="Any web page shown full-screen on the panel">

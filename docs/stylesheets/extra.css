@@ -201,6 +201,16 @@
   object-fit: cover;
 }
 
+/* Portrait orientation — the panel rotated 90° via the integration. The
+   frame is narrower and its screen takes the flipped 600x1024 ratio. */
+.da-tablet--portrait {
+  max-width: 340px;
+}
+
+.da-tablet--portrait .da-tablet__screen {
+  aspect-ratio: 600 / 1024;
+}
+
 .da-slide:nth-child(1) { animation-delay: calc(var(--da-slide-time) * 0); }
 .da-slide:nth-child(2) { animation-delay: calc(var(--da-slide-time) * 1); }
 .da-slide:nth-child(3) { animation-delay: calc(var(--da-slide-time) * 2); }
