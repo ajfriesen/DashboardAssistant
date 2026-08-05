@@ -522,7 +522,13 @@ let
     exec 3<> ${rotationFifo}
     while IFS=' ' read -r cmd arg <&3; do
       case "$cmd" in
-        rotate) ${swayRotate} "$arg" >/dev/null 2>&1 || true ;;
+        # Apply the transform, then relaunch the bar so its layout (labelled vs
+        # compact portrait) matches the new orientation. Backgrounded so the
+        # agent loop keeps reading the FIFO.
+        rotate)
+          ${swayRotate} "$arg" >/dev/null 2>&1 || true
+          ${waybarStart} "$arg" >/dev/null 2>&1 &
+          ;;
       esac
     done
   '';
@@ -750,6 +756,29 @@ let
     }
   '';
 
+  # Compact portrait variant of the bar. Same modules and on-click actions as
+  # waybarConfig, but icon-only formats: rotated 90°/270° the screen's short edge
+  # is too narrow for the labelled buttons, and waybar can't wrap to a second row,
+  # so the labels would clip. waybarStart picks this config for portrait rotations.
+  # Keep the module set / on-click handlers in sync with waybarConfig above — only
+  # the "format" strings differ here.
+  waybarConfigPortrait = pkgs.writeText "ha-kiosk-waybar-portrait.json" ''
+    {
+      "layer": "bottom",
+      "position": "bottom",
+      "height": 50,
+      "modules-left": ["custom/home", "custom/setup"],
+      "modules-center": ["custom/prev", "custom/sponsor", "custom/next"],
+      "modules-right": ["custom/kbd"],
+      "custom/kbd":     { "format": "⌨", "tooltip": false, "on-click": "${oskToggle}" },
+      "custom/home":    { "format": "🏠", "tooltip": false, "on-click": "${navHome}" },
+      "custom/setup":   { "format": "⚙", "tooltip": false, "on-click": "${cdpNav} ${daemonBase}/setup" },
+      "custom/prev":    { "format": "◀", "tooltip": false, "on-click": "${pagePrev}" },
+      "custom/sponsor": { "format": "❤", "tooltip": false, "on-click": "${cdpNav} ${daemonBase}/sponsor" },
+      "custom/next":    { "format": "▶", "tooltip": false, "on-click": "${pageNext}" }
+    }
+  '';
+
   waybarStyle = pkgs.writeText "ha-kiosk-waybar.css" ''
     * {
       font-family: sans-serif;
@@ -781,10 +810,13 @@ let
     }
     /* Beating heart. GTK CSS (waybar) has no `transform`, so the pulse is a
        font-size beat — two quick systole/diastole bumps per cycle — with the
-       heart tinted red so it reads as "sponsor" at a glance. */
+       heart tinted red so it reads as "sponsor" at a glance. A fixed min-width
+       (wide enough for the largest beat frame) keeps the module's width steady
+       so the growing glyph never shoves Prev/Next sideways. */
     #custom-sponsor {
       color: #ff5a7a;
       padding: 0 20px;
+      min-width: 32px;
       animation: heartbeat 1.2s ease-in-out infinite;
     }
     @keyframes heartbeat {
@@ -795,6 +827,39 @@ let
       60%  { font-size: 18px; }
       100% { font-size: 18px; }
     }
+  '';
+
+  # (Re)start the bottom bar with the config matching the current rotation:
+  # the compact icon-only bar for portrait (90°/270°, where the labelled bar
+  # would overflow the short edge), the labelled bar otherwise. The rotation
+  # comes from the arg, else from the persisted rotationFile (so the initial
+  # session launch — after rotationRestore has already applied the transform —
+  # comes up in the right layout). Called via `exec` for the initial launch and
+  # backgrounded from rotationAgent on a live rotation change.
+  #
+  # Kill any previous bar via a PID file, not `pkill`: nixpkgs wraps waybar, so
+  # the live process is `.waybar-wrapped`, which `pkill -x waybar` never matches
+  # (that left orphaned bars stacking on every rotation). `exec` keeps this
+  # shell's PID, so $$ recorded here is the waybar PID the next launch kills.
+  waybarStart = pkgs.writeShellScript "ha-kiosk-waybar-start" ''
+    set -u
+    pidfile="''${XDG_RUNTIME_DIR:-/tmp}/ha-kiosk-waybar.pid"
+    if [ -r "$pidfile" ]; then
+      old=$(${pkgs.coreutils}/bin/cat "$pidfile" 2>/dev/null)
+      [ -n "''${old:-}" ] && kill "$old" 2>/dev/null || true
+    fi
+    echo $$ > "$pidfile"
+
+    deg=''${1:-}
+    if [ -z "$deg" ]; then
+      deg=$(${pkgs.coreutils}/bin/cat ${rotationFile} 2>/dev/null \
+        | ${pkgs.coreutils}/bin/tr -d '[:space:]')
+    fi
+    case "$deg" in
+      90 | 270) cfg=${waybarConfigPortrait} ;;
+      *)        cfg=${waybarConfig} ;;
+    esac
+    exec ${pkgs.waybar}/bin/waybar -c "$cfg" -s ${waybarStyle}
   '';
 
   # A locked-down single-app Sway config: no keybindings (so touch users can't
@@ -869,7 +934,7 @@ let
 
     # Bottom button bar: Off / Dim / Brighter. Reserves an exclusive zone, so
     # Chromium tiles into the remaining space above it.
-    exec ${pkgs.waybar}/bin/waybar -c ${waybarConfig} -s ${waybarStyle}
+    exec ${waybarStart}
     ${lib.optionalString autoLogin ''
       # Auto-login: inject the staged HA token once the dashboard loads.
       exec ${tokenInjector}''}
