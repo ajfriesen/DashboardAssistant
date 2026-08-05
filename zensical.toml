@@ -52,8 +52,9 @@ Copyright &copy; 2026 Andrej Friesen
 nav = [
   { "Home" = "index.md" },
     {"About" = [
-      "about/features.md",
+      "about/why.md",
       "about/about.md",
+      "about/features.md",
   ]},
   { "In Action" = "in-action.md" },
   { "Hardware Support" = "hardware-support.md" },
