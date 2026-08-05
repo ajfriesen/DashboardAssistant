@@ -350,6 +350,27 @@ let
     done
   '';
 
+  # Screenshot agent: the HA "screenshot" button POSTs to the daemon, which (from
+  # outside the Sway session, with no Wayland access) pokes this FIFO. grim then
+  # grabs the whole output — bar, OSK and page, not just Chromium like the old CDP
+  # capture — to a temp file, atomically renamed so the daemon never reads a
+  # half-written frame. De-orphaned and held open read-write exactly like the nav
+  # agent so the daemon's writes never race a reopen.
+  screenshotAgent = pkgs.writeShellScript "ha-screenshot-agent" ''
+    for pid in $(${pkgs.procps}/bin/pgrep -f ha-screenshot-agent); do
+      [ "$pid" = "$$" ] || kill "$pid" 2>/dev/null || true
+    done
+    exec 3<> /var/lib/dashboard-assistant/screenshot.fifo
+    while IFS= read -r _ <&3; do
+      if ${pkgs.grim}/bin/grim -t jpeg -q 70 \
+          /var/lib/dashboard-assistant/screenshot.jpg.tmp >/dev/null 2>&1; then
+        ${pkgs.coreutils}/bin/mv -f \
+          /var/lib/dashboard-assistant/screenshot.jpg.tmp \
+          /var/lib/dashboard-assistant/screenshot.jpg 2>/dev/null || true
+      fi
+    done
+  '';
+
   # Apply an absolute browser zoom (percent) to the live HA page via Chromium's
   # loopback CDP port — the same mechanism as cdpNav. CSS `zoom` on the root
   # element scales the whole page; setting it on documentElement (always present)
@@ -819,6 +840,10 @@ let
     # or the waybar Prev/Next buttons).
     exec ${navAgent}
 
+    # Grabs a whole-screen JPEG (grim) when the daemon pokes the screenshot FIFO,
+    # backing the HA screenshot/image entity.
+    exec ${screenshotAgent}
+
     # Applies browser zoom changes from the HA "Zoom" number entity, and
     # restores the persisted level to the browser once it has loaded at startup.
     exec ${zoomAgent}
@@ -967,6 +992,10 @@ in
       # Rotation FIFO: the daemon writes "rotate <deg>"; the in-session rotation
       # agent reads it and applies a Sway output transform.
       "p /var/lib/dashboard-assistant/rotation.fifo 0660 dashboard-assistant dashboard-assistant - -"
+      # Screenshot FIFO: the daemon pokes it; the in-session grim agent grabs the
+      # whole screen. The agent writes screenshot.jpg (0644, world-readable) into
+      # the group-writable state dir, which the daemon reads back.
+      "p /var/lib/dashboard-assistant/screenshot.fifo 0660 dashboard-assistant dashboard-assistant - -"
     ];
 
     hardware.graphics.enable = true;

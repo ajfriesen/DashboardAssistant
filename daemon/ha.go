@@ -16,7 +16,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"io"
@@ -748,20 +747,15 @@ func (h *HAHub) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "installing", "target": tag})
 }
 
-// handleScreenshot captures the current web view over CDP and caches the JPEG,
-// which the image entity then fetches from screenshot.jpg.
+// handleScreenshot grabs the whole kiosk screen (in-session grim) and caches the
+// JPEG, which the image entity then fetches from screenshot.jpg.
 func (h *HAHub) handleScreenshot(w http.ResponseWriter, r *http.Request) {
 	if !requirePost(w, r) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
-	b64, err := captureScreenshot(ctx)
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
-	img, err := base64.StdEncoding.DecodeString(b64)
+	img, err := captureScreenshot(ctx)
 	if err != nil {
 		writeErr(w, err)
 		return

@@ -2,98 +2,74 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
-
-	"github.com/gorilla/websocket"
+	"os"
+	"sync"
+	"syscall"
+	"time"
 )
 
-// cdpEndpoint is Chromium's DevTools (CDP) HTTP endpoint, opened on loopback by
-// the kiosk when autoLogin/dev-debugging is on (see kiosk.nix — the same port the
-// in-session zoom/theme/nav helpers use). The daemon shares the host network
-// namespace, so unlike swaymsg it can reach this directly, with no in-session
-// agent: it lists the page target, opens the debugger WebSocket, and asks
-// Chromium to render the screenshot.
-const cdpEndpoint = "http://127.0.0.1:9222"
+// Whole-screen screenshots are taken by an in-session agent running grim (which
+// speaks wlroots' screencopy protocol), so the frame is the entire Wayland
+// output — the waybar bar, the on-screen keyboard and any splash included — not
+// just the Chromium web view (the old CDP Page.captureScreenshot only ever saw
+// the page). The daemon runs outside the Sway session and can't reach the
+// Wayland socket, so it uses the same handshake as the other in-session agents:
+// it pokes a request FIFO, the agent grabs a frame to screenshotFile via an
+// atomic rename, and the daemon reads that file back.
+//
+// One capture at a time: the freshness check keys off the file's mtime, so
+// overlapping requests would race over which frame each observes.
+var shotCaptureMu sync.Mutex
 
-// cdpPageWS returns the WebSocket debugger URL of the first browser "page" target.
-func cdpPageWS(ctx context.Context) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cdpEndpoint+"/json", nil)
-	if err != nil {
-		return "", err
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("cdp list targets (is the debug port open?): %w", err)
-	}
-	defer resp.Body.Close()
+// captureScreenshot triggers a whole-screen grab and returns the JPEG bytes. It
+// needs the kiosk session (and its grim agent) to be up; if not, the FIFO poke
+// fails or the wait times out against ctx.
+func captureScreenshot(ctx context.Context) ([]byte, error) {
+	shotCaptureMu.Lock()
+	defer shotCaptureMu.Unlock()
 
-	var targets []struct {
-		Type string `json:"type"`
-		WS   string `json:"webSocketDebuggerUrl"`
+	// Any frame the agent writes after this instant is ours; a screenshotFile
+	// left by an earlier capture has an older mtime and is skipped.
+	reqAt := time.Now()
+
+	if err := pokeScreenshotAgent(); err != nil {
+		return nil, err
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&targets); err != nil {
-		return "", fmt.Errorf("cdp decode targets: %w", err)
-	}
-	for _, t := range targets {
-		if t.Type == "page" && t.WS != "" {
-			return t.WS, nil
+
+	file := envOr("DASHBOARD_ASSISTANT_SCREENSHOT_FILE", screenshotFile)
+	for {
+		if fi, err := os.Stat(file); err == nil && fi.ModTime().After(reqAt) {
+			img, err := os.ReadFile(file)
+			if err != nil {
+				return nil, fmt.Errorf("read screenshot: %w", err)
+			}
+			if len(img) == 0 {
+				return nil, fmt.Errorf("screenshot: empty frame")
+			}
+			return img, nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("screenshot timed out (is the kiosk session up?): %w", ctx.Err())
+		case <-time.After(100 * time.Millisecond):
 		}
 	}
-	return "", fmt.Errorf("cdp: no page target")
 }
 
-// captureScreenshot grabs a JPEG of the current kiosk web page over CDP
-// (Page.captureScreenshot) and returns it base64-encoded. The HA API decodes it
-// and caches the JPEG, which the integration's image entity fetches. It needs the
-// loopback CDP port to be open (autoLogin with a staged token, or dev
-// remote-debugging).
-func captureScreenshot(ctx context.Context) (string, error) {
-	wsURL, err := cdpPageWS(ctx)
+// pokeScreenshotAgent asks the in-session grim agent for one frame. O_NONBLOCK so
+// opening a reader-less FIFO (session down) fails with ENXIO instead of blocking,
+// mirroring the display/nav/zoom writers.
+func pokeScreenshotAgent() error {
+	fifo := envOr("DASHBOARD_ASSISTANT_SCREENSHOT_FIFO", screenshotFifo)
+	f, err := os.OpenFile(fifo, os.O_WRONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
-		return "", err
+		return fmt.Errorf("screenshot session not ready: %w", err)
 	}
-	conn, _, err := websocket.DefaultDialer.DialContext(ctx, wsURL, nil)
-	if err != nil {
-		return "", fmt.Errorf("cdp dial: %w", err)
+	_, werr := f.WriteString("shot\n")
+	f.Close()
+	if werr != nil {
+		return fmt.Errorf("write screenshot fifo: %w", werr)
 	}
-	defer conn.Close()
-	conn.SetReadLimit(32 << 20) // screenshots are large; lift the default cap
-	if dl, ok := ctx.Deadline(); ok {
-		conn.SetWriteDeadline(dl)
-		conn.SetReadDeadline(dl)
-	}
-
-	const req = `{"id":1,"method":"Page.captureScreenshot","params":{"format":"jpeg","quality":70}}`
-	if err := conn.WriteMessage(websocket.TextMessage, []byte(req)); err != nil {
-		return "", fmt.Errorf("cdp write: %w", err)
-	}
-
-	// Read until our command's reply (id 1); skip any interleaved CDP events.
-	for {
-		_, data, err := conn.ReadMessage()
-		if err != nil {
-			return "", fmt.Errorf("cdp read: %w", err)
-		}
-		var resp struct {
-			ID     int `json:"id"`
-			Result struct {
-				Data string `json:"data"`
-			} `json:"result"`
-			Error *struct {
-				Message string `json:"message"`
-			} `json:"error"`
-		}
-		if err := json.Unmarshal(data, &resp); err != nil || resp.ID != 1 {
-			continue
-		}
-		if resp.Error != nil {
-			return "", fmt.Errorf("cdp: %s", resp.Error.Message)
-		}
-		if resp.Result.Data == "" {
-			return "", fmt.Errorf("cdp: empty screenshot")
-		}
-		return resp.Result.Data, nil
-	}
+	return nil
 }

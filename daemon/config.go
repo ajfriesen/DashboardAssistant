@@ -35,9 +35,11 @@ var (
 	zoomFile         = stateDir + "/zoom"          // persisted browser zoom percent, restored by the kiosk on launch
 	themeFifo        = stateDir + "/theme.fifo"    // daemon writes "theme <dark|light>"; in-session agent flips HA's theme over CDP
 	themeFile        = stateDir + "/theme"         // persisted dark/light choice, restored by the kiosk on launch
-	rotationFifo     = stateDir + "/rotation.fifo" // daemon writes "rotate <deg>"; in-session agent applies a Sway output transform
-	rotationFile     = stateDir + "/rotation"      // persisted display rotation (degrees), restored by the kiosk on launch
-	dmiFile          = stateDir + "/dmi.env"       // hardware serial, written by the daemon's root ExecStartPre (DMI is root-only)
+	rotationFifo     = stateDir + "/rotation.fifo"   // daemon writes "rotate <deg>"; in-session agent applies a Sway output transform
+	rotationFile     = stateDir + "/rotation"        // persisted display rotation (degrees), restored by the kiosk on launch
+	screenshotFifo   = stateDir + "/screenshot.fifo" // daemon pokes it; the in-session grim agent grabs the whole screen
+	screenshotFile   = stateDir + "/screenshot.jpg"  // latest whole-screen JPEG written by the grim agent, read back by the daemon
+	dmiFile          = stateDir + "/dmi.env"         // hardware serial, written by the daemon's root ExecStartPre (DMI is root-only)
 )
 
 const sessionUnit = "greetd.service" // the Sway kiosk session; restart relaunches it
