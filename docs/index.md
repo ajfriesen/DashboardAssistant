@@ -11,12 +11,11 @@ hide:
 
 <span class="da-hero__eyebrow">Home Assistant on your wall</span>
 
-# Your smart home, <span class="da-accent">on the wall</span> {: .da-hero__title }
+# Your Home Assistant Dashboard, <span class="da-accent">wherever you like</span> {: .da-hero__title }
 
 <p class="da-hero__lead">
-Download one image, flash it to an SD card or SSD, and power on your device — it
-wakes up as a Home Assistant dashboard on your wall or desk. No Linux, no login
-screens, no weekend of tinkering. Just your smart home, on the wall.
+Download one image, flash it to an SD card or SSD, and power on your device. It
+wakes up as a Home Assistant dashboard on your wall or desk. No Linux knowledge, no terminal, no weekend of tinkering. Just your smart home, on the wall.
 </p>
 
 <div class="da-hero__cta" markdown>

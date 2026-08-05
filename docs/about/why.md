@@ -39,9 +39,6 @@ one I wished existed.
   computer, whatever's in the drawer — not a locked-down, proprietary panel.
 - **Set-and-forget reliability.** It should ride out power cuts and reboots and
   just come back up on its own, unattended, for years.
-- **Safe for the whole household.** Someone standing at the panel shouldn't be
-  able to re-point it or reach anything sensitive — physical access shouldn't
-  mean full control.
 - **Repeatable by design.** Flashing a second or third panel should give me the
   exact same result every time, with no fiddly per-device setup.
 
