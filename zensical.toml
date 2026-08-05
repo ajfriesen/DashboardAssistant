@@ -57,7 +57,6 @@ nav = [
       "about/features.md",
   ]},
   { "In Action" = "in-action.md" },
-  { "How It Compares" = "comparison.md" },
   { "Hardware Support" = "hardware-support.md" },
   { "Stack for Nerds" = "stack-for-nerds.md" },
   { "Sponsor" = "sponsor.md" },
