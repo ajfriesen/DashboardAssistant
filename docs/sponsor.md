@@ -39,6 +39,6 @@ That's completely fine — these help just as much:
   the cheapest, most effective boost.
 - 🗣️ **Tell people.** Post your setup, share a screenshot, mention it in your
   Home Assistant community.
-- 🐛 **Create bug reports.** Bug reports, docs fixes or just say thanks on [GitHub discusson](https://github.com/ajfriesen/DashboardAssistant/discussions).
+- 🐛 **Create bug reports.** Bug reports, docs fixes or just say thanks on [GitHub discussions](https://github.com/ajfriesen/DashboardAssistant/discussions).
 
 Thank you for keeping the project alive. 💛

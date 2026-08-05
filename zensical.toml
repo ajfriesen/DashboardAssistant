@@ -60,7 +60,7 @@ nav = [
   { "How It Compares" = "comparison.md" },
   { "Hardware Support" = "hardware-support.md" },
   { "Stack for Nerds" = "stack-for-nerds.md" },
-  { "❤️ Sponsor" = "sponsor.md" },
+  { "Sponsor" = "sponsor.md" },
   # Drafts live in the repo-level drafts/ folder (outside docs/) so Zensical
   # doesn't publish them — it has no draft flag, and builds everything under
   # docs/. To publish one, move it into docs/ and add it to this nav:

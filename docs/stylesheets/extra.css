@@ -253,3 +253,34 @@
   line-height: 1.55;
   color: var(--md-default-fg-color--light);
 }
+
+/* --------------------------------------------------------------------------
+   Beating heart on the "Sponsor" nav link
+   --------------------------------------------------------------------------
+   The nav label stays plain text ("Sponsor"); the heart is added here as a
+   pseudo-element so it can be animated. Matches the Sponsor link in both the
+   top tabs and the sidebar, at any page depth (href ends in "sponsor/").
+   -------------------------------------------------------------------------- */
+.md-tabs__link[href$="sponsor/"]::before,
+.md-nav__link[href$="sponsor/"]::before {
+  content: "❤️";
+  display: inline-block;
+  margin-right: 0.4em;
+  transform-origin: center;
+  animation: da-heartbeat 1.3s ease-in-out infinite;
+}
+
+@keyframes da-heartbeat {
+  0%, 100% { transform: scale(1); }
+  15%      { transform: scale(1.3); }
+  30%      { transform: scale(1); }
+  45%      { transform: scale(1.2); }
+  60%      { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .md-tabs__link[href$="sponsor/"]::before,
+  .md-nav__link[href$="sponsor/"]::before {
+    animation: none;
+  }
+}
