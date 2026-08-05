@@ -694,7 +694,7 @@ let
       "position": "bottom",
       "height": 50,
       "modules-left": ["custom/home", "custom/setup"],
-      "modules-center": ["custom/prev", "custom/next"],
+      "modules-center": ["custom/prev", "custom/sponsor", "custom/next"],
       "modules-right": ["custom/kbd"],
       "custom/kbd": {
         "format": "⌨  Keyboard",
@@ -715,6 +715,11 @@ let
         "format": "◀  Prev",
         "tooltip": false,
         "on-click": "${pagePrev}"
+      },
+      "custom/sponsor": {
+        "format": "❤",
+        "tooltip": false,
+        "on-click": "${cdpNav} ${daemonBase}/sponsor"
       },
       "custom/next": {
         "format": "Next  ▶",
@@ -737,6 +742,7 @@ let
     #custom-home,
     #custom-setup,
     #custom-prev,
+    #custom-sponsor,
     #custom-next,
     #custom-kbd {
       padding: 0 16px;
@@ -747,9 +753,26 @@ let
     #custom-home:active,
     #custom-setup:active,
     #custom-prev:active,
+    #custom-sponsor:active,
     #custom-next:active,
     #custom-kbd:active {
       background: #33415a;
+    }
+    /* Beating heart. GTK CSS (waybar) has no `transform`, so the pulse is a
+       font-size beat — two quick systole/diastole bumps per cycle — with the
+       heart tinted red so it reads as "sponsor" at a glance. */
+    #custom-sponsor {
+      color: #ff5a7a;
+      padding: 0 20px;
+      animation: heartbeat 1.2s ease-in-out infinite;
+    }
+    @keyframes heartbeat {
+      0%   { font-size: 18px; }
+      15%  { font-size: 25px; }
+      30%  { font-size: 18px; }
+      45%  { font-size: 23px; }
+      60%  { font-size: 18px; }
+      100% { font-size: 18px; }
     }
   '';
 

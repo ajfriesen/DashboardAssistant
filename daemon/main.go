@@ -127,6 +127,10 @@ func main() {
 	// just the read-only Info and Recovery tabs, nothing that re-points the kiosk.
 	mux.Handle("/setup", loopbackOnly(http.HandlerFunc(srv.handleSetupPage)))
 	mux.Handle("/waiting", loopbackOnly(http.HandlerFunc(srv.handleWaitingPage)))
+	// Sponsor splash — reached from the ❤ button on the kiosk bar. Static page
+	// (importance of sponsoring + a QR to GitHub Sponsors); loopback only like the
+	// rest of the on-device UI.
+	mux.Handle("/sponsor", loopbackOnly(http.HandlerFunc(srv.handleSponsorPage)))
 	// Import a YAML config bundle (HA URL / token / Wi-Fi / API token / pages), fed
 	// by the USB and ESP importers. Loopback only. This is the sole config path.
 	mux.Handle("/api/import", loopbackOnly(http.HandlerFunc(srv.handleImport)))
@@ -198,6 +202,10 @@ func (s *server) handleSetupPage(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) handleWaitingPage(w http.ResponseWriter, r *http.Request) {
 	serveEmbedded(w, "web/waiting.html")
+}
+
+func (s *server) handleSponsorPage(w http.ResponseWriter, r *http.Request) {
+	serveEmbedded(w, "web/sponsor.html")
 }
 
 func (s *server) handleImport(w http.ResponseWriter, r *http.Request) {

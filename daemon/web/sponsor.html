@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Dashboard Assistant — Sponsor</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: system-ui, sans-serif; background: #10151c; color: #e8edf2;
+      min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 1.25rem; text-align: center; padding: 5vh 6vw;
+    }
+    /* Beating heart, matched to the waybar button so the two read as one action. */
+    .heart { font-size: 3.25rem; line-height: 1; animation: beat 1.2s ease-in-out infinite; }
+    @keyframes beat {
+      0%, 100% { transform: scale(1); }
+      15% { transform: scale(1.25); }
+      30% { transform: scale(1); }
+      45% { transform: scale(1.18); }
+      60% { transform: scale(1); }
+    }
+    @media (prefers-reduced-motion: reduce) { .heart { animation: none; } }
+    h1 { font-size: 1.55rem; margin: 0; font-weight: 650; }
+    p { color: #9fb0c0; margin: 0; max-width: 34rem; line-height: 1.55; }
+    p b { color: #e8edf2; }
+    .qr { display: flex; flex-direction: column; align-items: center; gap: .6rem; margin-top: .25rem; }
+    .qr img {
+      width: 200px; height: 200px; image-rendering: pixelated;
+      background: #fff; padding: 12px; border-radius: 14px;
+    }
+    .qr .cap { color: #9fb0c0; font-size: .95rem; }
+    .qr .url {
+      color: #6ea8fe; font-size: .9rem; word-break: break-all; max-width: 24rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .hint { color: #6c7a89; font-size: .85rem; margin-top: .5rem; }
+  </style>
+</head>
+<body>
+  <div class="heart" aria-hidden="true">❤️</div>
+
+  <h1>Keep Dashboard Assistant alive</h1>
+  <p>
+    Dashboard Assistant is built and maintained by <b>one person, in the open</b>.
+    Sponsoring pays for test hardware, image hosting and the CI that ships every
+    release — and the hours to fix bugs and build the next feature. If this put
+    your dashboard on the wall, <b>a small monthly amount keeps it moving.</b>
+  </p>
+
+  <div class="qr">
+    <!-- QR encodes https://github.com/sponsors/ajfriesen (generated with
+         `qrencode -l M`). Regenerate if the sponsor URL changes. -->
+    <img alt="QR code linking to GitHub Sponsors for Dashboard Assistant"
+         src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMYAAADGAQMAAACzVW0eAAAABlBMVEUAAAD///+l2Z/dAAAAAnRSTlP//8i138cAAAAJcEhZcwAACxIAAAsSAdLdfvwAAAFOSURBVFiF7ZfNrQMhDIQtUQAl0bpL2gKQeJ4ZWOXl72ofgpII9uMwwR7jtfVp2I98JZfFaMtbTLpbX1jbqEFGSGzxBVntGpxXIaExVvF4Lcf8slaMhOrZIb8gmYbJKka0CjINv095kErokkjA83nyTyY5I4THrvam7uSRa8zO0vKQj3XIHWoEGdXFTx6kE8iM0jIR85i7SmAJguGUTItQeBniLMnOx1piXoJII8+y4cY4vilBjBbZ8v/XnWwSnogjVDIyDRuXJYhUd5wlSRSbVYWgdZJq542BXaou+WRb1nVpyCLHJdmEvQlscamns0IEqm07Y+1WvW1vZxON055AL3u9EuR+y+HVoS3HP+lkKAenXnF4wPdZpxOG1xV2/ok7E2sQRZj2xQn3VYjsUNMrL+9miUSFWb2Jsfd8zMRUQpcw+0wtp1kV8mn8yDfyB4+OmSz1AK+RAAAAAElFTkSuQmCC">
+    <span class="cap">Scan to sponsor on GitHub</span>
+    <span class="url">github.com/sponsors/ajfriesen</span>
+  </div>
+
+  <p class="hint">Tap 🏠 Home on the bar below to return to your dashboard.</p>
+</body>
+</html>
