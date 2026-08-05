@@ -30,6 +30,6 @@ Dashboard Assistant is under active development. x86_64 is the primary, tested
 target today; Raspberry Pi and other aarch64 boards are a work in progress. See
 [Hardware Support](../hardware-support.md) for the current state.
 
-The project is open source on
+The project is developed in the open on
 [GitHub](https://github.com/ajfriesen/dashboard-assistant) — issues and pull
 requests are welcome.

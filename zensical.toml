@@ -17,7 +17,7 @@ site_name = "Dashboard Assistant"
 # meaningful description of the site content for use by search engines.
 #
 # Read more: https://zensical.org/docs/setup/basics/#site_description
-site_description = "A unbreakable Home Assistant Kiosk OS built on NixOS."
+site_description = "Put Home Assistant on any screen in your home. Flash one image to a spare tablet or panel and it boots straight into your dashboard."
 
 # The site_author attribute. This is used in the HTML head element.
 #
@@ -57,14 +57,14 @@ nav = [
   ]},
   { "In Action" = "in-action.md" },
   { "Hardware Support" = "hardware-support.md" },
+  { "Stack for Nerds" = "stack-for-nerds.md" },
   {"Flash" = [
      "flash/flash.md",
      "flash/home-assistant-setup.md",
      "flash/seed.md",
   ]},
-  {"Live Installer" = [
-     "installer/installer.md",
-  ]},
+  # "Live Installer" (installer/installer.md) is a draft — the installer isn't
+  # working yet, so the page is marked `draft: true` and kept out of the nav.
     {"Usage" = [
      "usage/usage.md",
      "usage/diagnostics.md",

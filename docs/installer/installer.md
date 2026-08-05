@@ -1,5 +1,6 @@
 ---
 icon: material/usb-flash-drive
+draft: true
 ---
 
 # Live Installer & First-Boot Setup
@@ -57,8 +58,8 @@ boot partition. The device applies it on first boot and goes straight to your
 dashboard.
 
 See [Seed File](../flash/seed.md) for the full schema and the two ways to apply
-it, and [Create Home Assistant User](../flash/home-assistant-setup.md) for how to
-make a dedicated kiosk user and generate the access token.
+it, and [Get a Home Assistant Token](../flash/home-assistant-setup.md) for how to
+generate the access token.
 
 ## The on-device panel
 

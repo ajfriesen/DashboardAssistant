@@ -20,8 +20,8 @@ only what you want to provision:
 # Home Assistant base URL the kiosk should open.
 ha_url: "https://homeassistant.local:8123"
 
-# Long-lived access token for the dedicated kiosk user. See
-# "Create Home Assistant User" for how to generate one.
+# Long-lived access token used to sign in to Home Assistant. See
+# "Get a Home Assistant Token" for how to generate one.
 token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiIyZWRlNGE0ZTFjNmQ0ZDY3OTY4ODhmMTk5OGNhNWVjMSIsImlhdCI6MTc4NDcxODk3MywiZXhwIjoyMTAwMDc4OTczfQ.Rd92pdzdYkC8HI3buVO6m9EVVI71Ye-MP_1nwogfOgU"
 
 # Optional Wi-Fi credentials. Omit the whole block on a wired device.
