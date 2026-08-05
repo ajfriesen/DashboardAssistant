@@ -38,19 +38,17 @@ reference for the complete entity list.
 
 OS updates are atomic and surface in Home Assistant as an `update` entity: it
 compares the installed version against the latest release and offers a one-tap
-install. If a new generation fails to boot cleanly, the device automatically
-rolls back to the previous working one.
+install. Every version is kept as a NixOS generation, so if an update misbehaves
+you can roll back from the device (see below).
 
 ## Recovery
 
-If a boot goes wrong, the device falls back to the last known-good generation on
-its own. For manual recovery, an on-screen picker lets you choose an older
-generation to boot into — useful if a configuration change misbehaves but the
-system still boots.
+If an update or configuration change misbehaves, an on-screen picker lets you
+choose an older, known-good generation to boot into — recovery is done by hand,
+right on the device's touchscreen.
 
-!!! warning "Automatic rollback needs systemd-boot"
-    The *automatic* reboot-into-the-previous-generation on a failed boot relies
-    on **systemd-boot** and its boot-counting support. It does **not** work with
-    **U-Boot**, which the Raspberry Pi images use — on those boards you'd recover
-    manually with the picker instead. (This is my last understanding; it may
-    change as the Pi targets mature.)
+!!! note "Automatic rollback isn't available yet"
+    Booting into the previous generation *automatically* after a failed boot
+    relies on boot-counting support. The images use **U-Boot**, which doesn't
+    provide it, and the NixOS support is still in testing — so today recovery is
+    manual, using the picker above. This may change as the targets mature.

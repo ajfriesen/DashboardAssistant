@@ -65,9 +65,9 @@ automate — no MQTT broker required.
 
 <div class="da-card" markdown>
 <div class="da-card__icon">🛡️</div>
-### Unbreakable via NixOS
-A bad update boots into the last working generation, with an on-screen recovery
-picker as backup.
+### Recoverable via NixOS
+Every update is atomic and keeps the previous generation. If something
+misbehaves, roll back to a known-good version right on the device's touchscreen.
 </div>
 
 <div class="da-card" markdown>

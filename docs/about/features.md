@@ -16,8 +16,11 @@ icon: lucide/sparkles
 
 **Stays alive**
 
-- Automatic generation rollback on a failed boot, plus a manual recovery picker.
 - Atomic OS updates surfaced as a Home Assistant `update` entity.
+- On-device recovery: if an update misbehaves, roll back to a previous
+  generation from the touchscreen recovery picker. (Automatic rollback on a
+  failed boot isn't available yet — it needs boot-counting support that U-Boot
+  doesn't provide.)
 
 **Seed-file provisioning**
 
