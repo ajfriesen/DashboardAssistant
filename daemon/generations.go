@@ -19,7 +19,8 @@ const systemProfile = "/nix/var/nix/profiles/system"
 // Generation is one bootable NixOS system generation.
 type Generation struct {
 	Number  int    `json:"number"`
-	Date    string `json:"date"` // activation time (profile symlink mtime), RFC3339
+	Date    string `json:"date"`  // activation time (profile symlink mtime), RFC3339
+	Label   string `json:"label"` // config.system.nixos.label, e.g. "dashboard-assistant-1.4.0-26.05.…"
 	Current bool   `json:"current"`
 }
 
@@ -41,10 +42,21 @@ func listGenerations() ([]Generation, error) {
 		if fi, err := os.Lstat(m); err == nil {
 			date = fi.ModTime().Format(time.RFC3339)
 		}
-		gens = append(gens, Generation{Number: n, Date: date, Current: n == current})
+		gens = append(gens, Generation{Number: n, Date: date, Label: generationLabel(m), Current: n == current})
 	}
 	sort.Slice(gens, func(i, j int) bool { return gens[i].Number > gens[j].Number })
 	return gens, nil
+}
+
+// generationLabel reads a generation's NixOS label from the "nixos-version" file
+// at the root of its system closure (config.system.nixos.label). Empty if the
+// file is missing (e.g. a very old generation), so callers can fall back.
+func generationLabel(link string) string {
+	b, err := os.ReadFile(filepath.Join(link, "nixos-version"))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
 }
 
 // currentGeneration is the number the profile symlink points at, or 0.

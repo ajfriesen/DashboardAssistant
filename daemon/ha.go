@@ -123,8 +123,10 @@ type stateSnapshot struct {
 		TotalGiB float64 `json:"total_gib"`
 		UsedGiB  float64 `json:"used_gib"`
 	} `json:"disk"`
-	Generations int `json:"generations"`
-	Update      struct {
+	Generations    int          `json:"generations"`
+	Generation     string       `json:"generation"`      // current generation's NixOS label (the tag it was built from)
+	GenerationList []Generation `json:"generation_list"` // all bootable generations, newest first
+	Update         struct {
 		Installed   string        `json:"installed_version"`
 		Latest      string        `json:"latest_version"`
 		InProgress  bool          `json:"in_progress"`
@@ -284,6 +286,13 @@ func (h *HAHub) snapshot() stateSnapshot {
 	}
 	if gens, err := listGenerations(); err == nil {
 		s.Generations = len(gens)
+		s.GenerationList = gens
+		for _, g := range gens {
+			if g.Current {
+				s.Generation = g.Label
+				break
+			}
+		}
 	}
 
 	us := h.upd.State()
