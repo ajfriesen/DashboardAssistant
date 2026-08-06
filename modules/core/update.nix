@@ -108,6 +108,14 @@ in
       # (0444), read at /etc/dashboard-assistant/version.
       environment.etc."dashboard-assistant/version".text = version;
 
+      # Stamp the release onto the generation so the boot menu, `nixos-version`,
+      # and `nixos-rebuild list-generations` all show which tag a generation was
+      # built from — useful after an in-place update or downgrade. Appended in
+      # parens after the nixpkgs label, e.g. "26.05.… (dashboard-assistant-0.1.0-rc.2)".
+      # Each release tag's flake carries its own `version`, so a switch to any
+      # tag self-labels correctly.
+      system.nixos.tags = [ "dashboard-assistant-${version}" ];
+
       # Merges with the daemon service's other environment settings (daemon.nix).
       systemd.services.dashboard-assistant-daemon.environment = {
         UPDATE_REPO = cfg.repo;
