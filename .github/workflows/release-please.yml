@@ -12,22 +12,19 @@ name: release-please
 # Use the hardware target as the commit scope (feat(rpi5):/fix(x86):); daemon/core
 # (or no scope) for changes that apply to all.
 #
-# Prereleases: force one with a `Release-As: 0.3.0-rc.1` commit footer. The step
-# below flags any release whose tag has a SemVer prerelease suffix (a hyphen) as a
-# GitHub pre-release; its images go to pre-release/ (not release/), off the stable
-# update path.
+# Prereleases: force one with a `Release-As: 0.3.0-rc.1` commit footer, usually on
+# an empty commit (`git commit --allow-empty`). The step below flags any release
+# whose tag has a SemVer prerelease suffix (a hyphen) as a GitHub pre-release; its
+# images go to pre-release/ (not release/), off the stable update path.
+#
+# No paths-ignore here: a `paths-ignore` filter skips pushes that change no
+# matching files, and an empty commit changes *no* files at all — so filtering
+# would silently swallow the `Release-As` empty commits above. Running on every
+# push (docs included) is cheap and harmless: docs: commits don't bump the
+# version, so no spurious release is cut.
 on:
   push:
     branches: [main]
-    # Docs-only pushes can't produce a release (docs: commits don't bump the
-    # version), so skip the release-please run for them. These paths are owned by
-    # docs.yml. A later feat:/fix: run still sees any skipped docs commits, since
-    # release-please reads the full commit history when it runs.
-    paths-ignore:
-      - 'docs/**'
-      - 'overrides/**'
-      - 'zensical.toml'
-      - '.github/workflows/docs.yml'
 
 permissions:
   contents: write # create the release PR, tag and GitHub Release
