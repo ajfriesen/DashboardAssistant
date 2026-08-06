@@ -208,11 +208,19 @@ func (p *Pages) navigate(url string) error {
 	return werr
 }
 
+// defaultPages seeds a fresh device (no urls.json yet) with a single page
+// pointing at the mDNS Home Assistant address, so the page list and the HA
+// select aren't empty out of the box. It's virtual until the list is edited or
+// imported, at which point savePages writes urls.json and takes over.
+func defaultPages() []Page {
+	return []Page{{Name: "Home Assistant", URL: "http://homeassistant.local:8123"}}
+}
+
 func loadPages() ([]Page, error) {
 	b, err := os.ReadFile(urlsFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return defaultPages(), nil
 		}
 		return nil, err
 	}
