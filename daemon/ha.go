@@ -125,13 +125,14 @@ type stateSnapshot struct {
 	} `json:"disk"`
 	Generations int `json:"generations"`
 	Update      struct {
-		Installed   string `json:"installed_version"`
-		Latest      string `json:"latest_version"`
-		InProgress  bool   `json:"in_progress"`
-		URL         string `json:"release_url,omitempty"`
-		Title       string `json:"title,omitempty"`
-		Summary     string `json:"release_summary,omitempty"`
-		Installable bool   `json:"installable"`
+		Installed   string        `json:"installed_version"`
+		Latest      string        `json:"latest_version"`
+		InProgress  bool          `json:"in_progress"`
+		URL         string        `json:"release_url,omitempty"`
+		Title       string        `json:"title,omitempty"`
+		Summary     string        `json:"release_summary,omitempty"`
+		Installable bool          `json:"installable"`
+		Available   []ReleaseInfo `json:"available"`
 	} `json:"update"`
 	Zoom  int `json:"zoom"`
 	Theme struct {
@@ -293,6 +294,7 @@ func (h *HAHub) snapshot() stateSnapshot {
 	s.Update.Title = us.Title
 	s.Update.Summary = us.Summary
 	s.Update.Installable = h.upd.Installable()
+	s.Update.Available = us.Available
 
 	s.Zoom = h.zoom.Level()
 	s.Theme.Dark = h.theme.Dark()
@@ -349,6 +351,7 @@ func (h *HAHub) routes() http.Handler {
 	mux.HandleFunc("/api/ha/power", h.auth(h.handlePower))
 	mux.HandleFunc("/api/ha/reset", h.auth(h.handleReset))
 	mux.HandleFunc("/api/ha/update", h.auth(h.handleUpdate))
+	mux.HandleFunc("/api/ha/install_version", h.auth(h.handleInstallVersion))
 	mux.HandleFunc("/api/ha/screenshot", h.auth(h.handleScreenshot))
 	mux.HandleFunc("/api/ha/screenshot.jpg", h.auth(h.handleScreenshotImage))
 	return mux
@@ -735,6 +738,50 @@ func (h *HAHub) handleUpdate(w http.ResponseWriter, r *http.Request) {
 			h.upd.RefreshInstalled()
 		} else {
 			log.Printf("ha: update %s did not complete: %s", tag, result)
+		}
+		h.broadcast()
+	})
+	if err != nil {
+		h.upd.SetInstalling(false)
+		h.broadcast()
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "installing", "target": tag})
+}
+
+// handleInstallVersion switches the device to a specific released tag chosen from
+// the version picker — any discovered release, newer or older (a downgrade),
+// stable or prerelease. It gates on the known release set (so a rebuild only ever
+// targets a real, discovered tag) and then drives the same privileged rebuild as
+// handleUpdate.
+func (h *HAHub) handleInstallVersion(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Tag string `json:"tag"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if !h.upd.Installable() {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "this image cannot apply updates"})
+		return
+	}
+	tag := strings.TrimSpace(req.Tag)
+	if !h.upd.HasVersion(tag) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown release tag"})
+		return
+	}
+
+	h.upd.SetInstalling(true)
+	h.broadcast()
+	log.Printf("ha: installing version %s", tag)
+
+	err := startUpdate(tag, func(result string) {
+		h.upd.SetInstalling(false)
+		if result == "done" {
+			h.upd.RefreshInstalled()
+		} else {
+			log.Printf("ha: install %s did not complete: %s", tag, result)
 		}
 		h.broadcast()
 	})
