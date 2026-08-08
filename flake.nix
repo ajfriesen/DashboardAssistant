@@ -56,7 +56,7 @@
       # the release PR to match the tag it cuts (via the x-release-please-version
       # annotation; tags may carry a leading "v", which the daemon strips) — don't
       # edit it by hand.
-      version = "0.1.0-rc.2"; # x-release-please-version
+      version = "0.1.0-rc.3"; # x-release-please-version
 
       # Optional per-build overrides (e.g. a seeded HA URL / debug flags). See
       # modules/local.example.nix. Must be git-tracked to be picked up.
