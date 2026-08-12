@@ -40,6 +40,7 @@ var (
 	screenshotFifo   = stateDir + "/screenshot.fifo" // daemon pokes it; the in-session grim agent grabs the whole screen
 	screenshotFile   = stateDir + "/screenshot.jpg"  // latest whole-screen JPEG written by the grim agent, read back by the daemon
 	dmiFile          = stateDir + "/dmi.env"         // hardware serial, written by the daemon's root ExecStartPre (DMI is root-only)
+	sendspinFile     = stateDir + "/sendspin"        // persisted on/off for the Sendspin audio player, reapplied to its unit at daemon start
 )
 
 const sessionUnit = "greetd.service" // the Sway kiosk session; restart relaunches it

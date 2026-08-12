@@ -85,8 +85,15 @@ func main() {
 	zoom := NewZoom()
 	theme := NewTheme()
 	rot := NewRotation()
-	hub := NewHAHub(loadAPIToken(), disp, pages, act, upd, zoom, theme, rot)
+	snd := NewSendspin()
+	hub := NewHAHub(loadAPIToken(), disp, pages, act, upd, zoom, theme, rot, snd)
 	srv := &server{nm: nm, ha: hub, pages: pages, diag: newDiagSession()}
+
+	// The Sendspin player's unit has no install target — this daemon owns its
+	// on/off state — so the persisted choice has to be applied on every boot.
+	// In a goroutine because it talks to systemd over D-Bus and must not delay
+	// the listeners below.
+	go snd.Reconcile()
 
 	// Home Assistant API: an authenticated LAN listener the first-party HACS
 	// integration polls and subscribes to (SSE). Runs on its own port, separate

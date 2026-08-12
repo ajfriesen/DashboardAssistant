@@ -10,6 +10,7 @@
     ./configimport.nix
     ./diagnostics.nix
     ./seed.nix
+    ./sendspin.nix
     ./debug.nix
     ./cleanup.nix
     ./memory.nix

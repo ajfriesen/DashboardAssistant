@@ -24,6 +24,7 @@ the device's Config → Info screen to pair. From there you can:
 - **Rotate** the display to 0, 90, 180 or 270°.
 - Take a **screenshot** of the current view on demand.
 - Switch the active **page**, or edit the list of dashboard URLs.
+- Turn the **Sendspin player** on or off — see [Multi-room audio](audio.md).
 - **Reboot** or **shut down** the device.
 - Install an **OS update** when one is available.
 

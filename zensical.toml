@@ -69,6 +69,7 @@ nav = [
      ]},
      {"Usage" = [
         "usage/usage.md",
+        "usage/audio.md",
         "usage/diagnostics.md",
      ]},
   ]},

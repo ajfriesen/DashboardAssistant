@@ -144,7 +144,11 @@ type stateSnapshot struct {
 		Current int   `json:"current"`
 		Options []int `json:"options"`
 	} `json:"rotation"`
-	Host struct {
+	// Omitted entirely on builds without the Sendspin player, so the
+	// integration creates no audio entity there (same pattern as the
+	// Present flags on battery/temperature).
+	Sendspin *sendspinState `json:"sendspin,omitempty"`
+	Host     struct {
 		IP     string `json:"ip"`
 		Uptime int    `json:"uptime"`
 		CPU    int    `json:"cpu"`
@@ -164,6 +168,14 @@ type stateSnapshot struct {
 	} `json:"screenshot"`
 }
 
+// sendspinState is the Sendspin player's slice of the snapshot. On is the
+// requested state (what the switch shows); State is systemd's live ActiveState,
+// so HA can tell "off" from "on but failing to start".
+type sendspinState struct {
+	On    bool   `json:"on"`
+	State string `json:"state,omitempty"`
+}
+
 // HAHub owns the capability objects and the live SSE subscribers, and caches the
 // latest screenshot. It replaces the MQTT bridge/manager: the same object
 // observers that used to trigger MQTT republishes now trigger an SSE broadcast.
@@ -179,6 +191,7 @@ type HAHub struct {
 	zoom  *Zoom
 	theme *Theme
 	rot   *Rotation
+	snd   *Sendspin
 
 	mu   sync.Mutex
 	subs map[chan []byte]struct{}
@@ -191,7 +204,7 @@ type HAHub struct {
 // NewHAHub wires the object observers to broadcast a fresh snapshot to every SSE
 // subscriber, keeping HA in sync with both API commands and out-of-band changes
 // reported over the reverse channel (display power, touch, brightness).
-func NewHAHub(token string, disp *Display, pages *Pages, act *Activity, upd *UpdateChecker, zoom *Zoom, theme *Theme, rot *Rotation) *HAHub {
+func NewHAHub(token string, disp *Display, pages *Pages, act *Activity, upd *UpdateChecker, zoom *Zoom, theme *Theme, rot *Rotation, snd *Sendspin) *HAHub {
 	h := &HAHub{
 		token:  token,
 		nodeID: nodeID(),
@@ -203,6 +216,7 @@ func NewHAHub(token string, disp *Display, pages *Pages, act *Activity, upd *Upd
 		zoom:   zoom,
 		theme:  theme,
 		rot:    rot,
+		snd:    snd,
 		subs:   map[chan []byte]struct{}{},
 	}
 	obs := func() { h.broadcast() }
@@ -213,6 +227,7 @@ func NewHAHub(token string, disp *Display, pages *Pages, act *Activity, upd *Upd
 	zoom.SetObserver(obs)
 	theme.SetObserver(obs)
 	rot.SetObserver(obs)
+	snd.SetObserver(obs)
 	return h
 }
 
@@ -310,6 +325,10 @@ func (h *HAHub) snapshot() stateSnapshot {
 	s.Rotation.Current = h.rot.Degrees()
 	s.Rotation.Options = h.rot.Options()
 
+	if h.snd.Available() {
+		s.Sendspin = &sendspinState{On: h.snd.On(), State: h.snd.Actual()}
+	}
+
 	s.Host.IP = primaryIP()
 	if up, err := readUptime(); err == nil {
 		s.Host.Uptime = up
@@ -357,6 +376,7 @@ func (h *HAHub) routes() http.Handler {
 	mux.HandleFunc("/api/ha/zoom", h.auth(h.handleZoom))
 	mux.HandleFunc("/api/ha/theme", h.auth(h.handleTheme))
 	mux.HandleFunc("/api/ha/rotation", h.auth(h.handleRotation))
+	mux.HandleFunc("/api/ha/sendspin", h.auth(h.handleSendspin))
 	mux.HandleFunc("/api/ha/power", h.auth(h.handlePower))
 	mux.HandleFunc("/api/ha/reset", h.auth(h.handleReset))
 	mux.HandleFunc("/api/ha/update", h.auth(h.handleUpdate))
@@ -497,6 +517,7 @@ func (h *HAHub) handleInfo(w http.ResponseWriter, r *http.Request) {
 		"installable":     h.upd.Installable(),
 		"has_battery":     hasBattery,
 		"has_temperature": hasTemp,
+		"has_sendspin":    h.snd.Available(),
 	})
 }
 
@@ -642,6 +663,28 @@ func (h *HAHub) handleTheme(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.theme.Set(req.Dark); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, h.snapshot())
+}
+
+// handleSendspin starts ({"on": true}) or stops the Sendspin audio player. A
+// device built without the player answers 404 rather than pretending to have
+// one — the integration never creates the entity in that case anyway, so this
+// only bites a hand-rolled request.
+func (h *HAHub) handleSendspin(w http.ResponseWriter, r *http.Request) {
+	if !h.snd.Available() {
+		http.Error(w, "sendspin player not available", http.StatusNotFound)
+		return
+	}
+	var req struct {
+		On bool `json:"on"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if err := h.snd.Set(req.On); err != nil {
 		writeErr(w, err)
 		return
 	}
