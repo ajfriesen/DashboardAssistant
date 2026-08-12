@@ -13,8 +13,8 @@
 }:
 let
   autoLogin = config.dashboardAssistant.kiosk.autoLogin;
-  # On-screen keyboard, packaged from source (not in nixpkgs). See packages/vboard.nix.
-  vboard = pkgs.callPackage ../../packages/vboard.nix { };
+  # On-screen keyboard, packaged from source (not in nixpkgs). See packages/vboard/.
+  vboard = pkgs.callPackage ../../packages/vboard/vboard.nix { };
   # Fallback dashboard target if runtime.env is somehow missing. Normal config
   # lives in /var/lib/dashboard-assistant/runtime.env (HA_URL=...), written by the daemon.
   defaultUrl = "http://homeassistant:8123/";

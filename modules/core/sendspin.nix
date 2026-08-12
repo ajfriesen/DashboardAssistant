@@ -4,7 +4,7 @@
 # *server* that sources music — in practice Music Assistant — and *players* that
 # receive it and stay in sync to well under a millisecond. This module ships the
 # player half only; the device is a speaker, never a music source, so
-# sendspin-go's `sendspin-server` binary is not packaged (see packages/sendspin-go.nix).
+# sendspin-go's `sendspin-server` binary is not packaged (see packages/sendspin-go/).
 #
 # Discovery is mDNS: the player browses for _sendspin-server._tcp and dials the
 # server it finds, so nothing has to be configured for the common case and no
@@ -33,7 +33,7 @@
 let
   cfg = config.dashboardAssistant.sendspin;
 
-  sendspin-player = pkgs.callPackage ../../packages/sendspin-go.nix { };
+  sendspin-player = pkgs.callPackage ../../packages/sendspin-go/sendspin-go.nix { };
 
   # The player's own default name is "<hostname>-sendspin-player", which on this
   # image expands to the MAC-derived "dashboard-assistant-ab12cd-sendspin-player"

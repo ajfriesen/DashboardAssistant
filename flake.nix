@@ -150,12 +150,12 @@
         # vboard (on-screen keyboard) is packaged from source — not in nixpkgs.
         # Exposed here so it can be built/tested standalone (`nix build .#vboard`);
         # the kiosk module pulls it in via callPackage.
-        vboard = pkgs.callPackage ./packages/vboard.nix { };
+        vboard = pkgs.callPackage ./packages/vboard/vboard.nix { };
 
         # sendspin-player (multi-room audio client) — likewise packaged from
         # source and exposed for standalone builds (`nix build .#sendspin-player`);
         # modules/core/sendspin.nix pulls it in via callPackage.
-        sendspin-player = pkgs.callPackage ./packages/sendspin-go.nix { };
+        sendspin-player = pkgs.callPackage ./packages/sendspin-go/sendspin-go.nix { };
       };
 
       # Raspberry Pi 4 SD-card image: `nix build .#rpi4-image`, then flash
