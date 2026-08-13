@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0-rc.3](https://github.com/ajfriesen/DashboardAssistant/compare/v0.1.0-rc.3...v0.2.0-rc.3) (2026-08-13)
+
+
+### Features
+
+* **audio:** add Sendspin multi-room audio player ([b92c0ea](https://github.com/ajfriesen/DashboardAssistant/commit/b92c0ea29b1c4be3b1c324867475a6ebf480ea87))
+
 ## [0.1.0-rc.3](https://github.com/ajfriesen/DashboardAssistant/compare/v0.1.0-rc.2...v0.1.0-rc.3) (2026-08-08)
 
 
