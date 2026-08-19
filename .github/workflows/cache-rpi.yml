@@ -9,10 +9,16 @@ name: cache-rpi
 # it. The consuming side is wired up in flake.nix (nixConfig) and
 # modules/core/binary-cache.nix.
 #
-# Both boards run as a matrix. The Pi 4 builds from the pinned nixpkgs (26.05);
-# the Pi 5 is pinned to nixpkgs-unstable in flake.nix (its kernel + sd-image pi5
-# support are newer than 26.05) — nothing board-specific is needed here, the
-# flake attrs already carry that.
+# All boards run as a matrix. The Pi 3 and Pi 4 build from the pinned nixpkgs
+# (26.05); the Pi 5 is pinned to nixpkgs-unstable in flake.nix (its kernel +
+# sd-image pi5 support are newer than 26.05) — nothing board-specific is needed
+# here, the flake attrs already carry that.
+#
+# Each board carries a `publish` flag. The Pi 3 is build-and-cache only: it has
+# not been confirmed to boot the kiosk on real hardware (1 GB of RAM), so a tag
+# must not quietly put a flashable image for it in the release bucket. Flip its
+# flag to true once the board is verified, and add the matching row to the
+# release notes table in release-please.yml.
 #
 # Native arm64 (ubuntu-24.04-arm) is free for public repos and builds the kernel
 # in real time instead of emulating it, so this workflow is the fast path even
@@ -38,7 +44,15 @@ name: cache-rpi
 # a tag still get something flashable.
 
 on:
+  # Manual runs can also produce a flashable image without cutting a tag, which
+  # is how an unreleased board (the Pi 3) gets something to test with. It lands
+  # as a workflow artifact rather than in the release bucket.
   workflow_dispatch:
+    inputs:
+      build_image:
+        description: Also build the SD image and upload it as an artifact
+        type: boolean
+        default: false
   push:
     branches: [main]
     # Docs-only pushes don't change the Nix build, so don't warm the cache for
@@ -75,7 +89,15 @@ jobs:
       # vice versa); each board's cache populate is independent.
       fail-fast: false
       matrix:
-        model: [rpi4, rpi5]
+        include:
+          # publish: whether a v* tag ships this board's image to the release
+          # bucket. See the header note on the Pi 3.
+          - model: rpi3
+            publish: false
+          - model: rpi4
+            publish: true
+          - model: rpi5
+            publish: true
     steps:
       - uses: actions/checkout@v7
 
@@ -97,9 +119,10 @@ jobs:
         run: nix profile install github:NixOS/nixpkgs/nixos-26.05#attic-client
 
       # aws CLI isn't guaranteed on the arm64 runner image, so pull the prebuilt
-      # binary from cache.nixos.org (only needed when we actually upload to R2).
+      # binary from cache.nixos.org (only needed when we actually upload to R2,
+      # which a non-publishing board never does).
       - name: Install AWS CLI
-        if: ${{ vars.R2_BUCKET != '' }}
+        if: ${{ matrix.publish && vars.R2_BUCKET != '' }}
         run: nix profile install github:NixOS/nixpkgs/nixos-26.05#awscli2
 
       # Build the full system toplevel: its closure references the kernel, initrd
@@ -116,11 +139,11 @@ jobs:
             .#nixosConfigurations.dashboard-assistant-${{ matrix.model }}.config.system.build.toplevel \
             --out-link result-toplevel
 
-      # The flashable image is only built (and published) for a v* tag release —
-      # there are no development images, so a regular push just warms the cache
-      # above.
+      # The flashable image is only built for a v* tag release of a published
+      # board, or on demand from a manual run — there are no development images,
+      # so a regular push just warms the cache above.
       - name: Build Pi image
-        if: ${{ github.ref_type == 'tag' }}
+        if: ${{ (github.ref_type == 'tag' && matrix.publish) || inputs.build_image }}
         run: |
           nix build --print-build-logs --accept-flake-config \
             .#packages.aarch64-linux.${{ matrix.model }}-image \
@@ -132,7 +155,7 @@ jobs:
       # pointer. The sd-image is already zstd-compressed, so we cp it straight to
       # R2. Skipped without R2_BUCKET (see the artifact fallback below).
       - name: Publish SD image to R2
-        if: ${{ github.ref_type == 'tag' && vars.R2_BUCKET != '' }}
+        if: ${{ github.ref_type == 'tag' && matrix.publish && vars.R2_BUCKET != '' }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -166,10 +189,11 @@ jobs:
             echo "nixos \`$nixos\` · commit \`${GITHUB_SHA::7}\` · sha256 \`$sha\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # Fallback for forks without R2 config building a tag: hand the release image
-      # out as a (slow) workflow artifact so there's still something flashable.
+      # Two cases hand the image out as a (slow) workflow artifact instead: a fork
+      # without R2 config building a tag, and a manual run that asked for an image
+      # (the only way to get a flashable Pi 3, which never publishes to R2).
       - name: Upload SD image artifact
-        if: ${{ github.ref_type == 'tag' && vars.R2_BUCKET == '' }}
+        if: ${{ (github.ref_type == 'tag' && matrix.publish && vars.R2_BUCKET == '') || (inputs.build_image && github.ref_type != 'tag') }}
         uses: actions/upload-artifact@v7
         with:
           name: dashboard-assistant-${{ matrix.model }}-image

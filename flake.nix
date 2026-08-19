@@ -108,6 +108,22 @@
         # `.#disk-image-dev`.
         dashboard-assistant-x86-disk-dev = mkDiskSystem [ ./modules/dev.nix ];
 
+        # Raspberry Pi 3 (aarch64) — SD-card image. CI warms the cache for it like
+        # the other boards, but a release tag deliberately does not publish its
+        # image (cache-rpi.yml `publish: false`) until the board is confirmed to
+        # boot the kiosk on 1 GB of RAM. Pinned nixpkgs (not unstable): nothing
+        # about this board needs a newer kernel.
+        dashboard-assistant-rpi3 = lib.nixosSystem {
+          system = "aarch64-linux";
+          specialArgs = { inherit impermanence version; };
+          modules = [
+            nixos-hardware.nixosModules.raspberry-pi-3
+            ./modules/hardware/rpi3.nix
+            ./modules/core/default.nix
+          ]
+          ++ localModules;
+        };
+
         # Raspberry Pi 4 (aarch64) — SD-card image, for bring-up/testing on a Pi.
         # Build the flashable image via `.#rpi4-image` (aarch64; this host builds
         # it via binfmt emulation, fetching most from the binary cache).
@@ -152,6 +168,11 @@
         # the kiosk module pulls it in via callPackage.
         vboard = pkgs.callPackage ./packages/vboard.nix { };
       };
+
+      # Raspberry Pi 3 SD-card image: `nix build .#rpi3-image`, then flash
+      # result/sd-image/*.img.zst to the card (same as the Pi 4).
+      packages.aarch64-linux.rpi3-image =
+        self.nixosConfigurations.dashboard-assistant-rpi3.config.system.build.sdImage;
 
       # Raspberry Pi 4 SD-card image: `nix build .#rpi4-image`, then flash
       # result/sd-image/*.img.zst to the card (zstdcat | dd, or unzstd first).

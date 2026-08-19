@@ -7,6 +7,7 @@ help:
   @echo "  build-disk-image             Build the stable raw disk image (btrfs+zstd)"
   @echo "  build-disk-image-dev         Build the dev raw disk image (SSH + debugging)"
   @echo "  build-disk-image-unstable    Build the raw disk image against nixos-unstable"
+  @echo "  build-rpi3             Build the Raspberry Pi 3 SD-card image (aarch64, untested)"
   @echo "  build-rpi4             Build the Raspberry Pi 4 SD-card image (aarch64)"
   @echo "  build-rpi5             Build the Raspberry Pi 5 SD-card image (aarch64, unstable)"
   @echo
@@ -73,6 +74,21 @@ build-disk-image-unstable:
   @echo "Image: $(readlink -f result)/dashboard-assistant.raw"
   @echo "Flash it (confirm the device first!):"
   @echo "  sudo dd if=$(readlink -f result)/dashboard-assistant.raw of=/dev/disk/by-id/ata-WDC_WDS100T2B0A-00SM50_195206A003DE bs=4M oflag=sync conv=fsync status=progress"
+
+# Build the Raspberry Pi 3 (aarch64) SD-card image. Same emulated-build /
+# binary-cache story as build-rpi4: once cache-rpi.yml has run on the arm64
+# runner, --accept-flake-config pulls the closure instead of compiling it. Note
+# the Pi 3 needs its own kernel build there (the Pi 4's cached one does not apply:
+# the Pi 3 kernel carries an extra DTB-renaming fixup), so a cold cache means
+# hours of emulation here. Untested on real hardware: 1 GB of RAM makes a working
+# kiosk the thing being verified, not assumed. Then flash the image to an SD card.
+[doc('Build the Raspberry Pi 3 SD-card image (aarch64, untested)')]
+build-rpi3:
+  nix build .#packages.aarch64-linux.rpi3-image --accept-flake-config --out-link result-rpi3
+  @echo
+  @echo "Image: $(readlink -f result-rpi3)/sd-image/"*.img.zst
+  @echo "Flash it (confirm the device first!):"
+  @echo "  zstdcat result-rpi3/sd-image/*.img.zst | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync"
 
 # Build the Raspberry Pi 4 (aarch64) SD-card image. On an x86 host the aarch64
 # closure builds via binfmt emulation — but once CI has populated the public
