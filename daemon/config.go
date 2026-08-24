@@ -28,13 +28,13 @@ var (
 	// Reverse channel: in-session agents write the *actual* power state here and
 	// the daemon publishes it, so HA stays in sync with out-of-band changes.
 	displayStateFifo = stateDir + "/display-state.fifo"
-	apiTokenFile     = stateDir + "/api-token"     // device HA API token, generated on first boot / written by config import
-	urlsFile         = stateDir + "/urls.json"     // pushable page list (name+url), web UI / config import
-	navFifo          = stateDir + "/nav.fifo"      // daemon writes a URL; in-session agent navigates Chromium there
-	zoomFifo         = stateDir + "/zoom.fifo"     // daemon writes "zoom <pct>"; in-session agent applies CSS zoom over CDP
-	zoomFile         = stateDir + "/zoom"          // persisted browser zoom percent, restored by the kiosk on launch
-	themeFifo        = stateDir + "/theme.fifo"    // daemon writes "theme <dark|light>"; in-session agent flips HA's theme over CDP
-	themeFile        = stateDir + "/theme"         // persisted dark/light choice, restored by the kiosk on launch
+	apiTokenFile     = stateDir + "/api-token"       // device HA API token, generated on first boot / written by config import
+	urlsFile         = stateDir + "/urls.json"       // pushable page list (name+url), web UI / config import
+	navFifo          = stateDir + "/nav.fifo"        // daemon writes a URL; in-session agent navigates Chromium there
+	zoomFifo         = stateDir + "/zoom.fifo"       // daemon writes "zoom <pct>"; in-session agent applies CSS zoom over CDP
+	zoomFile         = stateDir + "/zoom"            // persisted browser zoom percent, restored by the kiosk on launch
+	themeFifo        = stateDir + "/theme.fifo"      // daemon writes "theme <dark|light>"; in-session agent flips HA's theme over CDP
+	themeFile        = stateDir + "/theme"           // persisted dark/light choice, restored by the kiosk on launch
 	rotationFifo     = stateDir + "/rotation.fifo"   // daemon writes "rotate <deg>"; in-session agent applies a Sway output transform
 	rotationFile     = stateDir + "/rotation"        // persisted display rotation (degrees), restored by the kiosk on launch
 	screenshotFifo   = stateDir + "/screenshot.fifo" // daemon pokes it; the in-session grim agent grabs the whole screen
@@ -169,6 +169,22 @@ func clearProvisioningState() error {
 		}
 	}
 	return nil
+}
+
+// forgetWifi deletes every saved Wi-Fi profile, so a factory-reset device comes
+// back onboardable rather than silently rejoining the network it was reset away
+// from. Without it, "reset the tablet, then take it to a different house" quietly
+// does not work: the old profile autoconnects, the device never looks stranded,
+// and the setup AP never appears.
+//
+// The AP passphrase file is deliberately *not* removed. It may be on a printed
+// label or in a photo, and rotating a credential whose only job is to be readable
+// off the screen of the device it protects buys nothing.
+func forgetWifi(nm *NetworkManager) error {
+	if nm == nil {
+		return nil
+	}
+	return nm.ForgetWifiProfiles()
 }
 
 var (

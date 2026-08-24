@@ -46,10 +46,10 @@ let
     version = "0.1.0";
     src = ../../daemon;
 
-    # godbus + yaml.v3 + golang.org/x/*. Recompute after changing go.mod/go.sum
+    # godbus + yaml.v3 + go-qrcode + golang.org/x/*. Recompute after changing go.mod/go.sum
     # by setting this to a bogus hash (e.g. sha256-AAAA…) and reading the
     # expected hash from the build failure.
-    vendorHash = "sha256-DOCuNyMF5VRpScRzggfebVM9G2Arh9KauuB4hWgl+58=";
+    vendorHash = "sha256-19KTCNhoN6RqDYQwhP+cHwLE6wTvhZsJaYBSB8UAYFs=";
 
     meta.mainProgram = "dashboard-assistant-api";
   };
@@ -90,6 +90,7 @@ in
       NoNewPrivileges = true;
       ReadWritePaths = [ "/var/lib/dashboard-assistant" ];
     };
+
 
     environment.DASHBOARD_ASSISTANT_ADDR = ":8080";
   };

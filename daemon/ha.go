@@ -92,6 +92,11 @@ func deviceName() string {
 	return "Dashboard Assistant"
 }
 
+// SetNetwork gives the hub the NetworkManager handle. Passed in after
+// construction rather than through NewHAHub, which already takes nine arguments,
+// and because a wired-only host legitimately has none.
+func (h *HAHub) SetNetwork(nm *NetworkManager) { h.nm = nm }
+
 // stateSnapshot is the full device state the API serves (GET /state) and pushes
 // over SSE. It folds in every value the MQTT bridge used to publish as separate
 // topics; the integration maps each field to an HA entity.
@@ -192,6 +197,9 @@ type HAHub struct {
 	theme *Theme
 	rot   *Rotation
 	snd   *Sendspin
+	// Set after construction (SetNetwork): factory reset needs to drop saved Wi-Fi
+	// profiles, and the two reset paths must not drift apart on that.
+	nm *NetworkManager
 
 	mu   sync.Mutex
 	subs map[chan []byte]struct{}
@@ -362,7 +370,10 @@ func (h *HAHub) routes() http.Handler {
 	mux := http.NewServeMux()
 	// Unauthenticated on purpose: the gate is the pairing window, not a token the
 	// caller does not have yet. See handlePair.
-	mux.HandleFunc("/api/ha/pair", h.handlePair)
+	// Deliberately unauthenticated, but never over the Wi-Fi setup AP: an
+	// unprovisioned device hands the token to whoever asks, and during onboarding
+	// "whoever asks" would include any phone that joined the setup network.
+	mux.Handle("/api/ha/pair", notOnSetupAP(http.HandlerFunc(h.handlePair)))
 	// Unauthenticated, side-effect free: the stable identity the config flow keys
 	// zeroconf discovery on, so one device is one Home Assistant entry.
 	mux.HandleFunc("/api/ha/identify", h.handleIdentify)
@@ -754,6 +765,9 @@ func (h *HAHub) handleReset(w http.ResponseWriter, r *http.Request) {
 	if err := clearProvisioningState(); err != nil {
 		writeErr(w, err)
 		return
+	}
+	if err := forgetWifi(h.nm); err != nil {
+		log.Printf("ha: factory reset — could not forget Wi-Fi profiles: %v", err)
 	}
 	log.Printf("ha: factory reset — provisioning cleared, rebooting")
 	writeJSON(w, http.StatusOK, map[string]string{"status": "resetting"})

@@ -1,10 +1,14 @@
 # Seed File
 
-A **seed file** is how you provision a freshly flashed device — it's the only
-configuration path (there is no on-screen setup wizard). Drop a
+A **seed file** preconfigures a device before it ever boots. Drop a
 `dashboard-assistant.yaml` next to the image and the device picks up its Home
-Assistant URL and Wi-Fi on first boot — handy for field deploys or flashing
-several tablets at once.
+Assistant URL and Wi-Fi on first boot, which is what you want for field deploys or
+for flashing several tablets at once.
+
+For a single device you do not need one. A display that cannot get online
+broadcasts its own network and you set it up from your phone: see
+[Wi-Fi setup](wifi.md). A device that boots with a valid seed file joins your
+network directly and never broadcasts anything.
 
 !!! warning "Physical access = full trust"
     Any USB stick carrying a `dashboard-assistant.yaml` is applied automatically,

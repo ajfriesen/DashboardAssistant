@@ -35,7 +35,10 @@ func serveAdmin(srv *server) {
 	mux.HandleFunc("/api/admin/rollback", srv.handleRollback)
 	mux.HandleFunc("/api/admin/reset", srv.handleReset)
 	log.Printf("admin listening on %s", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	// Wrapped so a phone on the Wi-Fi setup AP cannot reach rollback or factory
+	// reset. This listener's whole authorization story is "you are on the owner's
+	// LAN", and the setup AP is a network where that is not true.
+	if err := http.ListenAndServe(addr, notOnSetupAP(mux)); err != nil {
 		log.Printf("admin server error: %v", err)
 	}
 }
@@ -108,6 +111,12 @@ func (s *server) handleReset(w http.ResponseWriter, r *http.Request) {
 	if err := clearProvisioningState(); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
+	}
+	// Also drop saved Wi-Fi, so the device comes back onboardable instead of
+	// rejoining the network it was just reset away from. Non-fatal: a device that
+	// keeps its Wi-Fi is still reset, just less useful to relocate.
+	if err := forgetWifi(s.nm); err != nil {
+		log.Printf("admin: factory reset — could not forget Wi-Fi profiles: %v", err)
 	}
 	log.Printf("admin: factory reset — provisioning cleared, rebooting")
 	writeJSON(w, http.StatusOK, map[string]string{"state": "resetting"})

@@ -9,6 +9,7 @@
     ./update.nix
     ./configimport.nix
     ./admin.nix
+    ./onboarding.nix
     ./seed.nix
     ./sendspin.nix
     ./debug.nix

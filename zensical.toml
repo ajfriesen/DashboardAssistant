@@ -65,6 +65,7 @@ nav = [
      "getting-started.md",
      {"Flash" = [
         "flash/flash.md",
+        "flash/wifi.md",
         "flash/seed.md",
      ]},
      {"Usage" = [

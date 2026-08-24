@@ -33,8 +33,14 @@ an update broke something. The device switches generation and reboots, and keeps
 booting that one until you deploy again.
 
 **Factory reset.** Clears the Home Assistant URL, the login token, the device
-API token and your display preferences, then reboots onto the onboarding screen.
-You have to type `RESET` to arm the button.
+API token, your display preferences **and saved Wi-Fi networks**, then reboots
+onto the onboarding screen. You have to type `RESET` to arm the button.
+
+Because it clears Wi-Fi, a reset display comes back broadcasting its own setup
+network, which is what lets you move one to a different house. It also means a
+reset knocks the display off your network, and this page has no password: anyone
+who can reach it can put a display into a state that needs a phone and a walk over
+to it.
 
 Factory reset is also how you **re-pair** a device with Home Assistant. A device
 that has been reset is unprovisioned, and an unprovisioned device hands its API
@@ -45,8 +51,11 @@ first, because its token stops working.
 ## If the network is gone
 
 The admin page needs the network, so it cannot help a device that will not join
-Wi-Fi. Two paths remain:
+Wi-Fi. Three paths remain:
 
+- If the display has never been online, it broadcasts its own setup network.
+  Scan the QR code on its screen and configure Wi-Fi from your phone: see
+  [Wi-Fi setup](../flash/wifi.md).
 - Drop a [seed file](../flash/seed.md) on a USB stick and plug it in. The device
   applies it and restarts the kiosk.
 - Pull the card or disk and read the journal directly, or reflash it.

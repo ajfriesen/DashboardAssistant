@@ -14,18 +14,25 @@ weekend of tinkering.
 
 Write one image to an SD card or SSD, pop it into your tablet, mini-PC or
 single-board computer, and power on. The [Flash](flash/flash.md) guide walks
-through downloading the latest image and writing it to your target disk, plus
-[seeding](flash/seed.md) the device so it knows which Home Assistant to show.
+through downloading the latest image and writing it to your target disk.
 
 [Flash the image&nbsp;→](flash/flash.md){ .da-btn .da-btn--primary }
 
-## 2. Boot and pair
+## 2. Get it on your network
 
-On first boot the device comes up as a Home Assistant dashboard. Install the
-**Dashboard Assistant** integration (via HACS) and Home Assistant discovers the
-panel over mDNS, so it shows up as a device you can see, control and automate.
+On Ethernet there is nothing to do. On Wi-Fi, the display shows a QR code: scan it
+with your phone, and a page opens where you enter your network name and password.
+See [Wi-Fi setup](flash/wifi.md). If you are setting up several devices, a
+[seed file](flash/seed.md) does this ahead of time instead.
 
-## 3. Use it day to day
+## 3. Pair with Home Assistant
+
+Once online, the device shows an "add me" screen. Install the **Dashboard
+Assistant** integration (via HACS) and Home Assistant discovers the panel over
+mDNS, so it shows up as a device you can see, control and automate. There is no
+token to type.
+
+## 4. Use it day to day
 
 Once it's on the wall, you control it in two places: on the screen itself and
 from Home Assistant. The [Usage](usage/usage.md) guide covers the on-device
