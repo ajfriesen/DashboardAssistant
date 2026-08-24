@@ -116,15 +116,27 @@ jobs:
             .#nixosConfigurations.dashboard-assistant-${{ matrix.model }}.config.system.build.toplevel \
             --out-link result-toplevel
 
-      # The flashable image is only built (and published) for a v* tag release —
-      # there are no development images, so a regular push just warms the cache
-      # above.
+      # Built for a v* tag release, and on a manual run so a branch can produce a
+      # flashable image to test with. A push to main only warms the cache above.
+      # The publish steps below stay tag-only: a test build must never overwrite a
+      # release channel's `latest` pointer.
       - name: Build Pi image
-        if: ${{ github.ref_type == 'tag' }}
+        if: ${{ github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' }}
         run: |
           nix build --print-build-logs --accept-flake-config \
             .#packages.aarch64-linux.${{ matrix.model }}-image \
             --out-link result-${{ matrix.model }}
+
+      # Manual branch run: hand the image back as a run artifact instead. Nothing
+      # is published.
+      - name: Upload SD image artifact (branch build)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sd-image-${{ matrix.model }}-${{ github.ref_name }}
+          path: result-${{ matrix.model }}/sd-image/*.img.zst
+          retention-days: 7
+          compression-level: 0 # already zstd
 
       # Publish the flashable SD image to R2 on a v* tag, channel/board-structured
       # (mirrors release-image.yml): release/<model>/ or pre-release/<model>/ for a

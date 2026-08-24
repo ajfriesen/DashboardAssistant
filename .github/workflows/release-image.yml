@@ -15,7 +15,13 @@ name: release image
 # Required repo config (Settings -> Secrets and variables -> Actions):
 #   Variables: R2_ACCOUNT_ID, R2_BUCKET, R2_PUBLIC_URL
 #   Secrets:   R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
+# A manual run builds the image from whatever branch you pick and attaches it as
+# a run artifact instead of publishing it. That is the only way to get a flashable
+# image out of a branch: everything below the artifact step is tag-gated, because
+# publishing to R2 and overwriting a channel's `latest` pointer must only ever
+# happen for a real release.
 on:
+  workflow_dispatch:
   push:
     tags:
       - "v*"
@@ -41,6 +47,7 @@ jobs:
       # routes to pre-release/; the leading "v" is stripped for the filename.
       - name: Resolve channel and version
         id: v
+        if: github.ref_type == 'tag' 
         env:
           TAG: ${{ github.ref_name }}
         run: |
@@ -54,6 +61,7 @@ jobs:
       # Guard: the baked version must match the tag. release-please bumps flake.nix
       # in the release PR, so this always holds — it just catches a mistake.
       - name: Verify baked version matches tag
+        if: github.ref_type == 'tag' 
         env:
           VERSION: ${{ steps.v.outputs.version }}
         run: |
@@ -71,7 +79,27 @@ jobs:
       - name: Build x86_64 disk image
         run: nix build .#disk-image
 
+      # Manual branch run: hand the image back as a run artifact and stop. Nothing
+      # is published, so a test build can never clobber a release channel.
+      - name: Compress disk image (branch build)
+        if: github.ref_type != 'tag'
+        run: |
+          set -euo pipefail
+          name="dashboard-assistant-${GITHUB_REF_NAME//\//-}-${GITHUB_SHA::7}.raw.zst"
+          zstd -19 -T0 -c "$(readlink -f result)/dashboard-assistant.raw" > "$name"
+          echo "ASSET=$name" >> "$GITHUB_ENV"
+
+      - name: Upload disk image artifact
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: disk-image-${{ github.ref_name }}
+          path: ${{ env.ASSET }}
+          retention-days: 7
+          compression-level: 0 # already zstd
+
       - name: Compress disk image
+        if: github.ref_type == 'tag'
         run: |
           set -euo pipefail
           zstd -19 -T0 -c "$(readlink -f result)/dashboard-assistant.raw" > "${{ steps.v.outputs.asset }}"
@@ -81,6 +109,7 @@ jobs:
       # provenance metadata (x-amz-meta-*) to both — readable with `aws s3api
       # head-object` or an HTTP HEAD via the custom domain.
       - name: Upload image to R2
+        if: github.ref_type == 'tag'
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
