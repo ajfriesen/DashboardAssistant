@@ -6,7 +6,7 @@
   # inserted USB stick. Required for the seed-file provisioning flow.
   dashboard.configImport.enable = true;
 
-  # Release-safe shared config only. DEV ONLY affordances (diagnostics, Chromium
-  # remote debugging, root SSH keys) live in modules/dev.nix and are baked into
-  # the *-dev images by flake.nix — never the stable release.
+  # Release-safe shared config only. DEV ONLY affordances (root SSH keys) live in
+  # modules/dev.nix and are baked into the *-dev images by flake.nix — never the
+  # stable release.
 }

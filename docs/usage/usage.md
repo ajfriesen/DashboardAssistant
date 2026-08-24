@@ -16,8 +16,9 @@ A small bar gives you touch controls without leaving the kiosk:
 ## From Home Assistant
 
 Install the **Dashboard Assistant** integration (via HACS) and Home Assistant
-discovers the device over mDNS as a single device — enter the API token shown on
-the device's Config → Info screen to pair. From there you can:
+discovers the device over mDNS as a single device and pairs itself. A device
+that has not been added yet hands over its API token automatically, so there is
+nothing to type. From there you can:
 
 - Turn the **display** on/off and set **brightness**.
 - Adjust **zoom** and flip **dark mode**.
@@ -44,12 +45,14 @@ you can roll back from the device (see below).
 
 ## Recovery
 
-If an update or configuration change misbehaves, an on-screen picker lets you
-choose an older, known-good generation to boot into — recovery is done by hand,
-right on the device's touchscreen.
+If an update or configuration change misbehaves, open the
+[admin page](admin.md) at `http://<device-ip>:8099/` from another machine on the
+network and pick an older, known-good generation to boot into. There is no
+recovery option on the tablet itself: the screen is read-only so that nobody
+walking past it can roll the device back or reset it.
 
 !!! note "Automatic rollback isn't available yet"
     Booting into the previous generation *automatically* after a failed boot
     relies on boot-counting support. The images use **U-Boot**, which doesn't
     provide it, and the NixOS support is still in testing — so today recovery is
-    manual, using the picker above. This may change as the targets mature.
+    manual, using the admin page. This may change as the targets mature.

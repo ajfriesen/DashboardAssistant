@@ -36,6 +36,37 @@
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     }
     .hint { color: #6c7a89; font-size: .85rem; margin-top: .5rem; }
+
+    /* Read-only device info, behind the ⓘ in the corner. This is the only
+       introspection the tablet screen offers: the old ⚙ Config panel could roll
+       the system back and printed the API token, so it moved to the LAN admin
+       listener. Nothing here changes the device, and nothing here is a secret. */
+    .infobtn {
+      position: fixed; top: 0; right: 0; z-index: 5;
+      width: 3.25rem; height: 3.25rem; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.35rem; line-height: 1;
+      background: none; border: 0; color: #6c7a89;
+      cursor: pointer; touch-action: manipulation;
+    }
+    .infobtn:active { color: #e8edf2; }
+    .panel {
+      position: fixed; inset: 0; z-index: 6; overflow-y: auto;
+      background: #10151c; padding: 4.5rem 6vw 3rem;
+      display: flex; flex-direction: column; align-items: center; gap: 1rem;
+    }
+    .panel h2 { font-size: 1.15rem; margin: 0; font-weight: 650; }
+    .info { margin: 0; width: 100%; max-width: 34rem; }
+    .info > div {
+      display: flex; justify-content: space-between; gap: 1rem;
+      padding: .6rem 0; border-bottom: 1px solid #1b2430; text-align: left;
+    }
+    .info dt { color: #9fb0c0; font-size: .85rem; }
+    .info dd {
+      margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: .85rem; text-align: right; word-break: break-all;
+    }
+    .hidden { display: none; }
   </style>
 </head>
 <body>
@@ -59,5 +90,66 @@
   </div>
 
   <p class="hint">Tap 🏠 Home on the bar below to return to your dashboard.</p>
+
+  <button id="infoOpen" class="infobtn" type="button" aria-label="Device information">ⓘ</button>
+
+  <div id="infoPanel" class="panel hidden">
+    <button id="infoClose" class="infobtn" type="button" aria-label="Close">✕</button>
+    <h2>Device</h2>
+    <dl id="infoRows" class="info"></dl>
+    <p id="infoMsg" class="hint"></p>
+    <p class="hint">
+      Read-only. This device is configured from Home Assistant or a seed file,
+      never from this screen.
+    </p>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    const INFO_FIELDS = [
+      ["name", "Name"],
+      ["hostname", "Hostname"],
+      ["mac", "MAC address"],
+      ["ip", "IP address"],
+      ["machine_id", "Machine ID"],
+      ["node_id", "Device ID"],
+      ["model", "Model"],
+      ["serial", "Serial"],
+      ["version", "Version"],
+      ["ha_url", "Home Assistant URL"],
+      ["api_url", "Integration URL"],
+    ];
+
+    async function loadInfo() {
+      const box = $("infoRows");
+      box.innerHTML = "";
+      $("infoMsg").textContent = "";
+      try {
+        const d = await (await fetch("/api/info")).json();
+        for (const [k, label] of INFO_FIELDS) {
+          const row = document.createElement("div");
+          const dt = document.createElement("dt");
+          dt.textContent = label;
+          const dd = document.createElement("dd");
+          dd.textContent = d[k] || "—";
+          row.append(dt, dd);
+          box.appendChild(row);
+        }
+      } catch (e) {
+        $("infoMsg").textContent = "Could not load info: " + e.message;
+      }
+    }
+
+    // Fetch on open rather than on load, so the IP and version are current even
+    // if the page has been sitting on screen.
+    $("infoOpen").addEventListener("click", () => {
+      $("infoPanel").classList.remove("hidden");
+      loadInfo();
+    });
+    $("infoClose").addEventListener("click", () => {
+      $("infoPanel").classList.add("hidden");
+    });
+  </script>
 </body>
 </html>

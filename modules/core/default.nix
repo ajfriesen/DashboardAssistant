@@ -8,7 +8,7 @@
     ./ha-api.nix
     ./update.nix
     ./configimport.nix
-    ./diagnostics.nix
+    ./admin.nix
     ./seed.nix
     ./sendspin.nix
     ./debug.nix
@@ -102,9 +102,6 @@
       "dashboard-assistant"
     ];
   };
-
-  # Convenience for field debugging over the network.
-  services.openssh.enable = true;
 
   system.stateVersion = "26.05";
 }

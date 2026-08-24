@@ -8,9 +8,9 @@ package main
 // stream; there is no MQTT broker.
 //
 // The API runs on its own listener (DASHBOARD_ASSISTANT_API_ADDR, default :8081,
-// opened on the LAN by modules/core/ha-api.nix), mirroring the diagnostics
-// listener. Every request carries a bearer token; the primary :8080 admin
-// surface stays loopback-only. See daemon/diag.go for the sibling pattern.
+// opened on the LAN by modules/core/ha-api.nix). Every request carries a bearer
+// token; the primary :8080 surface stays loopback-only. See daemon/admin.go for
+// the sibling pattern — that one is deliberately unauthenticated.
 
 import (
 	"context"

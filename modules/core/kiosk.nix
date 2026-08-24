@@ -70,7 +70,7 @@ let
 
     # Provisioning is seed-only (no on-screen wizard): an unprovisioned or
     # offline device shows the waiting splash until a seed file configures it.
-    # /setup is the admin panel, reached on demand via the waybar Config button.
+    # There is no on-screen admin page at all — recovery is on the LAN listener.
     case "$STATE" in
       READY) URL="$HA_URL" ;;
       *)     URL="${daemonBase}/waiting" ;;
@@ -715,12 +715,19 @@ let
   # Assistant (the HA Display light), so the bar only carries navigation and the
   # keyboard toggle. Each button is a custom module whose on-click runs a command
   # as the kiosk user.
+  #
+  # Nothing here reconfigures the device, and nothing new should. This is a wall
+  # panel that guests touch, so every button has to be safe in the hands of someone
+  # who is not the owner. There used to be a ⚙ Config button opening a panel that
+  # printed the API token and could roll the system back and reboot it; that moved
+  # to the LAN admin listener (daemon/admin.go). The ❤ page carries a read-only
+  # device-info view, which is as far as on-screen introspection goes.
   waybarConfig = pkgs.writeText "ha-kiosk-waybar.json" ''
     {
       "layer": "bottom",
       "position": "bottom",
       "height": 50,
-      "modules-left": ["custom/home", "custom/setup"],
+      "modules-left": ["custom/home"],
       "modules-center": ["custom/prev", "custom/sponsor", "custom/next"],
       "modules-right": ["custom/kbd"],
       "custom/kbd": {
@@ -732,11 +739,6 @@ let
         "format": "🏠  Home",
         "tooltip": false,
         "on-click": "${navHome}"
-      },
-      "custom/setup": {
-        "format": "⚙  Config",
-        "tooltip": false,
-        "on-click": "${cdpNav} ${daemonBase}/setup"
       },
       "custom/prev": {
         "format": "◀  Prev",
@@ -767,12 +769,11 @@ let
       "layer": "bottom",
       "position": "bottom",
       "height": 50,
-      "modules-left": ["custom/home", "custom/setup"],
+      "modules-left": ["custom/home"],
       "modules-center": ["custom/prev", "custom/sponsor", "custom/next"],
       "modules-right": ["custom/kbd"],
       "custom/kbd":     { "format": "⌨", "tooltip": false, "on-click": "${oskToggle}" },
       "custom/home":    { "format": "🏠", "tooltip": false, "on-click": "${navHome}" },
-      "custom/setup":   { "format": "⚙", "tooltip": false, "on-click": "${cdpNav} ${daemonBase}/setup" },
       "custom/prev":    { "format": "◀", "tooltip": false, "on-click": "${pagePrev}" },
       "custom/sponsor": { "format": "❤", "tooltip": false, "on-click": "${cdpNav} ${daemonBase}/sponsor" },
       "custom/next":    { "format": "▶", "tooltip": false, "on-click": "${pageNext}" }
@@ -790,7 +791,6 @@ let
       color: #ffffff;
     }
     #custom-home,
-    #custom-setup,
     #custom-prev,
     #custom-sponsor,
     #custom-next,
@@ -801,7 +801,6 @@ let
       border-radius: 10px;
     }
     #custom-home:active,
-    #custom-setup:active,
     #custom-prev:active,
     #custom-sponsor:active,
     #custom-next:active,
@@ -982,6 +981,46 @@ in
 
   config = {
     programs.sway.enable = true;
+
+    # Chromium lockdown, enforced by managed policy rather than command-line flags.
+    #
+    # --app= (see kioskLauncher) removes the omnibox and tab strip from the kiosk
+    # window, but it disables no commands: a long-press on the touchscreen still
+    # raises the context menu with "Inspect", and the on-screen keyboard has real
+    # Ctrl/Alt keys injected through /dev/uinput, so Ctrl+N, Ctrl+Shift+I and
+    # Ctrl+O were all reachable with a finger. DevTools on this device is a full
+    # escape: file:///var/lib/dashboard-assistant/token is readable by the kiosk
+    # user, and that token is the owner's long-lived Home Assistant credential.
+    #
+    # programs.chromium writes /etc/chromium/policies/managed/extra.json, which
+    # pkgs.chromium reads at startup.
+    programs.chromium = {
+      enable = true;
+      extraOpts = {
+        # Removes "Inspect" from the context menu and kills Ctrl+Shift+I. It does
+        # NOT disable --remote-debugging-port: remote debugging is governed by the
+        # separate RemoteDebuggingAllowed policy (Chrome 92+, default true), which
+        # is precisely why that policy was added. The waybar buttons drive the
+        # browser over CDP on :9222 and keep working — if they ever stop, this is
+        # the first thing to check.
+        DeveloperToolsAvailability = 2;
+        # file:// is the token read; the other two are the remaining context-menu
+        # escapes. chrome:// would otherwise reach settings, net-internals and the
+        # rest of the internal surface.
+        URLBlocklist = [
+          "file://*"
+          "chrome://*"
+          "devtools://*"
+          "view-source:*"
+        ];
+        IncognitoModeAvailability = 1;
+        PrintingEnabled = false;
+        DownloadRestrictions = 3;
+        AllowFileSelectionDialogs = false;
+        BrowserSignin = 0;
+        PasswordManagerEnabled = false;
+      };
+    };
 
     services.greetd = {
       enable = true;

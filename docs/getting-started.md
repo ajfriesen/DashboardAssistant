@@ -30,8 +30,8 @@ panel over mDNS, so it shows up as a device you can see, control and automate.
 Once it's on the wall, you control it in two places: on the screen itself and
 from Home Assistant. The [Usage](usage/usage.md) guide covers the on-device
 controls, the integration's entities, one-tap OS updates and rolling back if an
-update ever misbehaves. If something looks off, [Diagnostics](usage/diagnostics.md)
-helps you track it down.
+update ever misbehaves. If something looks off, the
+[admin page](usage/admin.md) is where you roll back or reset the device.
 
 [Read the usage guide&nbsp;→](usage/usage.md){ .da-btn .da-btn--ghost }
 

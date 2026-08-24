@@ -52,8 +52,8 @@ build-disk-image:
   @echo "  sudo dd if=$(readlink -f result)/dashboard-assistant.raw of=/dev/disk/by-id/ata-WDC_WDS100T2B0A-00SM50_195206A003DE bs=4M oflag=sync conv=fsync status=progress"
 
 # Build the dev raw disk image — same as build-disk-image plus modules/dev.nix
-# (root SSH access, diagnostics, Chromium remote debugging). For bench/field
-# debugging only; never flash this onto a released device.
+# (root SSH access). For bench/field debugging only; never flash this onto a
+# released device.
 [doc('Build the dev raw disk image (SSH + debugging)')]
 build-disk-image-dev:
   nix build .#disk-image-dev

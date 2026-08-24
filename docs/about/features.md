@@ -28,13 +28,17 @@ icon: lucide/sparkles
   dashboard URLs, optional integration token) dropped on a USB stick or the boot
   partition — no on-screen wizard, so a person at the panel can't re-point the
   device.
-- On-device ⚙ Config panel is read-only: Info and Recovery tabs only.
+- Nothing on the tablet screen reconfigures the device. The bar carries
+  navigation and the keyboard only, and the ⓘ view is read-only. Recovery
+  (rollback, factory reset) lives on a separate [admin page](../usage/admin.md)
+  you open from another machine on the network.
 
 ## Home Assistant integration
 
 Install the first-party **Dashboard Assistant** integration (via HACS) and Home
-Assistant discovers the device over mDNS, pairing with the API token shown on the
-device's Config → Info screen. It appears as a single device with these entities:
+Assistant discovers the device over mDNS. A device that has not been added yet
+hands over its API token automatically, so there is nothing to type and nothing to
+press on the tablet. It appears as a single device with these entities:
 
 ### Controls
 

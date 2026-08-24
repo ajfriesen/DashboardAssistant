@@ -96,16 +96,14 @@
         };
 
         # Stable release — persistent, boots from a fixed SATA disk, updatable
-        # with `nixos-rebuild switch`. No SSH daemon at all (overrides the
-        # convenience default in core/default.nix): a released device is
-        # reconfigured only via the USB seed file. Build via `.#disk-image`.
-        dashboard-assistant-x86-disk = mkDiskSystem [
-          { services.openssh.enable = lib.mkForce false; }
-        ];
+        # with `nixos-rebuild switch`. A released device is reconfigured only via
+        # the USB seed file. Build via `.#disk-image`. (sshd needs no override any
+        # more: modules/core/debug.nix only enables it when a root key is declared,
+        # which only the *-dev flavours do.)
+        dashboard-assistant-x86-disk = mkDiskSystem [ ];
 
         # Dev flavour of the on-disk system — same base plus modules/dev.nix
-        # (diagnostics, Chromium remote debugging, root SSH access). Build via
-        # `.#disk-image-dev`.
+        # (root SSH access). Build via `.#disk-image-dev`.
         dashboard-assistant-x86-disk-dev = mkDiskSystem [ ./modules/dev.nix ];
 
         # Raspberry Pi 4 (aarch64) — SD-card image, for bring-up/testing on a Pi.
