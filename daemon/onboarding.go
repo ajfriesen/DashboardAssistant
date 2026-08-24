@@ -89,6 +89,9 @@ type Onboarding struct {
 	// calm is when the "nothing is activating" condition first became true; zero
 	// while something is still in flight.
 	calm time.Time
+
+	noAPOnce    sync.Once
+	lastDecline string
 }
 
 func NewOnboarding(nm *NetworkManager, channel string) *Onboarding {
@@ -160,19 +163,35 @@ func (o *Onboarding) WithRadio(fn func() error) error {
 // Run is the manager loop: raise the AP when the device is stranded, tear it down
 // the moment a real connection appears. Mirrors watchReadyTransition's shape.
 func (o *Onboarding) Run() {
-	if o.nm == nil || !o.nm.HasWifi() {
-		return // wired-only host: nothing to onboard, keep today's behaviour
-	}
-	if !o.nm.CanAP() {
-		// Several USB dongles cannot beacon. Promising an AP that will never
-		// appear is worse than the plain "connecting" splash, so say so once and
-		// stand down.
-		log.Printf("onboarding: Wi-Fi device cannot run an access point; setup AP disabled")
+	if o.nm == nil {
 		return
 	}
 	for range time.Tick(3 * time.Second) {
 		o.tick()
 	}
+}
+
+// radioUsable reports whether there is a Wi-Fi device that can beacon.
+//
+// Checked on every tick rather than once at start. The device may not exist yet
+// when the daemon comes up (NetworkManager registers devices asynchronously and
+// this daemon usually starts first), so a single check at startup concluded
+// "wired-only host" on a machine that was about to have a perfectly good radio,
+// and onboarding then stayed off for the whole boot.
+func (o *Onboarding) radioUsable() bool {
+	if !o.nm.HasWifi() {
+		return false
+	}
+	if !o.nm.CanAP() {
+		// Several USB dongles cannot beacon at all. Promising an access point that
+		// will never appear is worse than the plain "connecting" splash, so stand
+		// down — but say so once, or this is invisible in the field.
+		o.noAPOnce.Do(func() {
+			log.Printf("onboarding: Wi-Fi device cannot run an access point; setup AP disabled")
+		})
+		return false
+	}
+	return true
 }
 
 func (o *Onboarding) tick() {
@@ -181,6 +200,9 @@ func (o *Onboarding) tick() {
 
 	if o.joining {
 		return // a join is in flight and owns the radio
+	}
+	if !o.radioUsable() {
+		return
 	}
 
 	// NetInfo excludes AP/shared connections, so this means a *real* uplink.
@@ -205,32 +227,51 @@ func (o *Onboarding) tick() {
 	}
 }
 
+// declineOnce logs, at most once per distinct reason, why onboarding is holding
+// off. A device that silently refuses to raise its setup AP is close to
+// undiagnosable in the field: the screen just says "Connecting…" forever and the
+// journal says nothing at all.
+func (o *Onboarding) decline(reason string) bool {
+	if o.lastDecline != reason {
+		o.lastDecline = reason
+		log.Printf("onboarding: not raising the setup AP: %s", reason)
+	}
+	return false
+}
+
 // shouldRaiseLocked decides whether this device is genuinely stranded.
 func (o *Onboarding) shouldRaiseLocked() bool {
 	// "Never been online and not provisioned." WasOnline is the load-bearing half:
 	// it is set the first time the device reaches the network and is only cleared
 	// by a factory reset, so a tablet that has ever worked never raises an AP.
-	if Provisioned() || WasOnline() {
-		return false
+	if Provisioned() {
+		return o.decline("device is already provisioned")
+	}
+	if WasOnline() {
+		return o.decline("device has been online before, so it is not a fresh install")
 	}
 	if time.Since(o.started) < bootFloor {
-		return false
+		return false // still inside the boot floor; not worth logging every tick
 	}
 	// A seed file on /boot provisions this device without any AP. Its unit retries
 	// for ~15s and a Wi-Fi-only seed never sets the provisioned marker, so the
 	// markers above cannot see it; ask systemd directly.
 	if !seedImportSettled() {
-		return false
+		return o.decline("waiting for the first-boot seed import to finish")
 	}
 	if o.nm.Settling() {
 		o.calm = time.Time{}
-		return false
+		return o.decline("NetworkManager is still bringing something up")
 	}
 	if o.calm.IsZero() {
 		o.calm = time.Now()
 		return false
 	}
-	return time.Since(o.calm) >= settleFor
+	if time.Since(o.calm) < settleFor {
+		return false
+	}
+	o.lastDecline = ""
+	return true
 }
 
 func (o *Onboarding) startLocked() error {

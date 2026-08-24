@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/godbus/dbus/v5"
@@ -66,7 +67,16 @@ const apAddress = "10.42.0.1"
 
 // NetworkManager wraps the system-bus connection and the Wi-Fi device path.
 type NetworkManager struct {
-	conn    *dbus.Conn
+	conn *dbus.Conn
+
+	// Resolved lazily, and re-resolved for as long as we do not have one. It
+	// cannot be looked up once at startup: NetworkManager registers devices
+	// asynchronously, and this daemon routinely wins that race — it is ordered
+	// after dbus.service and network.target, neither of which waits for a radio
+	// to be probed and its supplicant attached. Caching the empty result left
+	// Wi-Fi dead for the whole boot, which broke seed-file provisioning exactly
+	// as badly as it broke onboarding.
+	mu      sync.Mutex
 	wifiDev dbus.ObjectPath
 }
 
@@ -77,12 +87,25 @@ func NewNetworkManager() (*NetworkManager, error) {
 		return nil, fmt.Errorf("connect system bus: %w", err)
 	}
 	nm := &NetworkManager{conn: conn}
-	// A Wi-Fi device is optional: wired-only hosts (e.g. QEMU) still get a
-	// working D-Bus layer for connection detection and config-only provisioning.
+	// A Wi-Fi device is optional: wired-only hosts (e.g. QEMU) still get a working
+	// D-Bus layer for connection detection and config-only provisioning. Not
+	// finding one here is not final — see wifiDevice.
+	nm.wifiDevice()
+	return nm, nil
+}
+
+// wifiDevice returns the Wi-Fi device path, looking it up again whenever we do
+// not have one yet. "" on a host with no wireless hardware.
+func (nm *NetworkManager) wifiDevice() dbus.ObjectPath {
+	nm.mu.Lock()
+	defer nm.mu.Unlock()
+	if nm.wifiDev != "" {
+		return nm.wifiDev
+	}
 	if dev, err := nm.findWifiDevice(); err == nil {
 		nm.wifiDev = dev
 	}
-	return nm, nil
+	return nm.wifiDev
 }
 
 func (nm *NetworkManager) Close() error { return nm.conn.Close() }
@@ -216,7 +239,7 @@ func (nm *NetworkManager) Connected() bool { return nm.NetInfo().Connected }
 // A blank psk provisions an open network. It returns once NetworkManager has
 // accepted the connection (activation continues asynchronously).
 func (nm *NetworkManager) Provision(ssid, psk string) error {
-	if nm.wifiDev == "" {
+	if nm.wifiDevice() == "" {
 		return fmt.Errorf("no Wi-Fi device")
 	}
 	wireless := map[string]dbus.Variant{
@@ -244,7 +267,7 @@ func (nm *NetworkManager) Provision(ssid, psk string) error {
 	obj := nm.conn.Object(nmService, nmPath)
 	var connPath, activePath dbus.ObjectPath
 	err := obj.Call(nmIface+".AddAndActivateConnection", 0,
-		settings, nm.wifiDev, dbus.ObjectPath("/")).Store(&connPath, &activePath)
+		settings, nm.wifiDevice(), dbus.ObjectPath("/")).Store(&connPath, &activePath)
 	if err != nil {
 		return fmt.Errorf("AddAndActivateConnection: %w", err)
 	}
@@ -252,17 +275,17 @@ func (nm *NetworkManager) Provision(ssid, psk string) error {
 }
 
 // HasWifi reports whether a Wi-Fi device was found at start.
-func (nm *NetworkManager) HasWifi() bool { return nm.wifiDev != "" }
+func (nm *NetworkManager) HasWifi() bool { return nm.wifiDevice() != "" }
 
 // CanAP reports whether the Wi-Fi driver can beacon. Several USB dongles cannot,
 // and NM fails the activation with a message no end user can act on, so onboarding
 // checks this up front and falls back to the plain "connecting" splash instead of
 // promising an access point that will never appear.
 func (nm *NetworkManager) CanAP() bool {
-	if nm.wifiDev == "" {
+	if nm.wifiDevice() == "" {
 		return false
 	}
-	v, err := nm.conn.Object(nmService, nm.wifiDev).GetProperty(nmWifiIface + ".WirelessCapabilities")
+	v, err := nm.conn.Object(nmService, nm.wifiDevice()).GetProperty(nmWifiIface + ".WirelessCapabilities")
 	if err != nil {
 		return false
 	}
@@ -274,10 +297,10 @@ func (nm *NetworkManager) CanAP() bool {
 // from NM rather than guessed: it differs between the Pi targets and x86, where
 // systemd's predictable naming applies.
 func (nm *NetworkManager) IfaceName() string {
-	if nm.wifiDev == "" {
+	if nm.wifiDevice() == "" {
 		return ""
 	}
-	v, err := nm.conn.Object(nmService, nm.wifiDev).GetProperty(nmDevIface + ".Interface")
+	v, err := nm.conn.Object(nmService, nm.wifiDevice()).GetProperty(nmDevIface + ".Interface")
 	if err != nil {
 		return ""
 	}
@@ -287,10 +310,10 @@ func (nm *NetworkManager) IfaceName() string {
 
 // DeviceState is the Wi-Fi device's NMDeviceState.
 func (nm *NetworkManager) DeviceState() uint32 {
-	if nm.wifiDev == "" {
+	if nm.wifiDevice() == "" {
 		return 0
 	}
-	v, err := nm.conn.Object(nmService, nm.wifiDev).GetProperty(nmDevIface + ".State")
+	v, err := nm.conn.Object(nmService, nm.wifiDevice()).GetProperty(nmDevIface + ".State")
 	if err != nil {
 		return 0
 	}
@@ -344,7 +367,7 @@ func (nm *NetworkManager) EnableWireless() error {
 //   - autoconnect false, so a profile that somehow survives cannot resurrect the
 //     hotspot on a device that is happily online.
 func (nm *NetworkManager) StartAP(ssid, psk, channel string) (dbus.ObjectPath, error) {
-	if nm.wifiDev == "" {
+	if nm.wifiDevice() == "" {
 		return "", fmt.Errorf("no Wi-Fi device")
 	}
 	if err := nm.EnableWireless(); err != nil {
@@ -384,7 +407,7 @@ func (nm *NetworkManager) StartAP(ssid, psk, channel string) (dbus.ObjectPath, e
 	}
 	var connPath, activePath dbus.ObjectPath
 	err = nm.conn.Object(nmService, nmPath).Call(nmIface+".AddAndActivateConnection", 0,
-		settings, nm.wifiDev, dbus.ObjectPath("/")).Store(&connPath, &activePath)
+		settings, nm.wifiDevice(), dbus.ObjectPath("/")).Store(&connPath, &activePath)
 	if err != nil {
 		return "", fmt.Errorf("activate AP: %w", err)
 	}
@@ -502,7 +525,7 @@ type JoinResult struct {
 // re-raises the AP forever is a far worse outcome than a stale profile that the
 // next successful join replaces.
 func (nm *NetworkManager) JoinAndWait(ssid, psk string, timeout time.Duration) (JoinResult, error) {
-	if nm.wifiDev == "" {
+	if nm.wifiDevice() == "" {
 		return JoinResult{}, fmt.Errorf("no Wi-Fi device")
 	}
 	// Cheapest possible wrong-password check: WPA2 passphrases are 8-63 chars.
@@ -515,7 +538,7 @@ func (nm *NetworkManager) JoinAndWait(ssid, psk string, timeout time.Duration) (
 	// than the active connection because NM destroys the active-connection object
 	// when activation fails, and a watcher on a destroyed object simply goes quiet.
 	matches := []dbus.MatchOption{
-		dbus.WithMatchObjectPath(nm.wifiDev),
+		dbus.WithMatchObjectPath(nm.wifiDevice()),
 		dbus.WithMatchInterface(nmDevIface),
 		dbus.WithMatchMember("StateChanged"),
 	}
@@ -539,7 +562,7 @@ func (nm *NetworkManager) JoinAndWait(ssid, psk string, timeout time.Duration) (
 			nm.deleteConnection(connPath)
 			return JoinResult{Reason: "timed out joining " + ssid}, nil
 		case sig := <-sigs:
-			if sig == nil || sig.Path != nm.wifiDev || len(sig.Body) < 3 {
+			if sig == nil || sig.Path != nm.wifiDevice() || len(sig.Body) < 3 {
 				continue
 			}
 			newState, _ := sig.Body[0].(uint32)
@@ -584,7 +607,7 @@ func (nm *NetworkManager) addAndActivate(ssid, psk string) (dbus.ObjectPath, err
 	}
 	var connPath, activePath dbus.ObjectPath
 	err := nm.conn.Object(nmService, nmPath).Call(nmIface+".AddAndActivateConnection", 0,
-		settings, nm.wifiDev, dbus.ObjectPath("/")).Store(&connPath, &activePath)
+		settings, nm.wifiDevice(), dbus.ObjectPath("/")).Store(&connPath, &activePath)
 	if err != nil {
 		return "", fmt.Errorf("AddAndActivateConnection: %w", err)
 	}
