@@ -166,6 +166,14 @@
       packages.aarch64-linux.rpi5-image =
         self.nixosConfigurations.dashboard-assistant-rpi5.config.system.build.sdImage;
 
+      # VM tests. `nix flake check`, or `nix build .#checks.x86_64-linux.wifi-onboarding`
+      # for one. The Wi-Fi test needs virtual radios (mac80211_hwsim) because the
+      # onboarding flow is a state machine over a real radio and cannot be
+      # exercised on a machine that has none.
+      checks.${system} = {
+        wifi-onboarding = import ./tests/wifi-onboarding.nix { inherit pkgs version; };
+      };
+
       devShells.${system}.default = pkgs.mkShell {
         packages = [
           pkgs.go
