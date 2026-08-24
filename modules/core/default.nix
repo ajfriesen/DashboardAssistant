@@ -66,8 +66,15 @@
   # override the MAC-derived name from set-hostname-from-mac above (e.g. a stale
   # router lease resurrecting the old "ha-dashboard").
   networking.networkmanager.settings.main.hostname-mode = "none";
-  # The minimal profile disables wireless (wpa_supplicant); NetworkManager owns Wi-Fi.
-  networking.wireless.enable = lib.mkForce false;
+  # Do NOT force networking.wireless.enable off here. It reads like the right
+  # thing (NetworkManager owns Wi-Fi, so why run a second supplicant?) but the
+  # NetworkManager module sets `wireless.enable = true` on purpose, with
+  # dbusControlled = true and autoDetectInterfaces = false, precisely so it can
+  # drive wpa_supplicant over D-Bus. Forcing it off removed the wpa_supplicant
+  # D-Bus service, so NM logged "Couldn't initialize supplicant interface: Failed
+  # to D-Bus activate wpa_supplicant service" and every Wi-Fi device sat in state
+  # `unavailable` forever. The profiles/minimal.nix this used to cite does not
+  # touch networking.wireless at all.
 
   time.timeZone = "UTC";
 
