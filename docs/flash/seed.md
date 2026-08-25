@@ -33,14 +33,35 @@ token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiIyZWRlNGE0ZTFjNmQ0ZDY3OTY
 wifi:
   ssid: "MyNetwork"
   psk: "supersecret"
+
+# Optional device API token, the credential Home Assistant uses to talk to this
+# device. Leave it out and the device generates its own, which Home Assistant
+# picks up when it pairs. Set it to flash a fleet with a token you already know.
+api_token: "a-long-random-string"
+
+# Optional list of dashboard pages, replacing whatever the device has. `name` is
+# the label in Home Assistant; without one the URL is its own label.
+pages:
+  - name: "Home"
+    url: "https://homeassistant.local:8123/lovelace/0"
+  - name: "Kitchen"
+    url: "https://homeassistant.local:8123/lovelace/kitchen"
 ```
 
-| Key         | Required | Description                                                      |
-| ----------- | -------- | ---------------------------------------------------------------- |
-| `ha_url`    | no       | Home Assistant base URL the dashboard loads on boot.             |
-| `token`     | no       | Optional. Kiosk login token; normally provisioned by the integration. |
-| `wifi.ssid` | no       | Wi-Fi network name to join.                                      |
-| `wifi.psk`  | no       | Wi-Fi pre-shared key (password).                                 |
+| Key           | Required | Description                                                      |
+| ------------- | -------- | ---------------------------------------------------------------- |
+| `ha_url`      | no       | Home Assistant base URL the dashboard loads on boot.             |
+| `token`       | no       | Optional. Kiosk login token; normally provisioned by the integration. |
+| `wifi.ssid`   | no       | Wi-Fi network name to join.                                      |
+| `wifi.psk`    | no       | Wi-Fi pre-shared key (password).                                 |
+| `api_token`   | no       | Device API token for the Home Assistant integration. Generated per device if omitted. |
+| `pages`       | no       | List of `name` + `url` entries replacing the device's page list. `url` is required per entry. |
+
+Two notes on the optional keys. `api_token` only takes effect when the daemon
+next starts, so a stick plugged into a running device needs a reboot for that one
+key (everything else applies immediately). And `pages` replaces the list
+wholesale rather than merging, but importing it does not move the display off the
+page it is showing.
 
 ## Apply the Seed File
 
@@ -66,3 +87,14 @@ built with config import enabled (`dashboard.configImport.enable = true`).
 
 Once imported, the setup wizard is skipped and the dashboard goes straight to
 your Home Assistant instance.
+
+## Pairing still works
+
+A seeded device pairs with Home Assistant exactly like a hand-configured one: it
+is discovered over mDNS and hands over its API token with nothing to type. Writing
+a seed file does not count as having been paired, and there is no extra step to
+undo.
+
+If pairing is refused, the device has already been paired once. That is what the
+gate is for, and the way back is a factory reset from the
+[admin page](../usage/admin.md).

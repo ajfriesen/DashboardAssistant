@@ -29,6 +29,7 @@ var (
 	// the daemon publishes it, so HA stays in sync with out-of-band changes.
 	displayStateFifo = stateDir + "/display-state.fifo"
 	apiTokenFile     = stateDir + "/api-token"       // device HA API token, generated on first boot / written by config import
+	pairedMarker     = stateDir + "/paired"          // set the first time Home Assistant actually uses the device token; closes the pairing window
 	urlsFile         = stateDir + "/urls.json"       // pushable page list (name+url), web UI / config import
 	navFifo          = stateDir + "/nav.fifo"        // daemon writes a URL; in-session agent navigates Chromium there
 	zoomFifo         = stateDir + "/zoom.fifo"       // daemon writes "zoom <pct>"; in-session agent applies CSS zoom over CDP
@@ -58,6 +59,14 @@ func envOr(key, def string) string {
 // network state, which deriveState checks first.
 func Provisioned() bool {
 	_, err := os.Stat(markerFile)
+	return err == nil
+}
+
+// Paired reports whether Home Assistant has ever used the device API token, and
+// so whether the token has already reached the integration. It gates pairing:
+// see daemon/pairing.go for why this, and not Provisioned, is the right question.
+func Paired() bool {
+	_, err := os.Stat(pairedMarker)
 	return err == nil
 }
 
@@ -133,6 +142,13 @@ func markProvisioned() error {
 	return os.WriteFile(markerFile, []byte("1\n"), 0o664)
 }
 
+// markPaired records that the device token has been used successfully. Written
+// once, from the authenticated API path — never from /api/ha/pair itself, so a
+// claim that Home Assistant then fails to act on does not lock the device out.
+func markPaired() error {
+	return os.WriteFile(pairedMarker, []byte("1\n"), 0o664)
+}
+
 // WasOnline reports whether the device has reached the network at least once.
 // It separates a fresh, seeded-but-never-online device (which is *connecting*
 // for the first time) from a provisioned one that dropped its link (which is
@@ -154,14 +170,17 @@ func markOnline() {
 }
 
 // clearProvisioningState wipes the device's provisioning + config for a factory
-// reset: the HA URL, kiosk login token, provisioned marker, the generated device
-// API token (regenerated fresh on the next start), and user prefs. Hardware files
-// (dmi.env) and runtime FIFOs are left alone; missing files are not an error. The
-// node id (machine-id) is untouched, so Home Assistant sees the same device when
-// it is re-added rather than a duplicate.
+// reset: the HA URL, kiosk login token, provisioned marker, the paired marker,
+// the generated device API token (regenerated fresh on the next start), and user
+// prefs. Hardware files (dmi.env) and runtime FIFOs are left alone; missing files
+// are not an error. The node id (machine-id) is untouched, so Home Assistant sees
+// the same device when it is re-added rather than a duplicate.
+//
+// Dropping the paired marker is what reopens pairing, which is why reset is the
+// documented way back for a device that is already in Home Assistant.
 func clearProvisioningState() error {
 	for _, p := range []string{
-		markerFile, runtimeEnv, tokenFile, apiTokenFile,
+		markerFile, runtimeEnv, tokenFile, apiTokenFile, pairedMarker,
 		onlineMarker, urlsFile, zoomFile, themeFile, rotationFile,
 	} {
 		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {

@@ -43,10 +43,14 @@ who can reach it can put a display into a state that needs a phone and a walk ov
 to it.
 
 Factory reset is also how you **re-pair** a device with Home Assistant. A device
-that has been reset is unprovisioned, and an unprovisioned device hands its API
-token to Home Assistant automatically over mDNS discovery, so there is no code
-to type and no button to press on the tablet. Remove the old entry in Home Assistant
-first, because its token stops working.
+hands its API token to Home Assistant automatically until Home Assistant has used
+it once, and a reset puts it back in that state, so there is no code to type and
+no button to press on the tablet. Remove the old entry in Home Assistant first,
+because its token stops working.
+
+You only need this for a device that is *already* in Home Assistant. One that has
+never been paired pairs on its own, including a device preconfigured with a
+[seed file](../flash/seed.md).
 
 ## If the network is gone
 

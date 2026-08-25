@@ -24,6 +24,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -31,7 +32,8 @@ import (
 // (DASHBOARD_ASSISTANT_API_TOKEN, from a Nix EnvironmentFile) wins, then the
 // runtime state file written by config import, then a freshly generated token
 // persisted on first start. Auto-generation makes the device usable out of the
-// box — the token is shown on the loopback Config screen to paste into HA.
+// box: the token never has to be read or typed, it is handed to Home Assistant by
+// /api/ha/pair. Nothing on the device displays it (see handleInfo).
 func loadAPIToken() string {
 	if v := strings.TrimSpace(os.Getenv("DASHBOARD_ASSISTANT_API_TOKEN")); v != "" {
 		return v
@@ -207,6 +209,10 @@ type HAHub struct {
 	shotMu sync.Mutex
 	shot   []byte
 	shotAt time.Time
+
+	// Set once the device token has been used, so the marker is written a single
+	// time per boot rather than on every authenticated request.
+	pairedNoted atomic.Bool
 }
 
 // NewHAHub wires the object observers to broadcast a fresh snapshot to every SSE
@@ -370,9 +376,9 @@ func (h *HAHub) routes() http.Handler {
 	mux := http.NewServeMux()
 	// Unauthenticated on purpose: the gate is the pairing window, not a token the
 	// caller does not have yet. See handlePair.
-	// Deliberately unauthenticated, but never over the Wi-Fi setup AP: an
-	// unprovisioned device hands the token to whoever asks, and during onboarding
-	// "whoever asks" would include any phone that joined the setup network.
+	// Deliberately unauthenticated, but never over the Wi-Fi setup AP: an unpaired
+	// device hands the token to whoever asks, and during onboarding "whoever asks"
+	// would include any phone that joined the setup network.
 	mux.Handle("/api/ha/pair", notOnSetupAP(http.HandlerFunc(h.handlePair)))
 	// Unauthenticated, side-effect free: the stable identity the config flow keys
 	// zeroconf discovery on, so one device is one Home Assistant entry.
@@ -418,15 +424,20 @@ func (h *HAHub) auth(next http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
+		// A valid token proves the pairing actually landed, which is the moment to
+		// shut the window — not the claim itself, which may never be acted on.
+		h.notePaired()
 		next(w, r)
 	}
 }
 
 // handlePair hands the API token to Home Assistant without anyone reading or
 // typing it. It is deliberately unauthenticated — the caller does not yet have a
-// token; the gate is the pairing window, which only opens when the operator
-// presses "Pair" on the loopback Config screen (physical presence) or when the
-// build auto-confirms (preseeded fleet). Outside the window it reveals nothing.
+// token; the gate is the pairing window, which is open until the token has been
+// used once (or always, when the build auto-confirms for a fleet). Outside the
+// window it reveals nothing.
+//
+// Claiming does not itself close the window; using the token does. See Pairing.
 func (h *HAHub) handlePair(w http.ResponseWriter, r *http.Request) {
 	if !requirePost(w, r) {
 		return
@@ -434,16 +445,28 @@ func (h *HAHub) handlePair(w http.ResponseWriter, r *http.Request) {
 	tok, ok := h.pair.Claim()
 	if !ok {
 		writeJSON(w, http.StatusForbidden, map[string]string{
-			"error": "pairing not open; press Pair on the device's Config screen",
+			"error": "already paired with Home Assistant; factory-reset the device from its admin page to pair again",
 		})
 		return
 	}
-	log.Printf("ha: device paired via on-screen confirmation")
+	log.Printf("ha: handing device token to a pairing client")
 	writeJSON(w, http.StatusOK, map[string]any{
 		"token":   tok,
 		"node_id": h.nodeID,
 		"name":    deviceName(),
 	})
+}
+
+// notePaired records the first successful use of the device token, which is what
+// closes the pairing window. Idempotent and cheap: the atomic keeps it to one
+// write per boot, and the marker file is the durable record across reboots.
+func (h *HAHub) notePaired() {
+	if h.pairedNoted.Swap(true) || Paired() {
+		return
+	}
+	if err := markPaired(); err != nil {
+		log.Printf("ha: mark paired: %v", err)
+	}
 }
 
 // handleKioskLogin stages a Home Assistant login for the kiosk so no one has to
