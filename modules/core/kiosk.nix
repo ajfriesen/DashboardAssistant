@@ -1034,13 +1034,24 @@ in
     programs.chromium = {
       enable = true;
       extraOpts = {
-        # Removes "Inspect" from the context menu and kills Ctrl+Shift+I. It does
-        # NOT disable --remote-debugging-port: remote debugging is governed by the
-        # separate RemoteDebuggingAllowed policy (Chrome 92+, default true), which
-        # is precisely why that policy was added. The waybar buttons drive the
-        # browser over CDP on :9222 and keep working — if they ever stop, this is
-        # the first thing to check.
-        DeveloperToolsAvailability = 2;
+        # DeveloperToolsAvailability = 2 used to be set here. It cannot be: it
+        # kills the CDP protocol this kiosk is built on, and it does so silently.
+        # Measured on chromium 150, same launcher flags, policy the only variable:
+        # :9222 still listens, /json still lists the page target and still returns
+        # a webSocketDebuggerUrl, and then every command over that socket goes
+        # unanswered. RemoteDebuggingAllowed = true does not rescue it.
+        #
+        # Silent is the important word. Nothing errors and nothing is logged, so
+        # the token injector reads the empty reply as "no page yet" and waits for
+        # a page that is already there, and the waybar buttons, cdpNav page
+        # switching, zoom and theme all stop with no symptom but inaction. It cost
+        # a full debugging session, from an SD-card journal inwards, to find.
+        #
+        # So the escapes that motivated it (long-press "Inspect", and Ctrl+Shift+I
+        # from the uinput keyboard) are unhandled again, and the console can read
+        # localStorage.hassTokens. Anything that closes them has to stay off the
+        # CDP channel: swallow the shortcuts in the compositor, suppress the
+        # context menu on the page, or move these features to an extension.
         # file:// is the token read; the other two are the remaining context-menu
         # escapes. chrome:// would otherwise reach settings, net-internals and the
         # rest of the internal surface.
