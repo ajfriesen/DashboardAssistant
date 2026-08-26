@@ -153,7 +153,11 @@ let
       # flag here too (not just on the Off button), so an HA power-off also
       # lets the next touch re-power the display.
       case "$cmd" in
+        # Power on, then put the backlight back: the compositor restoring the
+        # output does not restore it, so without this the panel stays black
+        # while everything reports success. See brightnessRestore.
         on)  ${pkgs.sway}/bin/swaymsg 'output * power on'  >/dev/null 2>&1 || true
+             ${brightnessRestore} >/dev/null 2>&1 || true
              ${pkgs.coreutils}/bin/rm -f ${displayOffFlag} 2>/dev/null || true
              ${reportDisplayState} on  ;;
         off) ${pkgs.sway}/bin/swaymsg 'output * power off' >/dev/null 2>&1 || true
@@ -197,6 +201,8 @@ let
       fi
       if [ -e ${displayOffFlag} ]; then
         ${pkgs.sway}/bin/swaymsg 'output * power on' >/dev/null 2>&1 || true
+        # Same as the display agent: the output comes back, the backlight does not.
+        ${brightnessRestore} >/dev/null 2>&1 || true
         ${reportDisplayState} on
         ${pkgs.coreutils}/bin/rm -f ${displayOffFlag} 2>/dev/null || true
       fi
@@ -596,6 +602,15 @@ let
   # dashboardAssistant.kiosk.brightness.method forces a tier; "auto" (default) detects.
   brightnessMethod = config.dashboardAssistant.kiosk.brightness.method;
   brightnessEnv = "/var/lib/dashboard-assistant/brightness.env";
+  # The last commanded level (0..100). brightness.env carries the backend and
+  # device; this carries the value, because powering an output back on does not
+  # restore it. On a panel with a real backlight, DPMS-off drives the backlight to
+  # zero and `output * power on` does not drive it back, so the compositor
+  # reports a live output that is physically black. Everything looked fine and
+  # nothing worked: the display entity flipped to on, touch registered, and the
+  # panel stayed dark until a brightness change happened to write a non-zero
+  # value. So the level is persisted on every set and re-applied after power-on.
+  brightnessLevelFile = "/var/lib/dashboard-assistant/brightness-level";
 
   brightnessResolve = pkgs.writeShellScript "ha-brightness-resolve" ''
     set -u
@@ -650,6 +665,7 @@ let
           init=$(( $4 * 100 / $5 ))
         fi ;;
     esac
+    ${pkgs.coreutils}/bin/printf '%s\n' "$init" > ${brightnessLevelFile} 2>/dev/null || true
     ${reportDisplayState} bright "$init"
   '';
 
@@ -684,6 +700,30 @@ let
         ${pkgs.systemd}/bin/busctl --user -- \
           set-property rs.wl-gammarelay / rs.wl.gammarelay Brightness d "$val" >/dev/null 2>&1 || true ;;
     esac
+
+    # Record it so brightnessRestore can put the panel back after a power-on.
+    ${pkgs.coreutils}/bin/printf '%s\n' "$pct" > ${brightnessLevelFile} 2>/dev/null || true
+  '';
+
+  # Re-apply the last commanded level. Called after every `output * power on`,
+  # from both paths that can wake the panel (the HA switch via the display agent,
+  # and wake-on-touch), because the compositor restoring the output does not
+  # restore the backlight.
+  #
+  # Floors at 10 so waking never lands on an unrecoverable black: a kiosk dimmed
+  # to zero and then blanked would otherwise wake to a screen that is on, drawing,
+  # and invisible, with no on-screen way to fix it. Same reasoning as the software
+  # dimmer's own floor.
+  brightnessRestore = pkgs.writeShellScript "ha-brightness-restore" ''
+    set -u
+    pct=100
+    if [ -r ${brightnessLevelFile} ]; then
+      pct=$(${pkgs.coreutils}/bin/cat ${brightnessLevelFile} 2>/dev/null || echo 100)
+    fi
+    case "$pct" in ""|*[!0-9]*) pct=100 ;; esac
+    [ "$pct" -lt 10 ] && pct=10
+    ${brightnessSet} "$pct" >/dev/null 2>&1 || true
+    ${reportDisplayState} bright "$pct"
   '';
 
   # On-screen keyboard toggle, driven by the ⌨ Keyboard button on the bar.
