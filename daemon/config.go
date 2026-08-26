@@ -207,28 +207,60 @@ func forgetWifi(nm *NetworkManager) error {
 }
 
 var (
-	kioskRestartMu   sync.Mutex
-	lastKioskRestart time.Time
+	kioskRestartMu     sync.Mutex
+	lastKioskRestart   time.Time
+	kioskRestartQueued bool
+
+	// Window in which a second restart is folded into the first. A var, not a
+	// const, so tests can shrink it.
+	kioskRestartWindow = 8 * time.Second
+
+	// The actual session restart, swapped out in tests. Nothing else should call
+	// it directly: restartKiosk owns the coalescing.
+	kioskRestartFn = restartSessionUnit
 )
 
-// restartKiosk restarts the greetd session over the systemd D-Bus API. A scoped
-// polkit rule (see daemon.nix) grants dashboard-assistant rights to manage only this
-// unit. Restarting re-runs the state-aware launcher, which re-reads /api/state.
+// restartKiosk restarts the greetd session, coalescing bursts. A single
+// provisioning event can trigger two restart paths almost at once: kiosk_login
+// (or config import) staging the login, and the READY-transition watcher reacting
+// to the same SETUP to READY flip. Restarting twice tears the session down
+// mid-autologin, so calls inside the window collapse into one.
 //
-// Debounced: a single provisioning event can trigger two restart paths almost at
-// once — kiosk_login (or config import) staging the login, and the READY-transition
-// watcher reacting to the same SETUP→READY flip. Restarting twice tears the session
-// down mid-autologin, so collapse calls within a short window into one.
+// It defers rather than drops. Discarding the later call loses whatever state
+// change prompted it: a token staged a second after an unrelated restart would
+// never reach the session, and the device sits on the login screen until someone
+// reboots it. So the last caller in a burst is honoured, just late.
 func restartKiosk() error {
 	kioskRestartMu.Lock()
-	if time.Since(lastKioskRestart) < 8*time.Second {
+	if wait := kioskRestartWindow - time.Since(lastKioskRestart); wait > 0 {
+		if kioskRestartQueued {
+			kioskRestartMu.Unlock()
+			log.Printf("kiosk: restart already queued; coalesced")
+			return nil
+		}
+		kioskRestartQueued = true
 		kioskRestartMu.Unlock()
-		log.Printf("kiosk: restart skipped (debounced)")
+		log.Printf("kiosk: restart deferred %s so it does not land mid-autologin", wait.Round(time.Second))
+		// Slack past the window so the retry cannot re-defer on a boundary.
+		time.AfterFunc(wait+100*time.Millisecond, func() {
+			kioskRestartMu.Lock()
+			kioskRestartQueued = false
+			kioskRestartMu.Unlock()
+			if err := restartKiosk(); err != nil {
+				log.Printf("kiosk: deferred restart: %v", err)
+			}
+		})
 		return nil
 	}
 	lastKioskRestart = time.Now()
 	kioskRestartMu.Unlock()
+	return kioskRestartFn()
+}
 
+// restartSessionUnit restarts greetd over the systemd D-Bus API. A scoped polkit
+// rule (see daemon.nix) grants dashboard-assistant rights to manage only this
+// unit. Restarting re-runs the state-aware launcher, which re-reads /api/state.
+func restartSessionUnit() error {
 	conn, err := dbus.ConnectSystemBus()
 	if err != nil {
 		return fmt.Errorf("connect system bus: %w", err)

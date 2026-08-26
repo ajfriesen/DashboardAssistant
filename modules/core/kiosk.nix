@@ -235,41 +235,48 @@ let
         done
   '';
 
-  # Token auto-login: the productionised `just inject-token`. If a token has been
-  # staged (config import / seed), set localStorage `hassTokens` on the HA page
-  # over the loopback CDP port and navigate to the app root, which the app
-  # entrypoint consumes to log in (navigate to /, NOT reload — the
-  # /auth/authorize login screen ignores hassTokens). No token ⇒ no-op.
+  # Token auto-login: the productionised `just inject-token`. When a token has
+  # been staged (config import / seed / Home Assistant pairing), set localStorage
+  # `hassTokens` on the HA page over the loopback CDP port and navigate to the app
+  # root, which the app entrypoint consumes to log in (navigate to /, NOT reload:
+  # the /auth/authorize login screen ignores hassTokens).
   #
-  # This runs at session start, racing Chromium's cold load: the CDP page target
-  # matches the HA origin *before* the real document commits, so an early inject
-  # lands on the throwaway initial document and is lost (leaving the tokenless
-  # load to settle on the login screen). So we gate on the document actually
-  # being on the HA origin, then inject and re-check — retrying until hassTokens
-  # sticks and we're off /auth/*.
+  # It waits for its preconditions instead of racing them, because it has lost
+  # that race both possible ways on real hardware:
+  #
+  #   - Reading the token once at startup meant a token staged later in the
+  #     session (pairing completes a few seconds after boot) was never seen, and
+  #     only a session restart could recover it.
+  #   - Giving up after a fixed number of polls meant a cold Chromium that took
+  #     two minutes to commit its first page on an SD card was never injected
+  #     into, so the tablet sat on the login screen until someone rebooted it.
+  #     Rebooting did not help, because the same race repeated.
+  #
+  # So: re-read the token and the URL every pass, and keep polling until the
+  # session is genuinely logged in. A logged-out kiosk has nothing better to do,
+  # and the cost is a loopback curl every couple of seconds. This also means the
+  # kiosk restart after provisioning is now an optimisation rather than the thing
+  # correctness depends on.
   tokenInjector = pkgs.writeShellScript "ha-token-inject" ''
     set -u
-    if [ ! -r ${tokenPath} ]; then exit 0; fi
-    TOKEN=$(${pkgs.coreutils}/bin/cat ${tokenPath})
-    if [ -z "$TOKEN" ]; then exit 0; fi
 
-    HA_URL="${defaultUrl}"
-    if [ -r /var/lib/dashboard-assistant/runtime.env ]; then
-      # shellcheck disable=SC1091
-      . /var/lib/dashboard-assistant/runtime.env
-    fi
-    # Derive the HA origin (scheme://host[:port]) so we only inject into the HA
-    # page — not the daemon's setup/waiting pages on a different origin.
-    scheme=''${HA_URL%%://*}
-    rest=''${HA_URL#*://}
-    origin="$scheme://''${rest%%/*}"
-
-    # JSON-encode the token once so it is a safe JS string literal.
-    tokjson=$(${lib.getExe pkgs.jq} -cn --arg t "$TOKEN" '$t')
-    inject='localStorage.setItem("hassTokens", JSON.stringify({access_token:'"$tokjson"',token_type:"Bearer",expires_in:315360000,expires:Date.now()+315360000000,refresh_token:"",clientId:null,hassUrl:location.origin})); location.replace(location.origin + "/"); "injected"'
+    # The HA origin (scheme://host[:port]) from the daemon's runtime state, so we
+    # only ever inject into the HA page and not the daemon's setup/waiting pages
+    # on a different origin. Re-read every pass: provisioning rewrites it.
+    origin_of() {
+      HA_URL="${defaultUrl}"
+      if [ -r /var/lib/dashboard-assistant/runtime.env ]; then
+        # shellcheck disable=SC1091
+        . /var/lib/dashboard-assistant/runtime.env
+      fi
+      scheme=''${HA_URL%%://*}
+      rest=''${HA_URL#*://}
+      printf '%s://%s' "$scheme" "''${rest%%/*}"
+    }
 
     # Evaluate a JS expression on the first HA-origin CDP page and print its
-    # value. Empty if there is no such page/target yet.
+    # value. Empty if there is no such page/target yet, which is the normal state
+    # while Chromium is still starting.
     cdp_eval() {
       ws=$(${lib.getExe pkgs.curl} -s --max-time 2 http://localhost:9222/json 2>/dev/null \
         | ${lib.getExe pkgs.jq} -r --arg o "$origin" \
@@ -282,23 +289,53 @@ let
         | ${lib.getExe pkgs.jq} -r '.result.result.value // empty' 2>/dev/null
     }
 
-    # Poll for up to ~120s. status = "<on-HA-origin>|<has-tokens>|<on-/auth/>".
-    # Don't exit on the first "looks logged in": right after the inject the app is
-    # briefly on the app root with tokens before it may bounce back to /auth (mid
-    # OAuth redirect, or a boot-time hiccup). Require a few *consecutive* logged-in
-    # reads so we only stop once it has genuinely settled on the dashboard, and
-    # re-inject if it slips back to the login screen.
-    i=0; ok=0
-    while [ "$i" -lt 60 ]; do
-      i=$((i + 1))
+    token=""; origin=""; inject=""; ok=0; injects=0; delay=2
+
+    while :; do
+      new_token=$(${pkgs.coreutils}/bin/cat ${tokenPath} 2>/dev/null || true)
+      if [ -z "$new_token" ]; then
+        # Nothing staged yet, or not readable. Pairing may still be in flight, so
+        # keep waiting rather than exiting: this is a normal state on a fresh box.
+        ${pkgs.coreutils}/bin/sleep 5
+        continue
+      fi
+      new_origin=$(origin_of)
+
+      # Rebuild the payload only when the inputs actually change, so the steady
+      # state is two loopback calls and no jq churn.
+      if [ "$new_token" != "$token" ] || [ "$new_origin" != "$origin" ]; then
+        token=$new_token
+        origin=$new_origin
+        # JSON-encode the token once so it is a safe JS string literal.
+        tokjson=$(${lib.getExe pkgs.jq} -cn --arg t "$token" '$t')
+        inject='localStorage.setItem("hassTokens", JSON.stringify({access_token:'"$tokjson"',token_type:"Bearer",expires_in:315360000,expires:Date.now()+315360000000,refresh_token:"",clientId:null,hassUrl:location.origin})); location.replace(location.origin + "/"); "injected"'
+        ok=0; injects=0; delay=2
+      fi
+
+      # status = "<on-HA-origin>|<has-tokens>|<on-/auth/>".
+      # Don't stop on the first "looks logged in": right after the inject the app
+      # is briefly on the app root with tokens before it may bounce back to /auth
+      # (mid OAuth redirect, or a boot-time hiccup). Require a few *consecutive*
+      # logged-in reads so we only stop once it has genuinely settled, and
+      # re-inject if it slips back to the login screen.
       st=$(cdp_eval 'String(location.origin==="'"$origin"'"?1:0)+"|"+(localStorage.getItem("hassTokens")?1:0)+"|"+(location.pathname.indexOf("/auth/")===0?1:0)') || st=""
       case "$st" in
-        "")                        ${pkgs.coreutils}/bin/sleep 1; continue ;;  # no page yet
-        "1|1|0")                   ok=$((ok + 1)); [ "$ok" -ge 3 ] && exit 0 ;; # settled on the dashboard
-        "1|0|0" | "1|0|1" | "1|1|1") ok=0; cdp_eval "$inject" >/dev/null ;;     # not logged in — (re)inject
-        *)                         ok=0 ;;                                       # not committed yet — wait
+        "")                        ok=0 ;;                                       # no page yet; keep waiting
+        "1|1|0")                   ok=$((ok + 1)); [ "$ok" -ge 3 ] && exit 0 ;;   # settled on the dashboard
+        "1|0|0" | "1|0|1" | "1|1|1")                                             # not logged in; (re)inject
+          ok=0
+          injects=$((injects + 1))
+          cdp_eval "$inject" >/dev/null
+          # A token HA rejects would otherwise become a page-load storm: it is
+          # cleared on load, we see "not logged in" again, and we reload forever.
+          # Back off so a bad token costs a request a minute, not one every 2s.
+          if [ "$injects" -ge 10 ]; then delay=60
+          elif [ "$injects" -ge 5 ]; then delay=15
+          fi
+          ;;
+        *)                         ok=0 ;;                                       # not committed yet; wait
       esac
-      ${pkgs.coreutils}/bin/sleep 2
+      ${pkgs.coreutils}/bin/sleep "$delay"
     done
   '';
 

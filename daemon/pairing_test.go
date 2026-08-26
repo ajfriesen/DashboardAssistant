@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // tempState points the state-file vars this package reads at a fresh directory,
@@ -139,5 +141,71 @@ func TestPairRefusedOnSetupAP(t *testing.T) {
 	}
 	if _, err := os.Stat(pairedMarker); err == nil {
 		t.Fatal("a refused request must not mark the device paired")
+	}
+}
+
+// withStubRestart swaps the session restart for a counter and shrinks the
+// coalescing window, restoring both afterwards.
+func withStubRestart(t *testing.T, window time.Duration) *atomic.Int32 {
+	t.Helper()
+	var calls atomic.Int32
+	oldFn, oldWindow := kioskRestartFn, kioskRestartWindow
+	kioskRestartFn = func() error { calls.Add(1); return nil }
+	kioskRestartWindow = window
+	t.Cleanup(func() {
+		kioskRestartFn, kioskRestartWindow = oldFn, oldWindow
+		kioskRestartMu.Lock()
+		lastKioskRestart, kioskRestartQueued = time.Time{}, false
+		kioskRestartMu.Unlock()
+	})
+	kioskRestartMu.Lock()
+	lastKioskRestart, kioskRestartQueued = time.Time{}, false
+	kioskRestartMu.Unlock()
+	return &calls
+}
+
+// A burst must collapse, but the last caller must still be honoured: dropping it
+// loses the state change that prompted it (this is what left a paired tablet on
+// the login screen).
+func TestRestartKioskCoalescesInsteadOfDropping(t *testing.T) {
+	calls := withStubRestart(t, 100*time.Millisecond)
+
+	for i := 0; i < 5; i++ {
+		if err := restartKiosk(); err != nil {
+			t.Fatalf("restartKiosk: %v", err)
+		}
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("immediate restarts = %d, want 1 (the rest must coalesce)", got)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for calls.Load() < 2 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("restarts after the window = %d, want 2 (one immediate, one deferred)", got)
+	}
+
+	// The deferred pass must not itself re-arm and restart forever.
+	time.Sleep(300 * time.Millisecond)
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("restarts settled at %d, want 2 (the queue must drain, not loop)", got)
+	}
+}
+
+// Calls spaced beyond the window are unrelated events and each must land.
+func TestRestartKioskOutsideWindowRunsImmediately(t *testing.T) {
+	calls := withStubRestart(t, 20*time.Millisecond)
+
+	if err := restartKiosk(); err != nil {
+		t.Fatalf("restartKiosk: %v", err)
+	}
+	time.Sleep(60 * time.Millisecond)
+	if err := restartKiosk(); err != nil {
+		t.Fatalf("restartKiosk: %v", err)
+	}
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("spaced restarts = %d, want 2", got)
 	}
 }
