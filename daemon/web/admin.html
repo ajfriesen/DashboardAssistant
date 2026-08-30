@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard Assistant — Admin</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: system-ui, sans-serif; background: #10151c; color: #e8edf2;
+      min-height: 100vh; display: flex; flex-direction: column;
+    }
+    .content { flex: 1; display: flex; justify-content: center; padding: 4vh 4vw 8vh; }
+    .card { width: 100%; max-width: 560px; }
+    label { display: block; margin: 1rem 0 .35rem; font-size: .95rem; color: #9fb0c0; }
+    input, select, button {
+      width: 100%; font-size: 1.15rem; padding: .85rem 1rem; border-radius: 12px;
+      border: 1px solid #2a3644; background: #182029; color: #e8edf2;
+    }
+    button {
+      margin-top: 1.25rem; background: #2f81f7; border-color: #2f81f7; color: #fff;
+      font-weight: 600; touch-action: manipulation;
+    }
+    button:disabled { opacity: .5; }
+    button.danger { background: #b3391f; border-color: #b3391f; }
+    .topbar {
+      position: sticky; top: 0; z-index: 10;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 1rem; flex-wrap: wrap; row-gap: .5rem;
+      padding: .75rem 1.25rem;
+      background: #182029; border-bottom: 1px solid #2a3644;
+    }
+    .brand {
+      display: inline-flex; align-items: center; gap: .5rem;
+      font-size: 1.2rem; font-weight: 700; color: #e8edf2; white-space: nowrap;
+    }
+    .brand svg { width: 1.5rem; height: 1.5rem; flex: none; }
+    .badge {
+      font-size: .8rem; color: #9fb0c0; border: 1px solid #2a3644;
+      border-radius: 999px; padding: .2rem .7rem; white-space: nowrap;
+    }
+    h2 { font-size: 1.05rem; margin: 2.25rem 0 .5rem; font-weight: 650; }
+    h2:first-of-type { margin-top: 0; }
+    section { border-top: 1px solid #1b2430; padding-top: .25rem; }
+    section:first-of-type { border-top: 0; }
+    .hint { color: #9fb0c0; font-size: .9rem; margin: 0 0 .25rem; line-height: 1.45; }
+    .hint b { color: #e8edf2; }
+    .warn { color: #f0a868; }
+    .hidden { display: none; }
+    .msg { margin-top: 1rem; min-height: 1.4rem; font-size: .95rem; }
+    .msg.err { color: #ff6b6b; }
+    .msg.ok { color: #4ade80; }
+    .info { margin: 0; }
+    .info > div { display: flex; justify-content: space-between; gap: 1rem; padding: .65rem 0; border-bottom: 1px solid #1b2430; }
+    .info dt { color: #9fb0c0; font-size: .9rem; }
+    .info dd { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9rem; text-align: right; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <span class="brand">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="M593-80q-24 0-46-9t-39-26L304-320l33-34q14-14 34-19t40 0l69 20v-287q0-17 11.5-28.5T520-680q17 0 28.5 11.5T560-640v393l-98-28 103 103q6 6 13 9t15 3h167q33 0 56.5-23.5T840-240v-160q0-17 11.5-28.5T880-440q17 0 28.5 11.5T920-400v160q0 66-47 113T760-80H593Zm7-280v-160q0-17 11.5-28.5T640-560q17 0 28.5 11.5T680-520v160h-80Zm120 0v-120q0-17 11.5-28.5T760-520q17 0 28.5 11.5T800-480v120h-80Zm40 200H565h195Zm-600-40q-33 0-56.5-23.5T80-280v-480q0-33 23.5-56.5T160-840h600q33 0 56.5 23.5T840-760v160h-80v-160H160v480h72l79 80H160Z"/></svg>
+      Dashboard Assistant
+    </span>
+    <span class="badge">Admin</span>
+  </header>
+
+  <main class="content">
+    <div class="card">
+
+      <section>
+        <h2>Device</h2>
+        <p class="hint">Read-only. This device is configured from a seed file or from Home Assistant, not from here.</p>
+        <dl id="infoRows" class="info"></dl>
+        <div id="infoMsg" class="msg"></div>
+      </section>
+
+      <section>
+        <h2>Recovery</h2>
+        <p class="hint">
+          Boot an earlier system generation — use this if an update broke something.
+          The device switches to the chosen generation and <b>reboots</b>. It keeps
+          booting that one until you deploy again.
+        </p>
+        <label for="genSelect">Generation</label>
+        <select id="genSelect"><option value="">Loading…</option></select>
+        <button id="genRollback" class="danger" type="button" disabled>Roll back &amp; reboot</button>
+        <div id="genMsg" class="msg"></div>
+      </section>
+
+      <section>
+        <h2>Factory reset</h2>
+        <p class="hint">
+          Clears the Home Assistant URL, the login token, the device API token and
+          your display preferences, then <b>reboots</b> onto the onboarding screen.
+          The device re-appears in Home Assistant as the same device, ready to be
+          added again — <b>remove the existing entry there first</b>, because its
+          token stops working.
+        </p>
+        <p class="hint warn">This cannot be undone. Type <b>RESET</b> to enable the button.</p>
+        <label for="resetConfirm">Confirmation</label>
+        <input id="resetConfirm" type="text" autocomplete="off" autocapitalize="characters"
+               spellcheck="false" placeholder="RESET">
+        <button id="resetGo" class="danger" type="button" disabled>Factory reset &amp; reboot</button>
+        <div id="resetMsg" class="msg"></div>
+      </section>
+
+    </div>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function say(el, text, cls) {
+      const m = $(el);
+      m.textContent = text;
+      m.className = "msg" + (cls ? " " + cls : "");
+    }
+
+    // Identity + network. Deliberately no token field: this page is served to the
+    // whole LAN without authentication, so it must not leak a credential that
+    // reaches past this device.
+    const INFO_FIELDS = [
+      ["name", "Name"],
+      ["hostname", "Hostname"],
+      ["mac", "MAC address"],
+      ["ip", "IP address"],
+      ["machine_id", "Machine ID"],
+      ["node_id", "Device ID"],
+      ["model", "Model"],
+      ["serial", "Serial"],
+      ["version", "Version"],
+      ["ha_url", "Home Assistant URL"],
+      ["api_url", "Integration URL"],
+    ];
+
+    async function loadInfo() {
+      const box = $("infoRows");
+      box.innerHTML = "";
+      say("infoMsg", "");
+      try {
+        const d = await (await fetch("/api/admin/info")).json();
+        for (const [k, label] of INFO_FIELDS) {
+          const row = document.createElement("div");
+          const dt = document.createElement("dt");
+          dt.textContent = label;
+          const dd = document.createElement("dd");
+          dd.textContent = d[k] || "—";
+          row.append(dt, dd);
+          box.appendChild(row);
+        }
+      } catch (e) {
+        say("infoMsg", "Could not load info: " + e.message, "err");
+      }
+    }
+
+    // Newest first; the running generation is listed but not selectable, so
+    // "roll back" always means a real change.
+    async function loadGenerations() {
+      const sel = $("genSelect");
+      sel.innerHTML = "";
+      say("genMsg", "");
+      try {
+        const d = await (await fetch("/api/admin/generations")).json();
+        const gens = d.generations || [];
+        if (!gens.length) {
+          sel.innerHTML = '<option value="">No generations found</option>';
+          return;
+        }
+        for (const g of gens) {
+          const o = document.createElement("option");
+          o.value = g.number;
+          const date = g.date ? g.date.slice(0, 16).replace("T", " ") : "";
+          o.textContent = "Generation " + g.number + (date ? " · " + date : "") +
+            (g.current ? "  (current)" : "");
+          o.disabled = !!g.current;
+          sel.appendChild(o);
+        }
+        const first = gens.find((g) => !g.current);
+        if (first) {
+          sel.value = first.number;
+          $("genRollback").disabled = false;
+        }
+      } catch (e) {
+        sel.innerHTML = '<option value="">Could not load</option>';
+        say("genMsg", "Could not load generations: " + e.message, "err");
+      }
+    }
+
+    $("genRollback").addEventListener("click", async () => {
+      const gen = parseInt($("genSelect").value, 10);
+      if (!gen) return;
+      if (!confirm("Roll back to generation " + gen + " and reboot now?")) return;
+      $("genRollback").disabled = true;
+      say("genMsg", "Switching generation…");
+      try {
+        const r = await fetch("/api/admin/rollback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ generation: gen }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || r.statusText);
+        say("genMsg", "Rebooting into generation " + gen + "…", "ok");
+      } catch (e) {
+        say("genMsg", e.message, "err");
+        $("genRollback").disabled = false;
+      }
+    });
+
+    // Typed confirmation rather than a bare confirm(): this endpoint is reachable
+    // from anywhere on the network, so a mis-tap should not be able to wipe a
+    // provisioned device.
+    $("resetConfirm").addEventListener("input", (e) => {
+      $("resetGo").disabled = e.target.value.trim().toUpperCase() !== "RESET";
+    });
+
+    $("resetGo").addEventListener("click", async () => {
+      $("resetGo").disabled = true;
+      say("resetMsg", "Clearing provisioning…");
+      try {
+        const r = await fetch("/api/admin/reset", { method: "POST" });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || r.statusText);
+        say("resetMsg", "Reset done — rebooting onto the onboarding screen.", "ok");
+        $("resetConfirm").value = "";
+      } catch (e) {
+        say("resetMsg", e.message, "err");
+        $("resetGo").disabled = false;
+      }
+    });
+
+    loadInfo();
+    loadGenerations();
+  </script>
+</body>
+</html>

@@ -41,7 +41,14 @@ func (s *server) applyImport(data []byte) ([]string, error) {
 		if s.nm == nil {
 			return applied, fmt.Errorf("wifi requested but NetworkManager is unavailable")
 		}
-		if err := s.nm.Provision(cfg.WiFi.SSID, cfg.WiFi.PSK); err != nil {
+		// Through the onboarding manager, which takes the setup AP down first. A
+		// USB stick can be inserted at any moment, including while the portal is
+		// open, and without this NetworkManager would yank the radio out from
+		// under it and the two would fight over the interface.
+		err := s.onboard.WithRadio(func() error {
+			return s.nm.Provision(cfg.WiFi.SSID, cfg.WiFi.PSK)
+		})
+		if err != nil {
 			return applied, fmt.Errorf("wifi provision: %w", err)
 		}
 		applied = append(applied, "wifi:"+cfg.WiFi.SSID)

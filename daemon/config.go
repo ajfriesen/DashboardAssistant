@@ -28,13 +28,14 @@ var (
 	// Reverse channel: in-session agents write the *actual* power state here and
 	// the daemon publishes it, so HA stays in sync with out-of-band changes.
 	displayStateFifo = stateDir + "/display-state.fifo"
-	apiTokenFile     = stateDir + "/api-token"     // device HA API token, generated on first boot / written by config import
-	urlsFile         = stateDir + "/urls.json"     // pushable page list (name+url), web UI / config import
-	navFifo          = stateDir + "/nav.fifo"      // daemon writes a URL; in-session agent navigates Chromium there
-	zoomFifo         = stateDir + "/zoom.fifo"     // daemon writes "zoom <pct>"; in-session agent applies CSS zoom over CDP
-	zoomFile         = stateDir + "/zoom"          // persisted browser zoom percent, restored by the kiosk on launch
-	themeFifo        = stateDir + "/theme.fifo"    // daemon writes "theme <dark|light>"; in-session agent flips HA's theme over CDP
-	themeFile        = stateDir + "/theme"         // persisted dark/light choice, restored by the kiosk on launch
+	apiTokenFile     = stateDir + "/api-token"       // device HA API token, generated on first boot / written by config import
+	pairedMarker     = stateDir + "/paired"          // set the first time Home Assistant actually uses the device token; closes the pairing window
+	urlsFile         = stateDir + "/urls.json"       // pushable page list (name+url), web UI / config import
+	navFifo          = stateDir + "/nav.fifo"        // daemon writes a URL; in-session agent navigates Chromium there
+	zoomFifo         = stateDir + "/zoom.fifo"       // daemon writes "zoom <pct>"; in-session agent applies CSS zoom over CDP
+	zoomFile         = stateDir + "/zoom"            // persisted browser zoom percent, restored by the kiosk on launch
+	themeFifo        = stateDir + "/theme.fifo"      // daemon writes "theme <dark|light>"; in-session agent flips HA's theme over CDP
+	themeFile        = stateDir + "/theme"           // persisted dark/light choice, restored by the kiosk on launch
 	rotationFifo     = stateDir + "/rotation.fifo"   // daemon writes "rotate <deg>"; in-session agent applies a Sway output transform
 	rotationFile     = stateDir + "/rotation"        // persisted display rotation (degrees), restored by the kiosk on launch
 	screenshotFifo   = stateDir + "/screenshot.fifo" // daemon pokes it; the in-session grim agent grabs the whole screen
@@ -58,6 +59,14 @@ func envOr(key, def string) string {
 // network state, which deriveState checks first.
 func Provisioned() bool {
 	_, err := os.Stat(markerFile)
+	return err == nil
+}
+
+// Paired reports whether Home Assistant has ever used the device API token, and
+// so whether the token has already reached the integration. It gates pairing:
+// see daemon/pairing.go for why this, and not Provisioned, is the right question.
+func Paired() bool {
+	_, err := os.Stat(pairedMarker)
 	return err == nil
 }
 
@@ -133,6 +142,13 @@ func markProvisioned() error {
 	return os.WriteFile(markerFile, []byte("1\n"), 0o664)
 }
 
+// markPaired records that the device token has been used successfully. Written
+// once, from the authenticated API path — never from /api/ha/pair itself, so a
+// claim that Home Assistant then fails to act on does not lock the device out.
+func markPaired() error {
+	return os.WriteFile(pairedMarker, []byte("1\n"), 0o664)
+}
+
 // WasOnline reports whether the device has reached the network at least once.
 // It separates a fresh, seeded-but-never-online device (which is *connecting*
 // for the first time) from a provisioned one that dropped its link (which is
@@ -154,14 +170,17 @@ func markOnline() {
 }
 
 // clearProvisioningState wipes the device's provisioning + config for a factory
-// reset: the HA URL, kiosk login token, provisioned marker, the generated device
-// API token (regenerated fresh on the next start), and user prefs. Hardware files
-// (dmi.env) and runtime FIFOs are left alone; missing files are not an error. The
-// node id (machine-id) is untouched, so Home Assistant sees the same device when
-// it is re-added rather than a duplicate.
+// reset: the HA URL, kiosk login token, provisioned marker, the paired marker,
+// the generated device API token (regenerated fresh on the next start), and user
+// prefs. Hardware files (dmi.env) and runtime FIFOs are left alone; missing files
+// are not an error. The node id (machine-id) is untouched, so Home Assistant sees
+// the same device when it is re-added rather than a duplicate.
+//
+// Dropping the paired marker is what reopens pairing, which is why reset is the
+// documented way back for a device that is already in Home Assistant.
 func clearProvisioningState() error {
 	for _, p := range []string{
-		markerFile, runtimeEnv, tokenFile, apiTokenFile,
+		markerFile, runtimeEnv, tokenFile, apiTokenFile, pairedMarker,
 		onlineMarker, urlsFile, zoomFile, themeFile, rotationFile,
 	} {
 		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
@@ -171,29 +190,77 @@ func clearProvisioningState() error {
 	return nil
 }
 
+// forgetWifi deletes every saved Wi-Fi profile, so a factory-reset device comes
+// back onboardable rather than silently rejoining the network it was reset away
+// from. Without it, "reset the tablet, then take it to a different house" quietly
+// does not work: the old profile autoconnects, the device never looks stranded,
+// and the setup AP never appears.
+//
+// The AP passphrase file is deliberately *not* removed. It may be on a printed
+// label or in a photo, and rotating a credential whose only job is to be readable
+// off the screen of the device it protects buys nothing.
+func forgetWifi(nm *NetworkManager) error {
+	if nm == nil {
+		return nil
+	}
+	return nm.ForgetWifiProfiles()
+}
+
 var (
-	kioskRestartMu   sync.Mutex
-	lastKioskRestart time.Time
+	kioskRestartMu     sync.Mutex
+	lastKioskRestart   time.Time
+	kioskRestartQueued bool
+
+	// Window in which a second restart is folded into the first. A var, not a
+	// const, so tests can shrink it.
+	kioskRestartWindow = 8 * time.Second
+
+	// The actual session restart, swapped out in tests. Nothing else should call
+	// it directly: restartKiosk owns the coalescing.
+	kioskRestartFn = restartSessionUnit
 )
 
-// restartKiosk restarts the greetd session over the systemd D-Bus API. A scoped
-// polkit rule (see daemon.nix) grants dashboard-assistant rights to manage only this
-// unit. Restarting re-runs the state-aware launcher, which re-reads /api/state.
+// restartKiosk restarts the greetd session, coalescing bursts. A single
+// provisioning event can trigger two restart paths almost at once: kiosk_login
+// (or config import) staging the login, and the READY-transition watcher reacting
+// to the same SETUP to READY flip. Restarting twice tears the session down
+// mid-autologin, so calls inside the window collapse into one.
 //
-// Debounced: a single provisioning event can trigger two restart paths almost at
-// once — kiosk_login (or config import) staging the login, and the READY-transition
-// watcher reacting to the same SETUP→READY flip. Restarting twice tears the session
-// down mid-autologin, so collapse calls within a short window into one.
+// It defers rather than drops. Discarding the later call loses whatever state
+// change prompted it: a token staged a second after an unrelated restart would
+// never reach the session, and the device sits on the login screen until someone
+// reboots it. So the last caller in a burst is honoured, just late.
 func restartKiosk() error {
 	kioskRestartMu.Lock()
-	if time.Since(lastKioskRestart) < 8*time.Second {
+	if wait := kioskRestartWindow - time.Since(lastKioskRestart); wait > 0 {
+		if kioskRestartQueued {
+			kioskRestartMu.Unlock()
+			log.Printf("kiosk: restart already queued; coalesced")
+			return nil
+		}
+		kioskRestartQueued = true
 		kioskRestartMu.Unlock()
-		log.Printf("kiosk: restart skipped (debounced)")
+		log.Printf("kiosk: restart deferred %s so it does not land mid-autologin", wait.Round(time.Second))
+		// Slack past the window so the retry cannot re-defer on a boundary.
+		time.AfterFunc(wait+100*time.Millisecond, func() {
+			kioskRestartMu.Lock()
+			kioskRestartQueued = false
+			kioskRestartMu.Unlock()
+			if err := restartKiosk(); err != nil {
+				log.Printf("kiosk: deferred restart: %v", err)
+			}
+		})
 		return nil
 	}
 	lastKioskRestart = time.Now()
 	kioskRestartMu.Unlock()
+	return kioskRestartFn()
+}
 
+// restartSessionUnit restarts greetd over the systemd D-Bus API. A scoped polkit
+// rule (see daemon.nix) grants dashboard-assistant rights to manage only this
+// unit. Restarting re-runs the state-aware launcher, which re-reads /api/state.
+func restartSessionUnit() error {
 	conn, err := dbus.ConnectSystemBus()
 	if err != nil {
 		return fmt.Errorf("connect system bus: %w", err)

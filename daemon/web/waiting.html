@@ -42,6 +42,26 @@
       color: #6ea8fe; font-size: .82rem; word-break: break-all; max-width: 22rem;
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     }
+
+    /* Wi-Fi setup panel. The device is broadcasting its own network and this is
+       the only place its passphrase is ever shown, so the credentials are set in
+       large monospace: someone is reading them off a wall and typing them into a
+       phone. */
+    .wifi { display: none; flex-direction: column; align-items: center; gap: 1rem; }
+    .wifi.show { display: flex; }
+    .wifi img {
+      width: 190px; height: 190px; image-rendering: pixelated;
+      background: #fff; padding: 10px; border-radius: 12px;
+    }
+    .creds { display: grid; grid-template-columns: auto auto; gap: .4rem 1.1rem; align-items: baseline; }
+    .creds dt { color: #9fb0c0; font-size: .9rem; text-align: right; }
+    .creds dd {
+      margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 1.25rem; color: #e8edf2; text-align: left;
+    }
+    .wifi .fallback { color: #9fb0c0; font-size: .88rem; max-width: 26rem; }
+    .wifi .fallback code { color: #6ea8fe; font-size: .95rem; }
+    .wifi .err { color: #ffb4a2; font-size: .95rem; }
   </style>
 </head>
 <body>
@@ -55,6 +75,19 @@
       is discovered automatically — click <b>Add</b>. (Or <b>Add integration → Dashboard Assistant</b>.)</li>
     <li>That's it — a fresh device pairs automatically, and your dashboard appears here.</li>
   </ol>
+
+  <div class="wifi" id="wifi">
+    <img id="wifiqr" alt="QR code that joins the setup Wi-Fi network" src="">
+    <dl class="creds">
+      <dt>Network</dt><dd id="apssid"></dd>
+      <dt>Password</dt><dd id="appsk"></dd>
+    </dl>
+    <p class="fallback">
+      Scan the code with your phone's camera to join, then follow the page that
+      opens. If nothing opens, go to <code id="apurl"></code> in your browser.
+    </p>
+    <p class="err" id="aperr"></p>
+  </div>
 
   <div class="qr" id="qr">
     <img alt="QR code linking to the seed file setup guide"
@@ -72,17 +105,25 @@
     let device = null;
     fetch("/api/info").then((r) => r.json()).then((d) => { device = d; }).catch(() => {});
 
-    // Reflect the current state in the copy. Four cases:
+    // Reflect the current state in the copy. Five cases:
     //   CONNECTING — provisioned/seeded but never yet online (first-time connect)
+    //   ONBOARDING — stranded with no network; the setup AP is up, show how to join
     //   RECONNECT  — was online, link dropped
     //   SETUP      — online, not yet added: guide the user to add it in HA
     //   READY      — handled by poll() (reloads into the dashboard)
     function applyState(state) {
       const setup = state === "SETUP";
-      $("spinner").style.display = setup ? "none" : "";
+      const onboarding = state === "ONBOARDING";
+      $("spinner").style.display = setup || onboarding ? "none" : "";
       $("steps").classList.toggle("show", setup);
+      $("wifi").classList.toggle("show", onboarding);
+      if (onboarding) loadAP();
 
-      if (setup) {
+      if (onboarding) {
+        $("title").textContent = "Connect this display to Wi-Fi";
+        $("subtitle").textContent = "It is broadcasting its own network. Join it from your phone to finish setup.";
+        $("qr").classList.remove("show");
+      } else if (setup) {
         $("title").textContent = "Add this device in Home Assistant";
         $("subtitle").textContent = "It's online and ready. Add it to Home Assistant — no token to type:";
         $("devname").textContent = device && device.name ? " — “" + device.name + "” — " : " ";
@@ -100,6 +141,22 @@
         $("qrcap").textContent = "No network? Set up Wi-Fi with a seed file — scan for how";
         $("qr").classList.add("show");
       }
+    }
+
+    // Setup-AP details. Re-fetched on each ONBOARDING poll so a failed join can
+    // report why: the AP comes back with the same name and passphrase, and the
+    // error is the only new information.
+    async function loadAP() {
+      try {
+        const d = await (await fetch("/api/onboarding")).json();
+        $("apssid").textContent = d.ssid || "—";
+        $("appsk").textContent = d.psk || "—";
+        $("apurl").textContent = (d.portal_url || "").replace(/^https?:\/\//, "");
+        if (!$("wifiqr").src.endsWith("/api/onboarding/qr.png")) {
+          $("wifiqr").src = "/api/onboarding/qr.png";
+        }
+        $("aperr").textContent = d.last_error || "";
+      } catch (_) {}
     }
 
     // Poll state; when READY, the daemon relaunches the kiosk into the dashboard,

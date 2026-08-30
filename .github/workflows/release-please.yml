@@ -68,8 +68,15 @@ jobs:
           version="${TAG#v}"
           case "$TAG" in *-*) channel=pre-release ;; *) channel=release ;; esac
           base="$R2_PUBLIC_URL/$channel"
-          x86="$base/x86_64/dashboard-assistant-$version.raw.zst"
-          pi5="$base/rpi5/dashboard-assistant-$version.img.zst"
+          # <arch>/dashboard-assistant-<arch>-<version>.<ext>: the arch is both the
+          # folder and part of the filename, so a downloaded image is still
+          # identifiable once it's out of its folder. Kept in step with the layout
+          # the image workflows publish (see release-image.yml).
+          x86_name="dashboard-assistant-x86_64-$version.raw.zst"
+          rpi4_name="dashboard-assistant-rpi4-$version.img.zst"
+          rpi5_name="dashboard-assistant-rpi5-$version.img.zst"
+          x86="$base/x86_64/$x86_name"
+          pi5="$base/rpi5/$rpi5_name"
           body=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body -q .body)
           notes=$(mktemp)
           {
@@ -79,9 +86,9 @@ jobs:
             echo
             echo "| Board | Image |"
             echo "|---|---|"
-            echo "| x86_64 | [\`dashboard-assistant-$version.raw.zst\`]($x86) |"
-            echo "| Raspberry Pi 4 | [\`dashboard-assistant-$version.img.zst\`]($base/rpi4/dashboard-assistant-$version.img.zst) |"
-            echo "| Raspberry Pi 5 | [\`dashboard-assistant-$version.img.zst\`]($pi5) |"
+            echo "| x86_64 | [\`$x86_name\`]($x86) |"
+            echo "| Raspberry Pi 4 | [\`$rpi4_name\`]($base/rpi4/$rpi4_name) |"
+            echo "| Raspberry Pi 5 | [\`$rpi5_name\`]($pi5) |"
             echo
             echo "x86_64 — write to the target's internal disk (confirm the device first!):"
             echo '```'

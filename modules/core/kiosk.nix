@@ -70,7 +70,7 @@ let
 
     # Provisioning is seed-only (no on-screen wizard): an unprovisioned or
     # offline device shows the waiting splash until a seed file configures it.
-    # /setup is the admin panel, reached on demand via the waybar Config button.
+    # There is no on-screen admin page at all — recovery is on the LAN listener.
     case "$STATE" in
       READY) URL="$HA_URL" ;;
       *)     URL="${daemonBase}/waiting" ;;
@@ -153,7 +153,11 @@ let
       # flag here too (not just on the Off button), so an HA power-off also
       # lets the next touch re-power the display.
       case "$cmd" in
+        # Power on, then put the backlight back: the compositor restoring the
+        # output does not restore it, so without this the panel stays black
+        # while everything reports success. See brightnessRestore.
         on)  ${pkgs.sway}/bin/swaymsg 'output * power on'  >/dev/null 2>&1 || true
+             ${brightnessRestore} >/dev/null 2>&1 || true
              ${pkgs.coreutils}/bin/rm -f ${displayOffFlag} 2>/dev/null || true
              ${reportDisplayState} on  ;;
         off) ${pkgs.sway}/bin/swaymsg 'output * power off' >/dev/null 2>&1 || true
@@ -197,6 +201,8 @@ let
       fi
       if [ -e ${displayOffFlag} ]; then
         ${pkgs.sway}/bin/swaymsg 'output * power on' >/dev/null 2>&1 || true
+        # Same as the display agent: the output comes back, the backlight does not.
+        ${brightnessRestore} >/dev/null 2>&1 || true
         ${reportDisplayState} on
         ${pkgs.coreutils}/bin/rm -f ${displayOffFlag} 2>/dev/null || true
       fi
@@ -235,41 +241,48 @@ let
         done
   '';
 
-  # Token auto-login: the productionised `just inject-token`. If a token has been
-  # staged (config import / seed), set localStorage `hassTokens` on the HA page
-  # over the loopback CDP port and navigate to the app root, which the app
-  # entrypoint consumes to log in (navigate to /, NOT reload — the
-  # /auth/authorize login screen ignores hassTokens). No token ⇒ no-op.
+  # Token auto-login: the productionised `just inject-token`. When a token has
+  # been staged (config import / seed / Home Assistant pairing), set localStorage
+  # `hassTokens` on the HA page over the loopback CDP port and navigate to the app
+  # root, which the app entrypoint consumes to log in (navigate to /, NOT reload:
+  # the /auth/authorize login screen ignores hassTokens).
   #
-  # This runs at session start, racing Chromium's cold load: the CDP page target
-  # matches the HA origin *before* the real document commits, so an early inject
-  # lands on the throwaway initial document and is lost (leaving the tokenless
-  # load to settle on the login screen). So we gate on the document actually
-  # being on the HA origin, then inject and re-check — retrying until hassTokens
-  # sticks and we're off /auth/*.
+  # It waits for its preconditions instead of racing them, because it has lost
+  # that race both possible ways on real hardware:
+  #
+  #   - Reading the token once at startup meant a token staged later in the
+  #     session (pairing completes a few seconds after boot) was never seen, and
+  #     only a session restart could recover it.
+  #   - Giving up after a fixed number of polls meant a cold Chromium that took
+  #     two minutes to commit its first page on an SD card was never injected
+  #     into, so the tablet sat on the login screen until someone rebooted it.
+  #     Rebooting did not help, because the same race repeated.
+  #
+  # So: re-read the token and the URL every pass, and keep polling until the
+  # session is genuinely logged in. A logged-out kiosk has nothing better to do,
+  # and the cost is a loopback curl every couple of seconds. This also means the
+  # kiosk restart after provisioning is now an optimisation rather than the thing
+  # correctness depends on.
   tokenInjector = pkgs.writeShellScript "ha-token-inject" ''
     set -u
-    if [ ! -r ${tokenPath} ]; then exit 0; fi
-    TOKEN=$(${pkgs.coreutils}/bin/cat ${tokenPath})
-    if [ -z "$TOKEN" ]; then exit 0; fi
 
-    HA_URL="${defaultUrl}"
-    if [ -r /var/lib/dashboard-assistant/runtime.env ]; then
-      # shellcheck disable=SC1091
-      . /var/lib/dashboard-assistant/runtime.env
-    fi
-    # Derive the HA origin (scheme://host[:port]) so we only inject into the HA
-    # page — not the daemon's setup/waiting pages on a different origin.
-    scheme=''${HA_URL%%://*}
-    rest=''${HA_URL#*://}
-    origin="$scheme://''${rest%%/*}"
-
-    # JSON-encode the token once so it is a safe JS string literal.
-    tokjson=$(${lib.getExe pkgs.jq} -cn --arg t "$TOKEN" '$t')
-    inject='localStorage.setItem("hassTokens", JSON.stringify({access_token:'"$tokjson"',token_type:"Bearer",expires_in:315360000,expires:Date.now()+315360000000,refresh_token:"",clientId:null,hassUrl:location.origin})); location.replace(location.origin + "/"); "injected"'
+    # The HA origin (scheme://host[:port]) from the daemon's runtime state, so we
+    # only ever inject into the HA page and not the daemon's setup/waiting pages
+    # on a different origin. Re-read every pass: provisioning rewrites it.
+    origin_of() {
+      HA_URL="${defaultUrl}"
+      if [ -r /var/lib/dashboard-assistant/runtime.env ]; then
+        # shellcheck disable=SC1091
+        . /var/lib/dashboard-assistant/runtime.env
+      fi
+      scheme=''${HA_URL%%://*}
+      rest=''${HA_URL#*://}
+      printf '%s://%s' "$scheme" "''${rest%%/*}"
+    }
 
     # Evaluate a JS expression on the first HA-origin CDP page and print its
-    # value. Empty if there is no such page/target yet.
+    # value. Empty if there is no such page/target yet, which is the normal state
+    # while Chromium is still starting.
     cdp_eval() {
       ws=$(${lib.getExe pkgs.curl} -s --max-time 2 http://localhost:9222/json 2>/dev/null \
         | ${lib.getExe pkgs.jq} -r --arg o "$origin" \
@@ -282,23 +295,53 @@ let
         | ${lib.getExe pkgs.jq} -r '.result.result.value // empty' 2>/dev/null
     }
 
-    # Poll for up to ~120s. status = "<on-HA-origin>|<has-tokens>|<on-/auth/>".
-    # Don't exit on the first "looks logged in": right after the inject the app is
-    # briefly on the app root with tokens before it may bounce back to /auth (mid
-    # OAuth redirect, or a boot-time hiccup). Require a few *consecutive* logged-in
-    # reads so we only stop once it has genuinely settled on the dashboard, and
-    # re-inject if it slips back to the login screen.
-    i=0; ok=0
-    while [ "$i" -lt 60 ]; do
-      i=$((i + 1))
+    token=""; origin=""; inject=""; ok=0; injects=0; delay=2
+
+    while :; do
+      new_token=$(${pkgs.coreutils}/bin/cat ${tokenPath} 2>/dev/null || true)
+      if [ -z "$new_token" ]; then
+        # Nothing staged yet, or not readable. Pairing may still be in flight, so
+        # keep waiting rather than exiting: this is a normal state on a fresh box.
+        ${pkgs.coreutils}/bin/sleep 5
+        continue
+      fi
+      new_origin=$(origin_of)
+
+      # Rebuild the payload only when the inputs actually change, so the steady
+      # state is two loopback calls and no jq churn.
+      if [ "$new_token" != "$token" ] || [ "$new_origin" != "$origin" ]; then
+        token=$new_token
+        origin=$new_origin
+        # JSON-encode the token once so it is a safe JS string literal.
+        tokjson=$(${lib.getExe pkgs.jq} -cn --arg t "$token" '$t')
+        inject='localStorage.setItem("hassTokens", JSON.stringify({access_token:'"$tokjson"',token_type:"Bearer",expires_in:315360000,expires:Date.now()+315360000000,refresh_token:"",clientId:null,hassUrl:location.origin})); location.replace(location.origin + "/"); "injected"'
+        ok=0; injects=0; delay=2
+      fi
+
+      # status = "<on-HA-origin>|<has-tokens>|<on-/auth/>".
+      # Don't stop on the first "looks logged in": right after the inject the app
+      # is briefly on the app root with tokens before it may bounce back to /auth
+      # (mid OAuth redirect, or a boot-time hiccup). Require a few *consecutive*
+      # logged-in reads so we only stop once it has genuinely settled, and
+      # re-inject if it slips back to the login screen.
       st=$(cdp_eval 'String(location.origin==="'"$origin"'"?1:0)+"|"+(localStorage.getItem("hassTokens")?1:0)+"|"+(location.pathname.indexOf("/auth/")===0?1:0)') || st=""
       case "$st" in
-        "")                        ${pkgs.coreutils}/bin/sleep 1; continue ;;  # no page yet
-        "1|1|0")                   ok=$((ok + 1)); [ "$ok" -ge 3 ] && exit 0 ;; # settled on the dashboard
-        "1|0|0" | "1|0|1" | "1|1|1") ok=0; cdp_eval "$inject" >/dev/null ;;     # not logged in — (re)inject
-        *)                         ok=0 ;;                                       # not committed yet — wait
+        "")                        ok=0 ;;                                       # no page yet; keep waiting
+        "1|1|0")                   ok=$((ok + 1)); [ "$ok" -ge 3 ] && exit 0 ;;   # settled on the dashboard
+        "1|0|0" | "1|0|1" | "1|1|1")                                             # not logged in; (re)inject
+          ok=0
+          injects=$((injects + 1))
+          cdp_eval "$inject" >/dev/null
+          # A token HA rejects would otherwise become a page-load storm: it is
+          # cleared on load, we see "not logged in" again, and we reload forever.
+          # Back off so a bad token costs a request a minute, not one every 2s.
+          if [ "$injects" -ge 10 ]; then delay=60
+          elif [ "$injects" -ge 5 ]; then delay=15
+          fi
+          ;;
+        *)                         ok=0 ;;                                       # not committed yet; wait
       esac
-      ${pkgs.coreutils}/bin/sleep 2
+      ${pkgs.coreutils}/bin/sleep "$delay"
     done
   '';
 
@@ -559,6 +602,15 @@ let
   # dashboardAssistant.kiosk.brightness.method forces a tier; "auto" (default) detects.
   brightnessMethod = config.dashboardAssistant.kiosk.brightness.method;
   brightnessEnv = "/var/lib/dashboard-assistant/brightness.env";
+  # The last commanded level (0..100). brightness.env carries the backend and
+  # device; this carries the value, because powering an output back on does not
+  # restore it. On a panel with a real backlight, DPMS-off drives the backlight to
+  # zero and `output * power on` does not drive it back, so the compositor
+  # reports a live output that is physically black. Everything looked fine and
+  # nothing worked: the display entity flipped to on, touch registered, and the
+  # panel stayed dark until a brightness change happened to write a non-zero
+  # value. So the level is persisted on every set and re-applied after power-on.
+  brightnessLevelFile = "/var/lib/dashboard-assistant/brightness-level";
 
   brightnessResolve = pkgs.writeShellScript "ha-brightness-resolve" ''
     set -u
@@ -613,6 +665,7 @@ let
           init=$(( $4 * 100 / $5 ))
         fi ;;
     esac
+    ${pkgs.coreutils}/bin/printf '%s\n' "$init" > ${brightnessLevelFile} 2>/dev/null || true
     ${reportDisplayState} bright "$init"
   '';
 
@@ -647,6 +700,30 @@ let
         ${pkgs.systemd}/bin/busctl --user -- \
           set-property rs.wl-gammarelay / rs.wl.gammarelay Brightness d "$val" >/dev/null 2>&1 || true ;;
     esac
+
+    # Record it so brightnessRestore can put the panel back after a power-on.
+    ${pkgs.coreutils}/bin/printf '%s\n' "$pct" > ${brightnessLevelFile} 2>/dev/null || true
+  '';
+
+  # Re-apply the last commanded level. Called after every `output * power on`,
+  # from both paths that can wake the panel (the HA switch via the display agent,
+  # and wake-on-touch), because the compositor restoring the output does not
+  # restore the backlight.
+  #
+  # Floors at 10 so waking never lands on an unrecoverable black: a kiosk dimmed
+  # to zero and then blanked would otherwise wake to a screen that is on, drawing,
+  # and invisible, with no on-screen way to fix it. Same reasoning as the software
+  # dimmer's own floor.
+  brightnessRestore = pkgs.writeShellScript "ha-brightness-restore" ''
+    set -u
+    pct=100
+    if [ -r ${brightnessLevelFile} ]; then
+      pct=$(${pkgs.coreutils}/bin/cat ${brightnessLevelFile} 2>/dev/null || echo 100)
+    fi
+    case "$pct" in ""|*[!0-9]*) pct=100 ;; esac
+    [ "$pct" -lt 10 ] && pct=10
+    ${brightnessSet} "$pct" >/dev/null 2>&1 || true
+    ${reportDisplayState} bright "$pct"
   '';
 
   # On-screen keyboard toggle, driven by the ⌨ Keyboard button on the bar.
@@ -715,12 +792,19 @@ let
   # Assistant (the HA Display light), so the bar only carries navigation and the
   # keyboard toggle. Each button is a custom module whose on-click runs a command
   # as the kiosk user.
+  #
+  # Nothing here reconfigures the device, and nothing new should. This is a wall
+  # panel that guests touch, so every button has to be safe in the hands of someone
+  # who is not the owner. There used to be a ⚙ Config button opening a panel that
+  # printed the API token and could roll the system back and reboot it; that moved
+  # to the LAN admin listener (daemon/admin.go). The ❤ page carries a read-only
+  # device-info view, which is as far as on-screen introspection goes.
   waybarConfig = pkgs.writeText "ha-kiosk-waybar.json" ''
     {
       "layer": "bottom",
       "position": "bottom",
       "height": 50,
-      "modules-left": ["custom/home", "custom/setup"],
+      "modules-left": ["custom/home"],
       "modules-center": ["custom/prev", "custom/sponsor", "custom/next"],
       "modules-right": ["custom/kbd"],
       "custom/kbd": {
@@ -732,11 +816,6 @@ let
         "format": "🏠  Home",
         "tooltip": false,
         "on-click": "${navHome}"
-      },
-      "custom/setup": {
-        "format": "⚙  Config",
-        "tooltip": false,
-        "on-click": "${cdpNav} ${daemonBase}/setup"
       },
       "custom/prev": {
         "format": "◀  Prev",
@@ -767,12 +846,11 @@ let
       "layer": "bottom",
       "position": "bottom",
       "height": 50,
-      "modules-left": ["custom/home", "custom/setup"],
+      "modules-left": ["custom/home"],
       "modules-center": ["custom/prev", "custom/sponsor", "custom/next"],
       "modules-right": ["custom/kbd"],
       "custom/kbd":     { "format": "⌨", "tooltip": false, "on-click": "${oskToggle}" },
       "custom/home":    { "format": "🏠", "tooltip": false, "on-click": "${navHome}" },
-      "custom/setup":   { "format": "⚙", "tooltip": false, "on-click": "${cdpNav} ${daemonBase}/setup" },
       "custom/prev":    { "format": "◀", "tooltip": false, "on-click": "${pagePrev}" },
       "custom/sponsor": { "format": "❤", "tooltip": false, "on-click": "${cdpNav} ${daemonBase}/sponsor" },
       "custom/next":    { "format": "▶", "tooltip": false, "on-click": "${pageNext}" }
@@ -790,7 +868,6 @@ let
       color: #ffffff;
     }
     #custom-home,
-    #custom-setup,
     #custom-prev,
     #custom-sponsor,
     #custom-next,
@@ -801,7 +878,6 @@ let
       border-radius: 10px;
     }
     #custom-home:active,
-    #custom-setup:active,
     #custom-prev:active,
     #custom-sponsor:active,
     #custom-next:active,
@@ -982,6 +1058,57 @@ in
 
   config = {
     programs.sway.enable = true;
+
+    # Chromium lockdown, enforced by managed policy rather than command-line flags.
+    #
+    # --app= (see kioskLauncher) removes the omnibox and tab strip from the kiosk
+    # window, but it disables no commands: a long-press on the touchscreen still
+    # raises the context menu with "Inspect", and the on-screen keyboard has real
+    # Ctrl/Alt keys injected through /dev/uinput, so Ctrl+N, Ctrl+Shift+I and
+    # Ctrl+O were all reachable with a finger. DevTools on this device is a full
+    # escape: file:///var/lib/dashboard-assistant/token is readable by the kiosk
+    # user, and that token is the owner's long-lived Home Assistant credential.
+    #
+    # programs.chromium writes /etc/chromium/policies/managed/extra.json, which
+    # pkgs.chromium reads at startup.
+    programs.chromium = {
+      enable = true;
+      extraOpts = {
+        # DeveloperToolsAvailability = 2 used to be set here. It cannot be: it
+        # kills the CDP protocol this kiosk is built on, and it does so silently.
+        # Measured on chromium 150, same launcher flags, policy the only variable:
+        # :9222 still listens, /json still lists the page target and still returns
+        # a webSocketDebuggerUrl, and then every command over that socket goes
+        # unanswered. RemoteDebuggingAllowed = true does not rescue it.
+        #
+        # Silent is the important word. Nothing errors and nothing is logged, so
+        # the token injector reads the empty reply as "no page yet" and waits for
+        # a page that is already there, and the waybar buttons, cdpNav page
+        # switching, zoom and theme all stop with no symptom but inaction. It cost
+        # a full debugging session, from an SD-card journal inwards, to find.
+        #
+        # So the escapes that motivated it (long-press "Inspect", and Ctrl+Shift+I
+        # from the uinput keyboard) are unhandled again, and the console can read
+        # localStorage.hassTokens. Anything that closes them has to stay off the
+        # CDP channel: swallow the shortcuts in the compositor, suppress the
+        # context menu on the page, or move these features to an extension.
+        # file:// is the token read; the other two are the remaining context-menu
+        # escapes. chrome:// would otherwise reach settings, net-internals and the
+        # rest of the internal surface.
+        URLBlocklist = [
+          "file://*"
+          "chrome://*"
+          "devtools://*"
+          "view-source:*"
+        ];
+        IncognitoModeAvailability = 1;
+        PrintingEnabled = false;
+        DownloadRestrictions = 3;
+        AllowFileSelectionDialogs = false;
+        BrowserSignin = 0;
+        PasswordManagerEnabled = false;
+      };
+    };
 
     services.greetd = {
       enable = true;

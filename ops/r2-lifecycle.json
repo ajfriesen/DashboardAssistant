@@ -7,6 +7,12 @@
       "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 3 }
     },
     {
+      "ID": "expire-dev",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "dev/" },
+      "Expiration": { "Days": 7 }
+    },
+    {
       "ID": "expire-development",
       "Status": "Enabled",
       "Filter": { "Prefix": "development/" },

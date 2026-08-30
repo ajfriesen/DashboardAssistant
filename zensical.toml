@@ -65,12 +65,13 @@ nav = [
      "getting-started.md",
      {"Flash" = [
         "flash/flash.md",
+        "flash/wifi.md",
         "flash/seed.md",
      ]},
      {"Usage" = [
         "usage/usage.md",
         "usage/audio.md",
-        "usage/diagnostics.md",
+        "usage/admin.md",
      ]},
   ]},
   { "In Action" = "in-action.md" },

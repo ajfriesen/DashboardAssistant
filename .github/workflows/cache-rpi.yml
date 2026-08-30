@@ -25,17 +25,25 @@ name: cache-rpi
 #        --push dashboardassistant).
 # The Attic push only runs on the canonical repo; forks build without it.
 #
-# On a v* tag the flashable SD image is also published to the same Cloudflare R2
-# bucket the x86 image uses (GitHub Actions artifacts are far too slow to download
-# at image sizes), channel/board-structured: release/<model>/ (or pre-release/
-# <model>/ for a hyphened prerelease tag) as an immutable versioned object plus a
-# `latest.img.zst` — mirroring release-image.yml. There are no development images:
-# a regular push only warms the Attic cache above (local `just build-rpi*` and
-# SSH-based updates substitute from it). Requires the same repo config as the
-# release workflow (vars R2_ACCOUNT_ID / R2_BUCKET / R2_PUBLIC_URL, secrets
-# R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY). Without R2_BUCKET the R2 step is
-# skipped and the image falls back to a (slow) workflow artifact so forks building
-# a tag still get something flashable.
+# When an SD image is built it goes to the same Cloudflare R2 bucket the x86_64 image
+# uses, never to the run itself — GitHub Actions artifacts are far too slow to
+# move an image this size. The layout mirrors release-image.yml, with the board as
+# both the directory and part of the filename:
+#   release/<board>/dashboard-assistant-<board>-<version>.img.zst
+#   release/<board>/latest.img.zst                    (newest full release)
+#   pre-release/<board>/…               (same, for a hyphened SemVer tag)
+#   dev/<board>/dashboard-assistant-<board>-<commit>.img.zst
+# A v* tag publishes a release; a manual run publishes a dev build keyed by the
+# short commit, so a branch can be tested without ever touching the `latest`
+# pointer people flash. dev/ objects are swept after 7 days by the bucket
+# lifecycle policy (ops/r2-lifecycle.json). A plain push to main builds no image
+# at all — it only warms the Attic cache above, which is what local
+# `just build-rpi*` and SSH-based updates substitute from.
+#
+# Needs the same repo config as the release workflow (vars R2_ACCOUNT_ID /
+# R2_BUCKET / R2_PUBLIC_URL, secrets R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY).
+# Without R2_BUCKET — a fork — the image is still built and checked, there is just
+# nowhere to publish it to.
 
 on:
   workflow_dispatch:
@@ -116,23 +124,23 @@ jobs:
             .#nixosConfigurations.dashboard-assistant-${{ matrix.model }}.config.system.build.toplevel \
             --out-link result-toplevel
 
-      # The flashable image is only built (and published) for a v* tag release —
-      # there are no development images, so a regular push just warms the cache
-      # above.
+      # Built for a v* tag release, and on a manual run so a branch can produce a
+      # flashable image to test with. A push to main only warms the cache above.
       - name: Build Pi image
-        if: ${{ github.ref_type == 'tag' }}
+        if: ${{ github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' }}
         run: |
           nix build --print-build-logs --accept-flake-config \
             .#packages.aarch64-linux.${{ matrix.model }}-image \
             --out-link result-${{ matrix.model }}
 
-      # Publish the flashable SD image to R2 on a v* tag, channel/board-structured
-      # (mirrors release-image.yml): release/<model>/ or pre-release/<model>/ for a
-      # hyphened prerelease tag, as an immutable versioned object plus a `latest`
-      # pointer. The sd-image is already zstd-compressed, so we cp it straight to
-      # R2. Skipped without R2_BUCKET (see the artifact fallback below).
+      # Publish the flashable SD image to R2 (mirrors release-image.yml): a v* tag
+      # goes to release/<board>/ — or pre-release/<board>/ for a hyphened
+      # prerelease tag — as an immutable versioned object plus a `latest` pointer;
+      # a manual run goes to dev/<board>/ keyed by the short commit, with no
+      # pointer, so a test build can never become the image people flash. The
+      # sd-image is already zstd-compressed, so we cp it straight to R2.
       - name: Publish SD image to R2
-        if: ${{ github.ref_type == 'tag' && vars.R2_BUCKET != '' }}
+        if: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && vars.R2_BUCKET != '' }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -142,16 +150,29 @@ jobs:
           model="${{ matrix.model }}"
           bucket="${{ vars.R2_BUCKET }}"
           img=$(ls result-"$model"/sd-image/*.img.zst)
-          version="${GITHUB_REF_NAME#v}"
-          case "$GITHUB_REF_NAME" in *-*) channel=pre-release ;; *) channel=release ;; esac
-          name="dashboard-assistant-${version}.img.zst"
-          dir="$channel/$model"
           nixos=$(nix eval --raw ".#nixosConfigurations.dashboard-assistant-${model}.config.system.nixos.version")
+          baked=$(nix eval --raw \
+            ".#nixosConfigurations.dashboard-assistant-${model}.config.environment.etc.\"dashboard-assistant/version\".text")
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            version="${GITHUB_REF_NAME#v}"
+            case "$GITHUB_REF_NAME" in *-*) channel=pre-release ;; *) channel=release ;; esac
+            id="$version"
+          else
+            # Dev build: the commit is the identity, not the version.
+            version="$baked"
+            channel=dev
+            id="${GITHUB_SHA::7}"
+          fi
+          dir="$channel/$model"
+          name="dashboard-assistant-$model-$id.img.zst"
           sha=$(sha256sum "$img" | cut -d' ' -f1)
           built=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          # Metadata (x-amz-meta-*) attached to both objects; see release-image.yml.
-          meta="board=$model,arch=aarch64,channel=$channel,version=$version,tag=$GITHUB_REF_NAME,commit=$GITHUB_SHA,nixos-version=$nixos,built=$built,sha256=$sha,run-url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          for key in "$dir/$name" "$dir/latest.img.zst"; do
+          # Metadata (x-amz-meta-*) attached to every object; see release-image.yml.
+          # `ref` is the tag on a release build and the branch on a dev one.
+          meta="board=$model,arch=aarch64,channel=$channel,version=$version,ref=$GITHUB_REF_NAME,commit=$GITHUB_SHA,nixos-version=$nixos,built=$built,sha256=$sha,run-url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          keys=("$dir/$name")
+          [ "$channel" = dev ] || keys+=("$dir/latest.img.zst")
+          for key in "${keys[@]}"; do
             aws s3 cp "$img" "s3://$bucket/$key" \
               --endpoint-url "$R2_ENDPOINT" \
               --content-type application/zstd \
@@ -166,15 +187,19 @@ jobs:
             echo "nixos \`$nixos\` · commit \`${GITHUB_SHA::7}\` · sha256 \`$sha\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # Fallback for forks without R2 config building a tag: hand the release image
-      # out as a (slow) workflow artifact so there's still something flashable.
-      - name: Upload SD image artifact
-        if: ${{ github.ref_type == 'tag' && vars.R2_BUCKET == '' }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: dashboard-assistant-${{ matrix.model }}-image
-          path: result-${{ matrix.model }}/sd-image/*.img.zst
-          if-no-files-found: error
+      # A fork without R2 config: the image is built and checked, but there is
+      # nowhere to put it — and it is far too large to hand back as a run
+      # artifact, so say so plainly instead of failing at the upload.
+      - name: Note that publishing was skipped
+        if: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && vars.R2_BUCKET == '' }}
+        run: |
+          {
+            echo "### ${{ matrix.model }} image built, not published"
+            echo
+            echo "\`R2_BUCKET\` is not configured for this repository, so there is"
+            echo "nowhere to publish the image to. See the workflow header for the"
+            echo "variables and secrets it needs."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Push closures to Attic
         if: ${{ github.repository == 'ajfriesen/DashboardAssistant' }}

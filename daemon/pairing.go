@@ -1,102 +1,72 @@
 package main
 
-import (
-	"os"
-	"sync"
-	"time"
-)
+import "os"
 
-// Pairing implements typing-free, presence-gated enrollment of the device into
-// Home Assistant. The device's HA API token is a secret the operator otherwise
-// has to read off the Config screen and type into Home Assistant by hand. Instead
-// the Home Assistant config flow fetches it automatically over an unauthenticated
-// endpoint on the LAN listener (POST /api/ha/pair) — but only during a short
-// window the operator opens by pressing "Pair" on the loopback Config panel.
-// Reaching that panel already requires physical presence at the device (the kiosk
-// Config button navigates the local browser to the loopback :8080 surface), so
-// arming the window is the authorization. Outside the window the endpoint reveals
-// nothing. A preseeded/fleet build can hold the window permanently open for
-// zero-touch enrollment (see pairAutoConfirm); the token is still only ever handed
-// out over the LAN listener, never broadcast in mDNS.
+// Pairing implements typing-free enrollment of the device into Home Assistant.
+// The Home Assistant config flow fetches the device's API token automatically
+// over an unauthenticated endpoint on the LAN listener (POST /api/ha/pair), and
+// that endpoint only answers while the device has not yet been paired.
+//
+// The gate used to be "is the device unprovisioned", which conflated two
+// unrelated facts: whether the device knows its Home Assistant URL, and whether
+// it has already handed its token to anyone. That broke every preconfigured
+// device — a seed file carrying ha_url marks the device provisioned before it has
+// ever met Home Assistant, so pairing was refused on a device nobody had paired.
+// The question that actually matters is whether the token has already reached the
+// integration, so that is what is asked now.
+//
+// The window therefore closes on first *use* of the token (see HAHub.notePaired),
+// not on the claim itself. A claim Home Assistant fails to complete — it cannot
+// reach the device back, the flow is abandoned halfway — leaves pairing open, so
+// retrying works instead of requiring a factory reset.
+//
+// There used to be an on-screen "Pair" button that armed a 90-second window on a
+// provisioned device, on the theory that reaching the loopback Config panel proved
+// physical presence. That theory does not survive a tablet on a hallway wall, so
+// the button and the window are gone. Re-pairing goes through a factory reset,
+// which clears the paired marker along with the rest of the device's state. The
+// token is still only ever handed out over the LAN listener, never broadcast in
+// mDNS, and never over the Wi-Fi setup AP (see notOnSetupAP).
+//
+// Upgrade note: a device that was already paired under the old rule has no marker
+// yet, so its window reopens until the integration's next authenticated request
+// writes one — which is immediate on any live install, since the coordinator
+// connects and opens its event stream as soon as it can reach the device. There is
+// deliberately no migration that infers the marker from the provisioned flag: that
+// flag is exactly the thing that cannot tell a paired device from a seeded one,
+// and guessing wrong would relock the devices this change exists to unblock.
 type Pairing struct {
 	token string
 	auto  bool // window always open (preprovisioned fleet)
-
-	mu         sync.Mutex
-	armedUntil time.Time
 }
 
-// pairWindow is how long a single "Pair" press keeps the hand-off open. Long
-// enough to switch to Home Assistant and add the discovered device, short enough
-// that a forgotten window closes on its own.
-const pairWindow = 90 * time.Second
-
 // NewPairing builds the pairing gate for the device token. Auto-confirm is read
-// once at start: it is a build/seed property, not a runtime toggle.
+// once at start: it is a build property, not a runtime toggle.
 func NewPairing(token string) *Pairing {
 	return &Pairing{token: token, auto: pairAutoConfirm()}
 }
 
-// pairAutoConfirm reports whether the pairing window is always open — zero-touch
-// enrollment for preprovisioned fleets, set via the Nix module / seed. Devices on
-// an untrusted network should leave it off and use the on-screen Pair button.
+// pairAutoConfirm reports whether the pairing window is always open — repeatable
+// zero-touch enrollment for fleets that are re-added to Home Assistant without a
+// factory reset, set via dashboardAssistant.haApi.pairAutoConfirm in the image.
+// Devices on an untrusted network should leave it off; a reset is then the way to
+// re-pair.
 func pairAutoConfirm() bool {
 	return os.Getenv("DASHBOARD_ASSISTANT_PAIR_AUTO") == "1"
 }
 
-// Arm opens the pairing window for pairWindow, returning when it expires. Called
-// from the loopback Config screen when the operator presses "Pair".
-func (p *Pairing) Arm() time.Time {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.armedUntil = time.Now().Add(pairWindow)
-	return p.armedUntil
-}
-
-// Disarm closes the window immediately (the operator cancelled).
-func (p *Pairing) Disarm() {
-	p.mu.Lock()
-	p.armedUntil = time.Time{}
-	p.mu.Unlock()
-}
-
-// open reports whether pairing accepts a claim without an explicit arm: the build
-// auto-confirms, or the device is still unprovisioned. A fresh, never-added kiosk
-// is in onboarding — it pairs with Home Assistant with no on-device step, so the
-// guided "Add me in HA" screen just works. Once provisioned the device re-locks
-// and re-pairing requires an explicit Pair press on the Config screen.
+// open reports whether pairing accepts a claim: the build auto-confirms, or the
+// device has never been paired. A kiosk that has not been added to Home Assistant
+// yet pairs with no on-device step, whether it was set up by hand or seeded from a
+// USB stick. Once Home Assistant has used the token the device locks, and the way
+// back is a factory reset from the admin page.
 func (p *Pairing) open() bool {
-	return p.auto || !Provisioned()
+	return p.auto || !Paired()
 }
 
-// Remaining returns the seconds left in the window (0 when closed), for the
-// Config screen countdown and the status endpoint.
-func (p *Pairing) Remaining() int {
-	if p.open() {
-		return int(pairWindow / time.Second)
-	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if d := time.Until(p.armedUntil); d > 0 {
-		return int(d.Seconds())
-	}
-	return 0
-}
-
-// Claim returns the token and closes the window when pairing is open, so a
-// successful hand-off consumes it (single-shot): if a second party on the LAN
-// races Home Assistant for the token, only one of them wins and the operator sees
-// the other attempt fail rather than both succeeding silently. Auto-confirm never
-// consumes — a fleet network is trusted and may enroll repeatedly. Returns
-// ("", false) when the window is closed.
+// Claim returns the token when pairing is open. Returns ("", false) otherwise.
 func (p *Pairing) Claim() (string, bool) {
 	if p.open() {
-		return p.token, true
-	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if time.Now().Before(p.armedUntil) {
-		p.armedUntil = time.Time{} // consume the window
 		return p.token, true
 	}
 	return "", false

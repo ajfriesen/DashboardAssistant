@@ -1,8 +1,14 @@
 // Command dashboard-assistant-api is the management daemon for Dashboard Assistant OS.
 //
 // It owns first-boot provisioning: it computes the device state (SETUP /
-// RECONNECT / READY) that the Cage/Chromium launcher polls, serves the
-// on-screen setup wizard, and drives NetworkManager over D-Bus to join Wi-Fi.
+// ONBOARDING / CONNECTING / RECONNECT / READY) that the Cage/Chromium launcher
+// polls, serves the on-screen splash/sponsor pages, and drives NetworkManager over
+// D-Bus to join Wi-Fi. A device that cannot reach any network raises its own setup
+// access point and a captive portal instead — see onboarding.go and portal.go.
+//
+// Nothing on the device screen reconfigures the device: the kiosk is a wall panel
+// that guests touch. Recovery (rollback, factory reset) lives on a separate LAN
+// listener instead — see admin.go.
 package main
 
 import (
@@ -18,6 +24,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	qrcode "github.com/skip2/go-qrcode"
 )
 
 //go:embed web
@@ -29,15 +37,16 @@ type State string
 const (
 	StateSetup      State = "SETUP"      // fresh device — show the seed/awaiting-config splash
 	StateConnecting State = "CONNECTING" // provisioned but never yet online — first-time connect
+	StateOnboarding State = "ONBOARDING" // stranded with no network — the setup AP is up, show how to join it
 	StateReconnect  State = "RECONNECT"  // provisioned, was online, link dropped — reconnecting
 	StateReady      State = "READY"      // provisioned and online — show HA
 )
 
 type server struct {
-	nm    *NetworkManager // nil if no Wi-Fi device / D-Bus unavailable
-	ha    *HAHub          // owns the HA API state + SSE subscribers
-	pages *Pages          // the pushable page list + current index
-	diag  *diagSession    // one-time code for the opt-in LAN diagnostics page
+	nm      *NetworkManager // nil if no Wi-Fi device / D-Bus unavailable
+	ha      *HAHub          // owns the HA API state + SSE subscribers
+	pages   *Pages          // the pushable page list + current index
+	onboard *Onboarding     // owns the Wi-Fi setup AP; nil on wired-only hosts
 }
 
 // deriveState implements the first-boot decision flow.
@@ -49,6 +58,14 @@ func (s *server) deriveState() State {
 	if s.nm == nil || !s.nm.Connected() {
 		if WasOnline() {
 			return StateReconnect
+		}
+		// Stranded and never yet online: if the setup AP is up, the splash has
+		// something far more useful to show than a spinner. Read the manager's
+		// published flag only — deriveState is called from an HTTP handler the
+		// splash polls every 5s, so it must stay free of side effects and must
+		// never block on a radio operation.
+		if s.onboard != nil && s.onboard.Active() {
+			return StateOnboarding
 		}
 		return StateConnecting
 	}
@@ -87,7 +104,11 @@ func main() {
 	rot := NewRotation()
 	snd := NewSendspin()
 	hub := NewHAHub(loadAPIToken(), disp, pages, act, upd, zoom, theme, rot, snd)
-	srv := &server{nm: nm, ha: hub, pages: pages, diag: newDiagSession()}
+	hub.SetNetwork(nm)
+	srv := &server{nm: nm, ha: hub, pages: pages}
+	if nm != nil {
+		srv.onboard = NewOnboarding(nm, envOr("DASHBOARD_ASSISTANT_AP_CHANNEL", "6"))
+	}
 
 	// The Sendspin player's unit has no install target — this daemon owns its
 	// on/off state — so the persisted choice has to be applied on every boot.
@@ -129,10 +150,9 @@ func main() {
 	})
 	mux.HandleFunc("/api/state", srv.handleState)
 
-	// On-device admin panel + waiting splash — loopback only (the kiosk browser
-	// is local). Provisioning is seed-only (see /api/import); the panel exposes
-	// just the read-only Info and Recovery tabs, nothing that re-points the kiosk.
-	mux.Handle("/setup", loopbackOnly(http.HandlerFunc(srv.handleSetupPage)))
+	// Waiting splash — loopback only (the kiosk browser is local). Provisioning is
+	// seed-only (see /api/import), and there is deliberately no on-screen panel
+	// that can re-point or recover the kiosk; that lives on the admin listener.
 	mux.Handle("/waiting", loopbackOnly(http.HandlerFunc(srv.handleWaitingPage)))
 	// Sponsor splash — reached from the ❤ button on the kiosk bar. Static page
 	// (importance of sponsoring + a QR to GitHub Sponsors); loopback only like the
@@ -144,46 +164,28 @@ func main() {
 	// Page navigation (waybar Prev/Next buttons). The page list itself is managed
 	// through the HA integration (the "Page N" text slots), not the web UI.
 	mux.Handle("/api/nav", loopbackOnly(http.HandlerFunc(srv.handleNav)))
-	// Read-only device info for the setup UI's Info tab (identity + network).
+	// Read-only device info, shown behind the sponsor page's info button and
+	// re-served verbatim on the admin listener. Carries no secret.
 	mux.Handle("/api/info", loopbackOnly(http.HandlerFunc(srv.handleInfo)))
-	// Pairing: the Config screen's "Pair" button opens a short window during which
-	// Home Assistant can fetch the API token over the LAN listener without anyone
-	// typing it. Loopback only — reaching this is the physical-presence proof.
-	mux.Handle("/api/pair/arm", loopbackOnly(http.HandlerFunc(srv.handlePairArm)))
-	mux.Handle("/api/pair/status", loopbackOnly(http.HandlerFunc(srv.handlePairStatus)))
-	// Recovery: list bootable generations and roll back into one (reboots).
-	mux.Handle("/api/generations", loopbackOnly(http.HandlerFunc(srv.handleGenerations)))
-	mux.Handle("/api/rollback", loopbackOnly(http.HandlerFunc(srv.handleRollback)))
 
-	// Opt-in LAN diagnostics (modules/core/diagnostics.nix sets the env). The code
-	// is minted here on the loopback panel; the redacted logs are served on a
-	// separate LAN listener below so :8080 stays loopback-only.
-	if diagEnabled() {
-		mux.Handle("/api/diag/session", loopbackOnly(http.HandlerFunc(srv.handleDiagSession)))
-		go serveDiag(srv)
+	// Wi-Fi setup AP + captive portal, for a device with no seed file and no
+	// Ethernet that would otherwise sit on "Connecting…" forever. See onboarding.go.
+	if srv.onboard != nil {
+		mux.Handle("/api/onboarding", loopbackOnly(http.HandlerFunc(srv.handleOnboarding)))
+		mux.Handle("/api/onboarding/qr.png", loopbackOnly(http.HandlerFunc(srv.handleOnboardingQR)))
+		go srv.onboard.Run()
+		go servePortal(srv)
 	}
+
+	// Recovery over the LAN: the screen has no way to roll back or reset, so this
+	// is the only one. Unauthenticated by design — see admin.go.
+	go serveAdmin(srv)
 
 	mux.HandleFunc("/", srv.handleRoot)
 
 	log.Printf("dashboard-assistant-api listening on %s (state=%s)", addr, srv.deriveState())
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatalf("server error: %v", err)
-	}
-}
-
-// diagEnabled reports whether the opt-in LAN diagnostics feature is on.
-func diagEnabled() bool { return os.Getenv("DASHBOARD_ASSISTANT_DIAG") == "1" }
-
-// serveDiag runs the dedicated LAN diagnostics listener: only the code-entry
-// page and the code-gated log endpoint, nothing from the admin surface.
-func serveDiag(srv *server) {
-	addr := envOr("DASHBOARD_ASSISTANT_DIAG_ADDR", ":8099")
-	dmux := http.NewServeMux()
-	dmux.HandleFunc("/diag", srv.handleDiagPage)
-	dmux.HandleFunc("/api/diag", srv.handleDiagData)
-	log.Printf("diagnostics listening on %s", addr)
-	if err := http.ListenAndServe(addr, dmux); err != nil {
-		log.Printf("diagnostics server error: %v", err)
 	}
 }
 
@@ -194,8 +196,7 @@ func (s *server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	}
 	// Point a human who hits the daemon directly at the waiting splash. Fresh
 	// devices are provisioned from a seed file, not an on-screen wizard, so there
-	// is nothing interactive to send them to; /setup is the admin panel reached
-	// via the on-screen Config button.
+	// is nothing interactive to send them to. Recovery is on the admin listener.
 	http.Redirect(w, r, "/waiting", http.StatusFound)
 }
 
@@ -203,8 +204,30 @@ func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"state": string(s.deriveState())})
 }
 
-func (s *server) handleSetupPage(w http.ResponseWriter, r *http.Request) {
-	serveEmbedded(w, "web/setup.html")
+// handleOnboarding feeds the splash's setup-AP panel: the network name, the
+// passphrase, the portal URL and the last join error. Loopback only; this is the
+// tablet's own screen, and the passphrase on it is the credential for a network
+// that exists only on a device with nothing yet worth taking.
+func (s *server) handleOnboarding(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.onboard.Info())
+}
+
+// handleOnboardingQR renders the WIFI: join code. Unlike the sponsor page's
+// build-time PNG this one is per-device, so it has to be generated at runtime.
+func (s *server) handleOnboardingQR(w http.ResponseWriter, r *http.Request) {
+	payload := s.onboard.Info().QRPayload
+	if payload == "" {
+		http.Error(w, "no access point", http.StatusNotFound)
+		return
+	}
+	png, err := qrcode.Encode(payload, qrcode.Medium, 320)
+	if err != nil {
+		http.Error(w, "qr encode", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write(png)
 }
 
 func (s *server) handleWaitingPage(w http.ResponseWriter, r *http.Request) {
@@ -272,9 +295,15 @@ func (s *server) handleNav(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"page": s.pages.CurrentLabel()})
 }
 
-// handleInfo returns read-only device identity + network details for the setup
-// UI's Info tab. The node id / machine id are surfaced here (rather than in the
-// device name) so they're discoverable without cluttering the label.
+// handleInfo returns read-only device identity + network details. The node id /
+// machine id are surfaced here (rather than in the device name) so they're
+// discoverable without cluttering the label.
+//
+// It deliberately carries no secret. It used to return the device API token for
+// the old on-screen Config panel, which meant anyone who walked up to the tablet
+// could read the bearer token for the :8081 API — factory reset, OS downgrade,
+// arbitrary dashboard URLs. The token now only ever leaves via /api/ha/pair. Keep
+// it that way: this payload is also served unauthenticated on the LAN listener.
 func (s *server) handleInfo(w http.ResponseWriter, r *http.Request) {
 	haURL, _ := readHAURL()
 	writeJSON(w, http.StatusOK, map[string]string{
@@ -288,85 +317,20 @@ func (s *server) handleInfo(w http.ResponseWriter, r *http.Request) {
 		"serial":     readSerial(),
 		"version":    installedVersion(),
 		"ha_url":     haURL,
-		// Shown on the Config screen so the operator can add the device to Home
-		// Assistant: the API endpoint the integration connects to, and its token.
-		"api_url":   fmt.Sprintf("http://%s%s", primaryIP(), apiPort()),
-		"api_token": s.ha.token,
+		// The API endpoint the Home Assistant integration connects to. The token it
+		// needs is handed over by /api/ha/pair, never printed here.
+		"api_url": fmt.Sprintf("http://%s%s", primaryIP(), apiPort()),
 	})
 }
 
-// handlePairArm opens the pairing window so Home Assistant can fetch the API
-// token without the operator typing it. Loopback-only: reaching this from the
-// on-screen Config panel is the physical-presence proof that authorises the
-// hand-off. Returns the seconds the window stays open.
-func (s *server) handlePairArm(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "POST only"})
-		return
-	}
-	s.ha.pair.Arm()
-	writeJSON(w, http.StatusOK, map[string]any{
-		"armed":      true,
-		"expires_in": s.ha.pair.Remaining(),
-		"api_url":    fmt.Sprintf("http://%s%s", primaryIP(), apiPort()),
-	})
-}
-
-// handlePairStatus reports the remaining pairing window, for the Config screen's
-// live countdown.
-func (s *server) handlePairStatus(w http.ResponseWriter, r *http.Request) {
-	rem := s.ha.pair.Remaining()
-	writeJSON(w, http.StatusOK, map[string]any{"armed": rem > 0, "expires_in": rem})
-}
-
-// apiPort returns the ":<port>" suffix of the HA API listener for display in the
-// Config screen's connection hint.
+// apiPort returns the ":<port>" suffix of the HA API listener, for the api_url
+// reported by handleInfo.
 func apiPort() string {
 	addr := envOr("DASHBOARD_ASSISTANT_API_ADDR", ":8081")
 	if _, port, err := net.SplitHostPort(addr); err == nil && port != "" {
 		return ":" + port
 	}
 	return addr
-}
-
-// handleGenerations lists the bootable NixOS generations for the recovery UI.
-func (s *server) handleGenerations(w http.ResponseWriter, r *http.Request) {
-	gens, err := listGenerations()
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"generations": gens, "current": currentGeneration()})
-}
-
-// handleRollback boots into the requested generation (switches the profile and
-// reboots, via the privileged dashboard-assistant-rollback@ unit). POST {"generation": N}.
-func (s *server) handleRollback(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "POST only"})
-		return
-	}
-	var req struct {
-		Generation int `json:"generation"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "bad json"})
-		return
-	}
-	if !generationExists(req.Generation) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "no such generation"})
-		return
-	}
-	if req.Generation == currentGeneration() {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "already the current generation"})
-		return
-	}
-	if err := bootGeneration(req.Generation); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	log.Printf("rollback: booting generation %d", req.Generation)
-	writeJSON(w, http.StatusOK, map[string]any{"state": "rebooting", "generation": req.Generation})
 }
 
 // watchDisplayState tails the reverse FIFO, reporting each "on"/"off" line the
@@ -421,7 +385,15 @@ func watchReadyTransition(srv *server) {
 	for range time.Tick(3 * time.Second) {
 		// Once the link is up, remember it — future offline spells are "reconnecting",
 		// not a first-time "connecting". Idempotent after the first write.
-		if srv.nm != nil && srv.nm.Connected() {
+		//
+		// Never while onboarding owns the radio. `online-once` is a one-way marker
+		// cleared only by a factory reset, so if the setup AP were ever mistaken
+		// for a real connection here, that device would permanently lose the
+		// ability to show the AP again. NetInfo already excludes AP connections;
+		// this is the second lock on the same door, and it turns a brick into a
+		// blip if the first one ever fails.
+		if srv.nm != nil && srv.nm.Connected() &&
+			(srv.onboard == nil || !srv.onboard.Active()) {
 			markOnline()
 		}
 		cur := srv.deriveState()
@@ -450,6 +422,35 @@ func loopbackOnly(next http.Handler) http.Handler {
 		if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// notOnSetupAP rejects requests that arrived over the Wi-Fi setup access point.
+//
+// The mirror image of loopbackOnly, and it exists because the setup AP breaks the
+// assumption the admin listener was built on. That listener is unauthenticated on
+// the reasoning that reaching it means you are already on the owner's LAN. The
+// setup AP is a network segment where that is false and whose join credential is
+// printed on the tablet's screen, so without this a phone that joined it could
+// factory-reset or roll back the device, and could claim the device API token from
+// /api/ha/pair (which answers unauthenticated precisely while unprovisioned, which
+// is exactly the state an onboarding device is in).
+//
+// It keys off the *local* address the connection was accepted on, not the peer's,
+// which is what makes it exact: only sockets accepted on the AP address are refused.
+func notOnSetupAP(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if local, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr); ok {
+			host, _, err := net.SplitHostPort(local.String())
+			if err != nil {
+				host = local.String()
+			}
+			if host == apAddress {
+				http.Error(w, "not available during Wi-Fi setup", http.StatusForbidden)
+				return
+			}
 		}
 		next.ServeHTTP(w, r)
 	})

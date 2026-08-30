@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Set up Dashboard Assistant</title>
+  <!-- Every byte of this page is inline on purpose. It is served over an access
+       point with no route to the internet, so a single external stylesheet, font
+       or favicon would hang and, on iOS, leave the captive sheet blank. -->
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: system-ui, sans-serif; background: #10151c; color: #e8edf2;
+      min-height: 100vh; padding: 6vh 6vw 4rem; line-height: 1.5;
+    }
+    .card { max-width: 30rem; margin: 0 auto; }
+    h1 { font-size: 1.4rem; margin: 0 0 .35rem; font-weight: 650; }
+    .sub { color: #9fb0c0; font-size: .95rem; margin: 0 0 1.75rem; }
+    label { display: block; margin: 1.1rem 0 .35rem; font-size: .95rem; color: #9fb0c0; }
+    input {
+      width: 100%; font-size: 1.1rem; padding: .85rem 1rem; border-radius: 12px;
+      border: 1px solid #2a3644; background: #182029; color: #e8edf2;
+    }
+    button {
+      width: 100%; margin-top: 1.5rem; font-size: 1.1rem; padding: .9rem 1rem;
+      border-radius: 12px; border: 1px solid #2f81f7; background: #2f81f7;
+      color: #fff; font-weight: 600; touch-action: manipulation;
+    }
+    button:disabled { opacity: .5; }
+    .reveal {
+      display: flex; align-items: center; gap: .5rem; margin-top: .6rem;
+      color: #9fb0c0; font-size: .9rem;
+    }
+    .reveal input { width: auto; }
+    .note {
+      margin-top: 1.75rem; padding: .9rem 1rem; border-radius: 12px;
+      background: #182029; border: 1px solid #2a3644;
+      color: #9fb0c0; font-size: .88rem;
+    }
+    .note b { color: #e8edf2; }
+    .err {
+      margin-bottom: 1.5rem; padding: .9rem 1rem; border-radius: 12px;
+      background: #2a1a17; border: 1px solid #b3391f; color: #ffb4a2; font-size: .92rem;
+    }
+    .hidden { display: none; }
+    #done h1 { margin-bottom: .75rem; }
+    #done p { color: #9fb0c0; }
+  </style>
+</head>
+<body>
+  <div class="card">
+
+    <div id="form">
+      <h1>Connect this display to Wi-Fi</h1>
+      <p class="sub">Enter the network you want the display to join.</p>
+
+      <div id="err" class="err hidden"></div>
+
+      <label for="ssid">Network name</label>
+      <input id="ssid" type="text" autocomplete="off" autocapitalize="none"
+             autocorrect="off" spellcheck="false" placeholder="Your Wi-Fi name">
+
+      <label for="psk">Password</label>
+      <input id="psk" type="password" autocomplete="off" autocapitalize="none"
+             autocorrect="off" spellcheck="false" placeholder="Leave empty if open">
+      <label class="reveal"><input id="reveal" type="checkbox"> Show password</label>
+
+      <button id="join" type="button">Connect</button>
+
+      <!-- The name has to be typed rather than picked from a list: the radio
+           cannot scan while it is broadcasting this network. Say so, or it reads
+           as an omission. -->
+      <div class="note">
+        Type the name exactly as it appears on your phone, including capitals.
+        The display cannot search for networks while it is broadcasting this one.
+      </div>
+    </div>
+
+    <div id="done" class="hidden">
+      <h1>Connecting…</h1>
+      <p>
+        <b>This Wi-Fi network is about to disappear</b>, and your phone will drop
+        back to its usual network. That is expected.
+      </p>
+      <p>
+        Watch the display: it will show your dashboard once it is connected.
+      </p>
+      <p>
+        If this setup network comes back instead, the password was wrong. Rejoin it
+        and try again.
+      </p>
+    </div>
+
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    $("reveal").addEventListener("change", (e) => {
+      $("psk").type = e.target.checked ? "text" : "password";
+    });
+
+    // A previous attempt may have failed, in which case the device put this
+    // network back up so we could say why.
+    (async () => {
+      try {
+        const d = await (await fetch("/api/portal/status")).json();
+        if (d.last_error) {
+          $("err").textContent = d.last_error;
+          $("err").classList.remove("hidden");
+          if (d.ssid_attempt) $("ssid").value = d.ssid_attempt;
+        }
+      } catch (e) { /* offline by design; the form still works */ }
+    })();
+
+    $("join").addEventListener("click", async () => {
+      const ssid = $("ssid").value.trim();
+      if (!ssid) {
+        $("err").textContent = "Enter your network name.";
+        $("err").classList.remove("hidden");
+        return;
+      }
+      $("join").disabled = true;
+      try {
+        const r = await fetch("/api/portal/join", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ssid, psk: $("psk").value }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || r.statusText);
+        // Paint this before the radio switches. Once it does, this page cannot
+        // reach the device again.
+        $("form").classList.add("hidden");
+        $("done").classList.remove("hidden");
+      } catch (e) {
+        $("err").textContent = e.message;
+        $("err").classList.remove("hidden");
+        $("join").disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

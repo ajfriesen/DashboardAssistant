@@ -40,8 +40,8 @@ The panel doesn't just *show* Home Assistant — it reports back into it as a
 device.
 
 - A **first-party integration**, installable via [HACS](https://hacs.xyz/).
-- Home Assistant **discovers the device over mDNS** and pairs with an API token
-  shown on the device's Config → Info screen.
+- Home Assistant **discovers the device over mDNS** and claims the API token
+  itself while the device is still unprovisioned, so there is no code to type.
 - **No MQTT broker required** — it talks to Home Assistant directly.
 - Exposes controls and sensors: display on/off, brightness, zoom, dark mode,
   rotation, screenshot, reboot / shutdown, updates, plus battery, temperature,
@@ -55,7 +55,8 @@ full list.
 The device is configured entirely from a small **YAML seed file** (Home
 Assistant URL, token, Wi-Fi, dashboard URLs, optional integration token) dropped
 on a USB stick or the boot partition — no on-screen wizard, so a person at the
-panel can't re-point the device. The on-device Config panel is read-only.
+panel can't re-point the device. The screen shows a read-only info view and
+nothing else; rollback and factory reset live on a LAN-only admin page.
 
 ## Hardware
 

@@ -8,9 +8,9 @@ package main
 // stream; there is no MQTT broker.
 //
 // The API runs on its own listener (DASHBOARD_ASSISTANT_API_ADDR, default :8081,
-// opened on the LAN by modules/core/ha-api.nix), mirroring the diagnostics
-// listener. Every request carries a bearer token; the primary :8080 admin
-// surface stays loopback-only. See daemon/diag.go for the sibling pattern.
+// opened on the LAN by modules/core/ha-api.nix). Every request carries a bearer
+// token; the primary :8080 surface stays loopback-only. See daemon/admin.go for
+// the sibling pattern — that one is deliberately unauthenticated.
 
 import (
 	"context"
@@ -24,6 +24,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -31,7 +32,8 @@ import (
 // (DASHBOARD_ASSISTANT_API_TOKEN, from a Nix EnvironmentFile) wins, then the
 // runtime state file written by config import, then a freshly generated token
 // persisted on first start. Auto-generation makes the device usable out of the
-// box — the token is shown on the loopback Config screen to paste into HA.
+// box: the token never has to be read or typed, it is handed to Home Assistant by
+// /api/ha/pair. Nothing on the device displays it (see handleInfo).
 func loadAPIToken() string {
 	if v := strings.TrimSpace(os.Getenv("DASHBOARD_ASSISTANT_API_TOKEN")); v != "" {
 		return v
@@ -91,6 +93,11 @@ func deviceName() string {
 	}
 	return "Dashboard Assistant"
 }
+
+// SetNetwork gives the hub the NetworkManager handle. Passed in after
+// construction rather than through NewHAHub, which already takes nine arguments,
+// and because a wired-only host legitimately has none.
+func (h *HAHub) SetNetwork(nm *NetworkManager) { h.nm = nm }
 
 // stateSnapshot is the full device state the API serves (GET /state) and pushes
 // over SSE. It folds in every value the MQTT bridge used to publish as separate
@@ -192,6 +199,9 @@ type HAHub struct {
 	theme *Theme
 	rot   *Rotation
 	snd   *Sendspin
+	// Set after construction (SetNetwork): factory reset needs to drop saved Wi-Fi
+	// profiles, and the two reset paths must not drift apart on that.
+	nm *NetworkManager
 
 	mu   sync.Mutex
 	subs map[chan []byte]struct{}
@@ -199,6 +209,10 @@ type HAHub struct {
 	shotMu sync.Mutex
 	shot   []byte
 	shotAt time.Time
+
+	// Set once the device token has been used, so the marker is written a single
+	// time per boot rather than on every authenticated request.
+	pairedNoted atomic.Bool
 }
 
 // NewHAHub wires the object observers to broadcast a fresh snapshot to every SSE
@@ -362,7 +376,10 @@ func (h *HAHub) routes() http.Handler {
 	mux := http.NewServeMux()
 	// Unauthenticated on purpose: the gate is the pairing window, not a token the
 	// caller does not have yet. See handlePair.
-	mux.HandleFunc("/api/ha/pair", h.handlePair)
+	// Deliberately unauthenticated, but never over the Wi-Fi setup AP: an unpaired
+	// device hands the token to whoever asks, and during onboarding "whoever asks"
+	// would include any phone that joined the setup network.
+	mux.Handle("/api/ha/pair", notOnSetupAP(http.HandlerFunc(h.handlePair)))
 	// Unauthenticated, side-effect free: the stable identity the config flow keys
 	// zeroconf discovery on, so one device is one Home Assistant entry.
 	mux.HandleFunc("/api/ha/identify", h.handleIdentify)
@@ -407,15 +424,20 @@ func (h *HAHub) auth(next http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
+		// A valid token proves the pairing actually landed, which is the moment to
+		// shut the window — not the claim itself, which may never be acted on.
+		h.notePaired()
 		next(w, r)
 	}
 }
 
 // handlePair hands the API token to Home Assistant without anyone reading or
 // typing it. It is deliberately unauthenticated — the caller does not yet have a
-// token; the gate is the pairing window, which only opens when the operator
-// presses "Pair" on the loopback Config screen (physical presence) or when the
-// build auto-confirms (preseeded fleet). Outside the window it reveals nothing.
+// token; the gate is the pairing window, which is open until the token has been
+// used once (or always, when the build auto-confirms for a fleet). Outside the
+// window it reveals nothing.
+//
+// Claiming does not itself close the window; using the token does. See Pairing.
 func (h *HAHub) handlePair(w http.ResponseWriter, r *http.Request) {
 	if !requirePost(w, r) {
 		return
@@ -423,16 +445,28 @@ func (h *HAHub) handlePair(w http.ResponseWriter, r *http.Request) {
 	tok, ok := h.pair.Claim()
 	if !ok {
 		writeJSON(w, http.StatusForbidden, map[string]string{
-			"error": "pairing not open; press Pair on the device's Config screen",
+			"error": "already paired with Home Assistant; factory-reset the device from its admin page to pair again",
 		})
 		return
 	}
-	log.Printf("ha: device paired via on-screen confirmation")
+	log.Printf("ha: handing device token to a pairing client")
 	writeJSON(w, http.StatusOK, map[string]any{
 		"token":   tok,
 		"node_id": h.nodeID,
 		"name":    deviceName(),
 	})
+}
+
+// notePaired records the first successful use of the device token, which is what
+// closes the pairing window. Idempotent and cheap: the atomic keeps it to one
+// write per boot, and the marker file is the durable record across reboots.
+func (h *HAHub) notePaired() {
+	if h.pairedNoted.Swap(true) || Paired() {
+		return
+	}
+	if err := markPaired(); err != nil {
+		log.Printf("ha: mark paired: %v", err)
+	}
 }
 
 // handleKioskLogin stages a Home Assistant login for the kiosk so no one has to
@@ -754,6 +788,9 @@ func (h *HAHub) handleReset(w http.ResponseWriter, r *http.Request) {
 	if err := clearProvisioningState(); err != nil {
 		writeErr(w, err)
 		return
+	}
+	if err := forgetWifi(h.nm); err != nil {
+		log.Printf("ha: factory reset — could not forget Wi-Fi profiles: %v", err)
 	}
 	log.Printf("ha: factory reset — provisioning cleared, rebooting")
 	writeJSON(w, http.StatusOK, map[string]string{"status": "resetting"})
