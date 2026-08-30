@@ -4,6 +4,24 @@ Operational config for the Cloudflare R2 images bucket (the one the release
 workflows publish to; see `.github/workflows/release-image.yml` and
 `cache-rpi.yml`).
 
+## Bucket layout
+
+Every image the workflows publish is keyed by channel and arch, with the arch —
+`x86_64`, `rpi4`, `rpi5` — repeated in the filename so a downloaded file is still
+identifiable once it's out of its folder:
+
+```
+release/<arch>/dashboard-assistant-<arch>-<version>.{raw,img}.zst
+release/<arch>/latest.{raw,img}.zst          # newest full release
+pre-release/<arch>/…                         # hyphened SemVer tag, e.g. v0.2.0-rc.1
+dev/<arch>/dashboard-assistant-<arch>-<commit>.{raw,img}.zst
+```
+
+`dev/` holds branch builds (`.raw.zst` on x86_64, `.img.zst` on the Pis), keyed by
+the short commit and with no `latest` pointer — nothing outside a release tag may
+become the image people flash. Images are never attached to the Actions run
+itself; GitHub artifacts are far too slow at these sizes.
+
 ## `r2-lifecycle.json`
 
 The bucket's object-lifecycle policy, tracked here so it's reviewable and applied
@@ -15,7 +33,8 @@ Current rules:
 | Rule | Prefix | Effect |
 |---|---|---|
 | `abort-incomplete-multipart-uploads` | (all) | Abort stalled multipart uploads after 3 days (big images upload multipart). |
-| `expire-development` | `development/` | Delete after 7 days. Nothing publishes here anymore; this just sweeps strays. |
+| `expire-dev` | `dev/` | Delete after 7 days — branch builds are throwaway, and one lands per manual run. |
+| `expire-development` | `development/` | Delete after 7 days. The old name for `dev/`; nothing publishes here anymore, this just sweeps strays. |
 | `expire-pre-releases` | `pre-release/` | Delete after 90 days — prereleases are transient. |
 
 `release/**` has **no** rule: released images are immutable and kept indefinitely.

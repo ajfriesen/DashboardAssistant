@@ -1,25 +1,37 @@
 name: release image
 
-# Build the flashable x86_64 disk image for a release and publish it to R2.
-# Triggered by the v* tag that release-please creates — which only starts this
-# workflow because release-please authenticates with a PAT (RELEASE_PLEASE_TOKEN);
-# tags made by the default GITHUB_TOKEN don't start new runs. The Raspberry Pi
-# images are published in parallel by cache-rpi.yml (also tag-triggered), and the
-# release notes' download links are written by release-please.yml.
+# Build the flashable x86_64 disk image and publish it to R2 — on a release tag and
+# on a branch build alike. Nothing is ever attached to the run itself: GitHub
+# Actions artifacts are far too slow to move an image this size, and the bucket is
+# already where every other image lives.
 #
-# R2 layout (channel decided by the tag: a hyphen like v0.1.0-rc.1 => pre-release):
-#   release/x86_64/dashboard-assistant-<version>.raw.zst      (immutable, per release)
-#   release/x86_64/latest.raw.zst                             (newest full release)
-#   pre-release/x86_64/…                                      (same, for prereleases)
+# Tag runs are started by the v* tag release-please creates — which only starts
+# this workflow because release-please authenticates with a PAT
+# (RELEASE_PLEASE_TOKEN); tags made by the default GITHUB_TOKEN don't start new
+# runs. The Raspberry Pi images are published in parallel by cache-rpi.yml (also
+# tag-triggered), and the release notes' download links are written by
+# release-please.yml.
+#
+# R2 layout. The arch — x86_64, rpi4, rpi5 — is both the directory and part of the
+# filename, so an image stays identifiable once it is downloaded and out of its
+# folder:
+#   release/x86_64/dashboard-assistant-x86_64-<version>.raw.zst (immutable, per release)
+#   release/x86_64/latest.raw.zst                               (newest full release)
+#   pre-release/x86_64/…                                        (same, for a hyphened SemVer tag)
+#   dev/x86_64/dashboard-assistant-x86_64-<commit>.raw.zst      (branch build)
+#
+# The channel comes from the ref alone: a v* tag publishes a release (pre-release
+# for a hyphen, e.g. v0.1.0-rc.1), anything else is a dev build keyed by the short
+# commit, so two runs off the same branch can't overwrite each other. Only a tag
+# moves the channel's `latest` pointer — a test build must never become the image
+# people flash. dev/ objects are swept after 7 days by the bucket lifecycle policy
+# (ops/r2-lifecycle.json).
 #
 # Required repo config (Settings -> Secrets and variables -> Actions):
 #   Variables: R2_ACCOUNT_ID, R2_BUCKET, R2_PUBLIC_URL
 #   Secrets:   R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
-# A manual run builds the image from whatever branch you pick and attaches it as
-# a run artifact instead of publishing it. That is the only way to get a flashable
-# image out of a branch: everything below the artifact step is tag-gated, because
-# publishing to R2 and overwriting a channel's `latest` pointer must only ever
-# happen for a real release.
+# Without R2_BUCKET — a fork — the build and its checks still run, there is just
+# nowhere to publish to, so the upload is skipped.
 on:
   workflow_dispatch:
   push:
@@ -28,6 +40,11 @@ on:
 
 permissions:
   contents: read # checkout only; the release notes are written by release-please.yml
+
+env:
+  # The board token shared by the object directory and the filename. Kept in one
+  # place because release-please.yml builds the same paths to link to.
+  ARCH: x86_64
 
 jobs:
   image:
@@ -43,25 +60,37 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
-      # Channel + version from the tag. A hyphen (SemVer prerelease, e.g. -rc.1)
-      # routes to pre-release/; the leading "v" is stripped for the filename.
-      - name: Resolve channel and version
+      # Channel, version and object name, decided by the ref (see the header). A
+      # hyphen in the tag (SemVer prerelease, e.g. -rc.1) routes to pre-release/;
+      # the leading "v" is stripped for the filename.
+      - name: Resolve channel and asset name
         id: v
-        if: github.ref_type == 'tag' 
         env:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          version="${TAG#v}"
-          case "$TAG" in *-*) channel=pre-release ;; *) channel=release ;; esac
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "channel=$channel" >> "$GITHUB_OUTPUT"
-          echo "asset=dashboard-assistant-$version.raw.zst" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            version="${TAG#v}"
+            case "$TAG" in *-*) channel=pre-release ;; *) channel=release ;; esac
+            id="$version"
+          else
+            # Dev build: the commit is the identity, not the version. The baked
+            # version still ends up in the object metadata below.
+            version=""
+            channel=dev
+            id="${GITHUB_SHA::7}"
+          fi
+          {
+            echo "version=$version"
+            echo "channel=$channel"
+            echo "dir=$channel/$ARCH"
+            echo "asset=dashboard-assistant-$ARCH-$id.raw.zst"
+          } >> "$GITHUB_OUTPUT"
 
       # Guard: the baked version must match the tag. release-please bumps flake.nix
       # in the release PR, so this always holds — it just catches a mistake.
       - name: Verify baked version matches tag
-        if: github.ref_type == 'tag' 
+        if: github.ref_type == 'tag'
         env:
           VERSION: ${{ steps.v.outputs.version }}
         run: |
@@ -79,63 +108,68 @@ jobs:
       - name: Build x86_64 disk image
         run: nix build .#disk-image
 
-      # Manual branch run: hand the image back as a run artifact and stop. Nothing
-      # is published, so a test build can never clobber a release channel.
-      - name: Compress disk image (branch build)
-        if: github.ref_type != 'tag'
-        run: |
-          set -euo pipefail
-          name="dashboard-assistant-${GITHUB_REF_NAME//\//-}-${GITHUB_SHA::7}.raw.zst"
-          zstd -19 -T0 -c "$(readlink -f result)/dashboard-assistant.raw" > "$name"
-          echo "ASSET=$name" >> "$GITHUB_ENV"
-
-      - name: Upload disk image artifact
-        if: github.ref_type != 'tag'
-        uses: actions/upload-artifact@v4
-        with:
-          name: disk-image-${{ github.ref_name }}
-          path: ${{ env.ASSET }}
-          retention-days: 7
-          compression-level: 0 # already zstd
-
       - name: Compress disk image
-        if: github.ref_type == 'tag'
+        env:
+          ASSET: ${{ steps.v.outputs.asset }}
         run: |
           set -euo pipefail
-          zstd -19 -T0 -c "$(readlink -f result)/dashboard-assistant.raw" > "${{ steps.v.outputs.asset }}"
+          zstd -19 -T0 -c "$(readlink -f result)/dashboard-assistant.raw" > "$ASSET"
 
-      # Publish the immutable versioned object and overwrite the channel's `latest`
-      # pointer (the single flashable artifact for that channel/board), attaching
-      # provenance metadata (x-amz-meta-*) to both — readable with `aws s3api
-      # head-object` or an HTTP HEAD via the custom domain.
-      - name: Upload image to R2
-        if: github.ref_type == 'tag'
+      # Publish the immutable per-build object, and for a release also overwrite
+      # the channel's `latest` pointer (the single flashable artifact for that
+      # channel/board), attaching provenance metadata (x-amz-meta-*) to each —
+      # readable with `aws s3api head-object` or an HTTP HEAD via the custom
+      # domain.
+      - name: Publish image to R2
+        if: ${{ vars.R2_BUCKET != '' }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto
           ASSET: ${{ steps.v.outputs.asset }}
           CHANNEL: ${{ steps.v.outputs.channel }}
+          DIR: ${{ steps.v.outputs.dir }}
           VERSION: ${{ steps.v.outputs.version }}
-          TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           bucket="${{ vars.R2_BUCKET }}"
-          dir="$CHANNEL/x86_64"
           nixos=$(nix eval --raw '.#nixosConfigurations.dashboard-assistant-x86-disk.config.system.nixos.version')
+          baked=$(nix eval --raw \
+            '.#nixosConfigurations.dashboard-assistant-x86-disk.config.environment.etc."dashboard-assistant/version".text')
           sha=$(sha256sum "$ASSET" | cut -d' ' -f1)
           built=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          meta="board=x86_64,arch=x86_64,channel=$CHANNEL,version=$VERSION,tag=$TAG,commit=$GITHUB_SHA,nixos-version=$nixos,built=$built,sha256=$sha,run-url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          for key in "$dir/$ASSET" "$dir/latest.raw.zst"; do
+          # `ref` is the tag on a release build and the branch on a dev one, so it
+          # answers "where did this come from" for both without an empty key.
+          meta="board=$ARCH,arch=x86_64,channel=$CHANNEL,version=${VERSION:-$baked},ref=$GITHUB_REF_NAME,commit=$GITHUB_SHA,nixos-version=$nixos,built=$built,sha256=$sha,run-url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          keys=("$DIR/$ASSET")
+          # Only a release moves the pointer people flash; dev builds are keyed by
+          # commit and have no `latest`.
+          [ "$CHANNEL" = dev ] || keys+=("$DIR/latest.raw.zst")
+          for key in "${keys[@]}"; do
             aws s3 cp "$ASSET" "s3://$bucket/$key" \
               --endpoint-url "$R2_ENDPOINT" \
               --content-type application/zstd \
               --metadata "$meta"
           done
+          size=$(du -h "$ASSET" | cut -f1)
           {
-            echo "### 📦 x86_64 image published to $dir/"
+            echo "### 📦 $ARCH image published to $DIR/"
             echo
-            echo "**${{ vars.R2_PUBLIC_URL }}/$dir/$ASSET**"
+            echo "**[$ASSET](${{ vars.R2_PUBLIC_URL }}/$DIR/$ASSET)** ($size)"
             echo
             echo "nixos \`$nixos\` · commit \`${GITHUB_SHA::7}\` · sha256 \`$sha\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # A fork without R2 config: the image is built and checked, but there is
+      # nowhere to put it — and it is far too large to hand back as a run
+      # artifact, so say so plainly instead of failing at the upload.
+      - name: Note that publishing was skipped
+        if: ${{ vars.R2_BUCKET == '' }}
+        run: |
+          {
+            echo "### Image built, not published"
+            echo
+            echo "\`R2_BUCKET\` is not configured for this repository, so there is"
+            echo "nowhere to publish the image to. See the workflow header for the"
+            echo "variables and secrets it needs."
           } >> "$GITHUB_STEP_SUMMARY"

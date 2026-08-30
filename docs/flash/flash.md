@@ -26,7 +26,7 @@ Cloudflare R2 bucket (GitHub can't host the multi-GB file directly).
 The asset is a zstd-compressed raw disk image named like:
 
 ```
-dashboard-assistant-<version>-x86_64.raw.zst
+dashboard-assistant-x86_64-<version>.raw.zst
 ```
 
 !!! tip "Verify the download"
@@ -50,7 +50,7 @@ dashboard-assistant-<version>-x86_64.raw.zst
     Decompress and write it in one pipe (replace `/dev/sdX` with your device):
 
     ```bash
-    zstd -dc dashboard-assistant-*-x86_64.raw.zst \
+    zstd -dc dashboard-assistant-x86_64-*.raw.zst \
       | sudo dd of=/dev/sdX bs=4M conv=fsync oflag=direct status=progress
     sync
     ```
@@ -68,7 +68,7 @@ dashboard-assistant-<version>-x86_64.raw.zst
 
     ```bash
     diskutil unmountDisk /dev/diskN
-    zstd -dc dashboard-assistant-*-x86_64.raw.zst \
+    zstd -dc dashboard-assistant-x86_64-*.raw.zst \
       | sudo dd of=/dev/rdiskN bs=4m
     ```
 
