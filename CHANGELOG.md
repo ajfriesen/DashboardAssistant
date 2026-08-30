@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.2.0-rc.1](https://github.com/ajfriesen/DashboardAssistant/compare/v0.1.0-rc.3...v0.2.0-rc.1) (2026-08-30)
+
+
+### Features
+
+* **audio:** add Sendspin multi-room audio player ([b92c0ea](https://github.com/ajfriesen/DashboardAssistant/commit/b92c0ea29b1c4be3b1c324867475a6ebf480ea87))
+* **rpi5:** add a dev image with root SSH and deploy it without reflashing ([96fa83f](https://github.com/ajfriesen/DashboardAssistant/commit/96fa83f2b91bc5d292b9eb1b7e1e8bf2f844d8e8))
+* **security:** move recovery off the tablet screen onto a LAN admin page ([acbabeb](https://github.com/ajfriesen/DashboardAssistant/commit/acbabeb14fb5ed1a58d509473a408bfc5f8d74c3))
+* Wi-Fi onboarding, LAN admin page, and R2 image publishing ([2a95fd4](https://github.com/ajfriesen/DashboardAssistant/commit/2a95fd4722448b5364caee1d2c377139c82fe2b3))
+* **wifi:** onboard a stranded device over its own access point ([e7e6d4e](https://github.com/ajfriesen/DashboardAssistant/commit/e7e6d4ef611bbc81dd79e7a31bf51628e23bfbf8))
+
+
+### Bug Fixes
+
+* **daemon:** resolve the Wi-Fi device lazily, not once at startup ([6af00d0](https://github.com/ajfriesen/DashboardAssistant/commit/6af00d0e78e2d071912af84820b5ed47d7a5f8fe))
+* **kiosk:** drop DeveloperToolsAvailability, it silently kills CDP ([0531475](https://github.com/ajfriesen/DashboardAssistant/commit/05314758b9f9c7e64b413ba11b35617646a7a7db))
+* **kiosk:** make auto-login wait for its preconditions, not race them ([8b81d50](https://github.com/ajfriesen/DashboardAssistant/commit/8b81d504c79534b27076134e2e2ae014db446fb2))
+* **kiosk:** restore the backlight after powering the display on ([a01eb20](https://github.com/ajfriesen/DashboardAssistant/commit/a01eb203504c94934d0e6583f7a4d25347797bc2))
+* **network:** let NetworkManager run wpa_supplicant ([c5ffc82](https://github.com/ajfriesen/DashboardAssistant/commit/c5ffc821998500fe293bc855c0420bf18690af81))
+* **pairing:** let a preconfigured device pair with Home Assistant ([373ee53](https://github.com/ajfriesen/DashboardAssistant/commit/373ee5303847c01e572646871f298be4c3020d1e))
+
+
+### Documentation
+
+* document the Music Assistant page and the Sendspin switch ([64a45f0](https://github.com/ajfriesen/DashboardAssistant/commit/64a45f053d526d60fcb770ead92ba16d17c7b685))
+
+
+### Miscellaneous
+
+* release 0.2.0-rc.1 ([01bbb80](https://github.com/ajfriesen/DashboardAssistant/commit/01bbb807790c5070f73236f2b403205172094681))
+
 ## [0.1.0-rc.3](https://github.com/ajfriesen/DashboardAssistant/compare/v0.1.0-rc.2...v0.1.0-rc.3) (2026-08-08)
 
 
