@@ -12,6 +12,15 @@ icon: lucide/sparkles
 - On-screen keyboard for text fields on touch-only devices. (Experimental)
 - Automatic login using a long-lived HA token — no tapping through the login screen.
 
+**Multi-room audio** — see [Multi-room audio](../usage/audio.md).
+
+- The dashboard is also a speaker: a built-in [Sendspin](https://www.sendspin-audio.com/)
+  player joins a synchronized group alongside your other speakers.
+- Music Assistant runs the show. Installed as the Home Assistant add-on, it gets a
+  page on the dashboard automatically — already signed in, because Ingress carries
+  the tablet's Home Assistant identity across.
+- Audio never leaves your network, and there is no cloud account in the path.
+
 **Control from Home Assistant** — see the [entity reference](#home-assistant-integration).
 
 **Stays alive**
@@ -52,6 +61,7 @@ press on the tablet. It appears as a single device with these entities:
 | Page | `select` | Jump to one of your configured dashboard URLs |
 | Next / Previous page | `button` | Cycle through the dashboard URLs |
 | Page 1 … N | `text` | Edit the dashboard URL list from HA |
+| Sendspin player | `switch` | Turn the device's multi-room audio player on/off; carries a `status` attribute. Only on builds with the audio stack |
 | Reboot / Shut down | `button` | Power-cycle the device |
 | System update | `update` | Installed vs. latest release, with one-tap install |
 

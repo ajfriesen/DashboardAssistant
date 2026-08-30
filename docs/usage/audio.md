@@ -19,6 +19,11 @@ server over mDNS on your local network and connects on its own.
 Audio never leaves your network, and there is no cloud account anywhere in the
 path.
 
+One server-side setting matters: Music Assistant can ask players to **pair** with
+a PIN, and can be told to *require* it. Unpaired players are allowed by default,
+which is what the dashboard relies on — it has no way to be handed a PIN. Leave
+unpaired access enabled for it under the Sendspin settings in Music Assistant.
+
 ## Using it
 
 Once the device is on the network, it appears in Music Assistant as a player
@@ -27,6 +32,33 @@ Home Assistant integration uses. Send music to it like any other speaker, or add
 it to a group and it stays in sync with the rest.
 
 Volume is controlled from Music Assistant, not on the device.
+
+## Controlling music from the dashboard
+
+When Music Assistant is installed as the Home Assistant **add-on**, the
+integration adds a **Music Assistant** page to the device automatically. Pick it
+from the `Page` select entity, or swipe to it on the tablet, and the full Music
+Assistant interface comes up on screen — browse the library, and send what you
+pick to the device's own player or to any other speaker in the house.
+
+Nobody has to log in. Music Assistant 2.7 made a login mandatory and keeps its
+own accounts, separate from Home Assistant's, but the add-on is reached through
+Home Assistant's Ingress: it is told who is signed in and creates a matching
+Music Assistant account with no password. The tablet is already signed into Home
+Assistant, so it is already signed into Music Assistant.
+
+Two things are worth knowing:
+
+- That account is a regular, non-admin one. If the dashboard shows no speakers or
+  no music, an admin may have to grant it access under **Settings → User
+  Management** in Music Assistant.
+- If the browser is ever signed out of Home Assistant it comes back on the Home
+  Assistant dashboard, not this page — same as a fresh boot. Swipe back.
+
+A **standalone** Music Assistant server — one that is not a Home Assistant add-on
+— gets no page, because without Ingress there is nothing to sign the tablet in
+with. Add its URL as a page by hand (the `Page 1 … N` text entities, see
+[Usage](usage.md#from-home-assistant)) and log in once on the device.
 
 ## Turning it off
 
