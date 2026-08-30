@@ -27,7 +27,7 @@ site_author = "ajfriesen"
 # The site_url is the canonical URL for your site. When building online
 # documentation you should set this.
 # Read more: https://zensical.org/docs/setup/basics/#site_url
-site_url = "https://dashboard-assistant.com/"
+site_url = "https://dashboardassistant.org/"
 
 # Repository link + edit/view buttons in the header.
 # Read more: https://zensical.org/docs/setup/repository/
@@ -69,6 +69,7 @@ nav = [
         "flash/seed.md",
      ]},
      {"Usage" = [
+        "usage/integration.md",
         "usage/usage.md",
         "usage/audio.md",
         "usage/admin.md",

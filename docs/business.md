@@ -51,8 +51,8 @@ same result every time. No fiddly per-device setup, nothing to hand-configure.
 <div class="da-card__icon">🛟</div>
 ### Recoverable, not brickable
 Every version is kept as a generation. If an update ever misbehaves, roll back
-to a known-good one with a couple of taps on the screen. No site visit, no
-re-flash.
+to a known-good one from the device's admin page, over the network. No site
+visit, no re-flash.
 </div>
 
 <div class="da-card" markdown>

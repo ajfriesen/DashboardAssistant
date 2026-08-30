@@ -14,15 +14,17 @@ a reboot. Dashboard Assistant takes the opposite approach:
 - **Declarative and reproducible.** The whole system is defined in NixOS. The
   image you flash is the system you run — there is no hand-configuration to drift.
 - **Recoverable by design.** Updates are atomic and every version is kept as a
-  NixOS generation. If one misbehaves, an on-screen recovery picker lets you roll
-  back to an older, known-good generation right on the device's touchscreen.
-  (Automatic rollback on a failed boot isn't available yet — it needs
-  boot-counting support that U-Boot doesn't provide and that NixOS is still
-  testing.)
+  NixOS generation. If one misbehaves, the device's LAN-only
+  [admin page](../usage/admin.md) lets you roll back to an older, known-good
+  generation from any machine on your network — the touchscreen itself stays
+  read-only. (Automatic rollback on a failed boot isn't available yet — it
+  needs boot-counting support that U-Boot doesn't provide and that NixOS is
+  still testing.)
 - **A first-class Home Assistant citizen.** The panel doesn't just *show* Home
-  Assistant — a native integration (installable via HACS) reports it back as a
-  device with its own controls and sensors (display, brightness, zoom,
-  screenshots, CPU, temperature and more).
+  Assistant — a native integration (installable
+  [via HACS](../usage/integration.md)) reports it back as a device with its own
+  controls and sensors (display, brightness, zoom, screenshots, CPU,
+  temperature and more).
 
 ## Project status
 

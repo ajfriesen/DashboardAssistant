@@ -54,8 +54,8 @@ A few looks at Dashboard Assistant running on real hardware.
 <figure class="da-tablet-figure">
   <div class="da-tablet">
     <div class="da-tablet__screen">
-      <img class="da-shot" src="img/recovery.jpeg" alt="The on-screen recovery generation picker">
+      <img class="da-shot" src="img/recovery.jpeg" alt="The recovery generation picker">
     </div>
   </div>
-  <figcaption>The recovery picker — boot into an older NixOS generation if an update misbehaves.</figcaption>
+  <figcaption>Recovery — boot into an older NixOS generation if an update misbehaves. Today this lives on the LAN-only admin page, off the touchscreen.</figcaption>
 </figure>

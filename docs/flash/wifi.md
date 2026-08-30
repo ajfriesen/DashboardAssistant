@@ -24,7 +24,9 @@ online and never broadcasts anything.
 5. **Type your own Wi-Fi name and password** and tap Connect.
 6. **The display's network disappears** and your phone returns to its usual one.
    That is the display joining your network. Watch the screen: it moves on to
-   "Add this device in Home Assistant" and Home Assistant discovers it.
+   "Add this device in Home Assistant" and Home Assistant discovers it —
+   provided the [Dashboard Assistant integration](../usage/integration.md) is
+   installed there.
 
 ## Type the name exactly
 

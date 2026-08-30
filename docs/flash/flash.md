@@ -18,22 +18,35 @@ You'll also need `zstd` (Linux/macOS) or a GUI flasher such as
 
 ## Download the image
 
-Grab the latest x86_64 disk image from the
-[GitHub releases page](https://github.com/ajfriesen/DashboardAssistant/releases/latest).
-The download link sits at the top of the release notes and points to a
-Cloudflare R2 bucket (GitHub can't host the multi-GB file directly).
+There is one image per board. Grab the latest from the
+[GitHub releases page](https://github.com/ajfriesen/DashboardAssistant/releases/latest)
+— the download table sits at the top of the release notes and points to our
+download server (GitHub can't host the multi-GB files directly). Every image is
+zstd-compressed:
 
-The asset is a zstd-compressed raw disk image named like:
+| Board | Image |
+|---|---|
+| x86_64 (mini-PC, tablet, NUC) | `dashboard-assistant-x86_64-<version>.raw.zst` |
+| Raspberry Pi 4 | `dashboard-assistant-rpi4-<version>.img.zst` |
+| Raspberry Pi 5 | `dashboard-assistant-rpi5-<version>.img.zst` |
 
-```
-dashboard-assistant-x86_64-<version>.raw.zst
-```
+The newest release is also always available directly at
+`https://download.dashboardassistant.org/release/<board>/latest.raw.zst`
+(x86_64) or `…/release/<board>/latest.img.zst` (Pi), with `x86_64`, `rpi4` or
+`rpi5` as the board.
+
+x86_64 targets need to boot **UEFI** — see the
+[x86_64 requirements](../hardware-support/x86.md).
 
 !!! tip "Verify the download"
     The image is several GB even compressed. If a flash fails midway, re-download
     and check the file size against the release page before retrying.
 
 ## Flash the image
+
+The procedure is the same for every board — an x86_64 image goes to the SSD or
+internal disk, a Raspberry Pi image goes to the SD card (usually
+`/dev/mmcblkX` in a built-in slot, `/dev/sdX` in a USB reader).
 
 !!! danger "Double-check the target device"
     `dd` writes with no confirmation. Flashing the wrong disk will **erase it**.
@@ -50,7 +63,7 @@ dashboard-assistant-x86_64-<version>.raw.zst
     Decompress and write it in one pipe (replace `/dev/sdX` with your device):
 
     ```bash
-    zstd -dc dashboard-assistant-x86_64-*.raw.zst \
+    zstd -dc dashboard-assistant-*.zst \
       | sudo dd of=/dev/sdX bs=4M conv=fsync oflag=direct status=progress
     sync
     ```
@@ -68,7 +81,7 @@ dashboard-assistant-x86_64-<version>.raw.zst
 
     ```bash
     diskutil unmountDisk /dev/diskN
-    zstd -dc dashboard-assistant-x86_64-*.raw.zst \
+    zstd -dc dashboard-assistant-*.zst \
       | sudo dd of=/dev/rdiskN bs=4m
     ```
 
@@ -77,11 +90,13 @@ dashboard-assistant-x86_64-<version>.raw.zst
 === "Windows / GUI"
 
     1. Download [balenaEtcher](https://etcher.balena.io/).
-    2. Decompress the `.raw.zst` file with [7-Zip](https://www.7-zip.org/) (or
-       `zstd -d`) to get a `.raw` image.
-    3. In Etcher, choose **Flash from file**, select the `.raw` image, pick the
+    2. Decompress the `.zst` file with [7-Zip](https://www.7-zip.org/) (or
+       `zstd -d`) to get the raw `.raw` / `.img` image.
+    3. In Etcher, choose **Flash from file**, select the image, pick the
        target drive, and flash.
 
 Once the flash finishes, move the disk into the target machine (or leave it in
-place) and boot it. On first boot the device comes up unprovisioned and waits to
-be configured from a [seed file](seed.md).
+place) and boot it. On Ethernet the device gets online by itself; on Wi-Fi it
+starts the on-screen [Wi-Fi setup](wifi.md). To configure a device before it
+ever boots — for several tablets, or a headless install — use a
+[seed file](seed.md) instead.
