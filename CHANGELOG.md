@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1-rc.1](https://github.com/ajfriesen/DashboardAssistant/compare/v0.2.0-rc.1...v0.2.1-rc.1) (2026-08-30)
+
+
+### Documentation
+
+* add the HACS install guide and sync pages with today's behaviour ([e00972f](https://github.com/ajfriesen/DashboardAssistant/commit/e00972f082d4a3fb0f47612b0d3fd9cf4f3d9a95))
+* add the HACS install guide and sync pages with today's behaviour ([3e88caa](https://github.com/ajfriesen/DashboardAssistant/commit/3e88caa986503d7e7f95a2e5a897e2579bd3564c))
+
 ## [0.2.0-rc.1](https://github.com/ajfriesen/DashboardAssistant/compare/v0.1.0-rc.3...v0.2.0-rc.1) (2026-08-30)
 
 
