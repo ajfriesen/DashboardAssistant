@@ -77,6 +77,23 @@
           ++ localModules
           ++ extraModules;
         };
+
+      # The Pi 5 system, parameterised the same way, so its stable and dev
+      # flavours cannot drift apart. nixpkgs-unstable's lib.nixosSystem for the
+      # same reason the stable flavour uses it (see below).
+      mkRpi5System =
+        extraModules:
+        nixpkgs-unstable.lib.nixosSystem {
+          system = "aarch64-linux";
+          specialArgs = { inherit impermanence version; };
+          modules = [
+            nixos-hardware.nixosModules.raspberry-pi-5
+            ./modules/hardware/rpi5.nix
+            ./modules/core/default.nix
+          ]
+          ++ localModules
+          ++ extraModules;
+        };
     in
     {
       nixosConfigurations = {
@@ -125,16 +142,16 @@
         # `--override-input nixpkgs` on the other targets): the Pi 5 kernel and
         # the sd-image pi5 support are newer than the pinned 26.05. Build the
         # flashable image via `.#rpi5-image`.
-        dashboard-assistant-rpi5 = nixpkgs-unstable.lib.nixosSystem {
-          system = "aarch64-linux";
-          specialArgs = { inherit impermanence version; };
-          modules = [
-            nixos-hardware.nixosModules.raspberry-pi-5
-            ./modules/hardware/rpi5.nix
-            ./modules/core/default.nix
-          ]
-          ++ localModules;
-        };
+        dashboard-assistant-rpi5 = mkRpi5System [ ];
+
+        # Dev flavour of the Pi 5 image — same base plus modules/dev.nix, which
+        # declares the root SSH keys that turn sshd on (see modules/core/debug.nix;
+        # a release image has no sshd at all). This is the image to reach for when
+        # a Pi needs debugging: it is reconfigurable in place with
+        # `nixos-rebuild switch --flake .#dashboard-assistant-rpi5-dev --target-host`,
+        # so iterating no longer means pulling the card and reflashing. Build via
+        # `.#rpi5-image-dev` or `just build-rpi5-dev`.
+        dashboard-assistant-rpi5-dev = mkRpi5System [ ./modules/dev.nix ];
       };
 
       # Raw btrfs+zstd EFI disk image built by disko: `nix build .#disk-image`
@@ -165,6 +182,11 @@
       # then flash result/sd-image/*.img.zst to the card (same as the Pi 4).
       packages.aarch64-linux.rpi5-image =
         self.nixosConfigurations.dashboard-assistant-rpi5.config.system.build.sdImage;
+
+      # Same image plus root SSH, for debugging on real hardware without
+      # reflashing between changes: `nix build .#rpi5-image-dev`.
+      packages.aarch64-linux.rpi5-image-dev =
+        self.nixosConfigurations.dashboard-assistant-rpi5-dev.config.system.build.sdImage;
 
       # VM tests. `nix flake check`, or `nix build .#checks.x86_64-linux.wifi-onboarding`
       # for one. The Wi-Fi test needs virtual radios (mac80211_hwsim) because the

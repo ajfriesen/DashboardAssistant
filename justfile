@@ -9,6 +9,8 @@ help:
   @echo "  build-disk-image-unstable    Build the raw disk image against nixos-unstable"
   @echo "  build-rpi4             Build the Raspberry Pi 4 SD-card image (aarch64)"
   @echo "  build-rpi5             Build the Raspberry Pi 5 SD-card image (aarch64, unstable)"
+  @echo "  build-rpi5-dev         Build the Pi 5 SD-card image with root SSH (dev)"
+  @echo "  deploy-rpi5-dev HOST   Push the working tree to a dev Pi over SSH (no reflash)"
   @echo
   @echo "Run / connect (QEMU):"
   @echo "  qemu-run               Boot the built ISO in QEMU"
@@ -101,6 +103,33 @@ build-rpi5:
   @echo "Image: $(readlink -f result-rpi5)/sd-image/"*.img.zst
   @echo "Flash it (confirm the device first!):"
   @echo "  zstdcat result-rpi5/sd-image/*.img.zst | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync"
+
+# Build the dev flavour of the Pi 5 image: same system plus root SSH (the keys in
+# modules/dev.nix). Flash this one when a Pi needs debugging — with sshd up you
+# reconfigure it in place with `just deploy-rpi5-dev` instead of pulling the card
+# and reflashing for every change. Never ship it: a release image has no sshd.
+[doc('Build the Raspberry Pi 5 SD-card image with root SSH (dev/debugging)')]
+build-rpi5-dev:
+  nix build .#packages.aarch64-linux.rpi5-image-dev --accept-flake-config --out-link result-rpi5-dev
+  @echo
+  @echo "Image: $(readlink -f result-rpi5-dev)/sd-image/"*.img.zst
+  @echo "Flash it (confirm the device first!):"
+  @echo "  zstdcat result-rpi5-dev/sd-image/*.img.zst | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync"
+  @echo
+  @echo "Then, for every change after that (no reflash):"
+  @echo "  just deploy-rpi5-dev root@dashboard-assistant-<mac6>.local"
+
+# Push the current tree to an already-flashed dev Pi and switch it live. Builds
+# here (aarch64 under binfmt, mostly from cache) and copies the closure over SSH,
+# so the Pi does no compiling. HOST is anything ssh takes: root@<ip>, or
+# root@dashboard-assistant-<mac6>.local via mDNS. Use `boot` instead of `switch`
+# as the ACTION when a change needs a reboot (kernel, firmware, initrd).
+[doc('Deploy the working tree to a dev Pi over SSH (no reflash)')]
+deploy-rpi5-dev HOST ACTION="switch":
+  nixos-rebuild {{ACTION}} \
+    --flake .#dashboard-assistant-rpi5-dev \
+    --target-host {{HOST}} \
+    --accept-flake-config
 
 # Boot the built ISO. The virtio-net NIC gets DHCP from QEMU's user-mode
 # network, so NetworkManager auto-connects it — first boot lands in the setup
