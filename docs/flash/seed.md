@@ -90,10 +90,10 @@ your Home Assistant instance.
 
 ## Pairing still works
 
-A seeded device pairs with Home Assistant exactly like a hand-configured one: it
-is discovered over mDNS and hands over its API token with nothing to type. Writing
-a seed file does not count as having been paired, and there is no extra step to
-undo.
+A seeded device [pairs with Home Assistant](../usage/integration.md) exactly
+like a hand-configured one: it is discovered over mDNS and hands over its API
+token with nothing to type. Writing a seed file does not count as having been
+paired, and there is no extra step to undo.
 
 If pairing is refused, the device has already been paired once. That is what the
 gate is for, and the way back is a factory reset from the

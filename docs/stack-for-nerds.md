@@ -5,8 +5,8 @@ icon: lucide/cpu
 # Stack for Nerds
 
 The technical bits, for the curious. If you just want a dashboard on your wall,
-the [landing page](index.md) and [Get started](flash/flash.md) guide are all you
-need — this page is about *how* it works under the hood.
+the [landing page](index.md) and [Get started](getting-started.md) guide are all
+you need — this page is about *how* it works under the hood.
 
 ## Built on NixOS
 
@@ -25,9 +25,11 @@ Dashboard Assistant OS is a minimal, **declarative NixOS** system.
 
 Because every version is retained as a generation, you can always go back.
 
-- **Manual rollback (available today).** An on-screen recovery picker lets you
-  boot an older, known-good generation right from the device's touchscreen —
-  useful if a configuration change misbehaves but the system still boots.
+- **Manual rollback (available today).** The LAN-only
+  [admin page](usage/admin.md) lets you boot an older, known-good generation
+  from any machine on your network — useful if a configuration change
+  misbehaves but the system still boots. The touchscreen itself is read-only,
+  so nobody at the panel can roll the device back.
 - **Automatic rollback (not yet).** Booting into the previous generation
   *automatically* after a failed boot relies on boot-counting support. The
   images use **U-Boot**, which doesn't provide it, and the NixOS support is
@@ -39,7 +41,8 @@ Because every version is retained as a generation, you can always go back.
 The panel doesn't just *show* Home Assistant — it reports back into it as a
 device.
 
-- A **first-party integration**, installable via [HACS](https://hacs.xyz/).
+- A **first-party integration**, installable
+  [via HACS](usage/integration.md) as a custom repository.
 - Home Assistant **discovers the device over mDNS** and claims the API token
   itself while the device is still unprovisioned, so there is no code to type.
 - **No MQTT broker required** — it talks to Home Assistant directly.
@@ -52,11 +55,14 @@ full list.
 
 ## Provisioning
 
-The device is configured entirely from a small **YAML seed file** (Home
-Assistant URL, token, Wi-Fi, dashboard URLs, optional integration token) dropped
-on a USB stick or the boot partition — no on-screen wizard, so a person at the
-panel can't re-point the device. The screen shows a read-only info view and
-nothing else; rollback and factory reset live on a LAN-only admin page.
+A single device sets itself up on screen: the [Wi-Fi onboarding](flash/wifi.md)
+joins it to your network over its own access point and captive portal, and Home
+Assistant discovers it from there. For fleets and field deploys, a small
+**YAML seed file** (Home Assistant URL, token, Wi-Fi, dashboard URLs, optional
+integration token) dropped on a USB stick or the boot partition configures the
+device before it ever boots. Either way, nothing on the running panel can
+re-point the device: the screen shows a read-only info view and nothing else;
+rollback and factory reset live on a LAN-only admin page.
 
 ## Hardware
 

@@ -15,10 +15,11 @@ A small bar gives you touch controls without leaving the kiosk:
 
 ## From Home Assistant
 
-Install the **Dashboard Assistant** integration (via HACS) and Home Assistant
-discovers the device over mDNS as a single device and pairs itself. A device
-that has not been added yet hands over its API token automatically, so there is
-nothing to type. From there you can:
+Install the **Dashboard Assistant** integration
+([via HACS](integration.md)) and Home Assistant discovers the device over mDNS
+as a single device and pairs itself. A device that has not been added yet hands
+over its API token automatically, so there is nothing to type. From there you
+can:
 
 - Turn the **display** on/off and set **brightness**.
 - Adjust **zoom** and flip **dark mode**.

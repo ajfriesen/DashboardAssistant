@@ -19,7 +19,7 @@ wakes up as a Home Assistant dashboard on your wall or desk. No Linux knowledge,
 </p>
 
 <div class="da-hero__cta" markdown>
-[Get started&nbsp;→](flash/flash.md){ .da-btn .da-btn--primary }
+[Get started&nbsp;→](getting-started.md){ .da-btn .da-btn--primary }
 [See it in action](in-action.md){ .da-btn .da-btn--ghost }
 </div>
 
@@ -35,7 +35,7 @@ wakes up as a Home Assistant dashboard on your wall or desk. No Linux knowledge,
   <div class="da-tablet__screen">
     <img class="da-slide" src="img/home-assistant-light.jpeg" alt="A Home Assistant running in light mode">
     <img class="da-slide" src="img/home-assistant-dark.jpeg" alt="A Home Assistant running in dark mode.">
-    <img class="da-slide" src="img/recovery.jpeg" alt="Shows the restore menu, to boot into an older verion.">
+    <img class="da-slide" src="img/recovery.jpeg" alt="Recovery: pick an older, known-good version to boot.">
     <img class="da-slide" src="img/keyboard.jpeg" alt="Use a touch keyboard if needed.">
     <img class="da-slide" src="img/random-website.jpeg" alt="Shows any website.">
   </div>
@@ -94,18 +94,18 @@ terminal, nothing to re-flash.
 <div class="da-card" markdown>
 <div class="da-card__icon">🛟</div>
 ### Easy to undo
-If an update ever misbehaves, go back to a version that worked with a couple of
-taps on the screen.
+If an update ever misbehaves, go back to a version that worked — from a simple
+admin page on your own network, no re-flash, no site visit.
 </div>
 
 </div>
 
 <div class="da-hero__cta" markdown>
-[Get started&nbsp;→](flash/flash.md){ .da-btn .da-btn--primary }
+[Get started&nbsp;→](getting-started.md){ .da-btn .da-btn--primary }
 [Stack for Nerds](stack-for-nerds.md){ .da-btn .da-btn--ghost }
 </div>
 
-<p class="da-section-lead" style="margin-top: 1rem;">
+<p class="da-section-lead" style="margin-top: 1rem;" markdown>
 Want to know what's running under the hood? It's all in
-<a href="stack-for-nerds/">Stack for Nerds</a>.
+[Stack for Nerds](stack-for-nerds.md).
 </p>

@@ -6,7 +6,7 @@ hide:
 
 # Getting Started
 
-Going from a spare device to a Home Assistant panel on the wall takes three
+Going from a spare device to a Home Assistant panel on the wall takes four
 steps. Follow them in order and you'll be up and running without a terminal or a
 weekend of tinkering.
 
@@ -28,9 +28,12 @@ See [Wi-Fi setup](flash/wifi.md). If you are setting up several devices, a
 ## 3. Pair with Home Assistant
 
 Once online, the device shows an "add me" screen. Install the **Dashboard
-Assistant** integration (via HACS) and Home Assistant discovers the panel over
-mDNS, so it shows up as a device you can see, control and automate. There is no
-token to type.
+Assistant** integration — a HACS custom repository, added in a couple of
+clicks — and Home Assistant discovers the panel over mDNS, so it shows up as a
+device you can see, control and automate. There is no token to type. The
+[Connect to Home Assistant](usage/integration.md) guide walks through it.
+
+[Install the integration&nbsp;→](usage/integration.md){ .da-btn .da-btn--primary }
 
 ## 4. Use it day to day
 
