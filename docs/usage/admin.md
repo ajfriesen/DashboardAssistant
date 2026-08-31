@@ -2,7 +2,7 @@
 
 The tablet's screen is deliberately dull. It shows your dashboard, a navigation
 bar and a read-only info view, and nothing on it can change how the device is
-configured. A wall panel gets touched by guests, housemates and children, and
+configured. A shared screen gets touched by guests, housemates and children, and
 none of them should be able to re-point it, roll it back or reboot it.
 
 Everything that *does* change the device lives on the **admin page**, which you

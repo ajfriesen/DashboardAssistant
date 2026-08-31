@@ -68,6 +68,15 @@
   gap: 0.75rem;
 }
 
+/* Hardware line under the hero CTA — the supported-target slot from the brand
+   copy table (docs/brand/README.md). Deliberately quiet: it answers "will it
+   run on mine?" without competing with the buttons above it. */
+.da-hero__hardware {
+  margin: 1rem 0 0;
+  font-size: 0.78rem;
+  color: var(--md-default-fg-color--light);
+}
+
 /* --------------------------------------------------------------------------
    Buttons
    --------------------------------------------------------------------------
@@ -273,6 +282,26 @@
 .da-card__icon {
   font-size: 1.5rem;
   line-height: 1;
+}
+
+/* The three-step section reuses .da-card, but its icon slot holds a step
+   number rather than an emoji — so it gets the amber fill and a fixed circle
+   instead of sitting at emoji size. */
+.da-cards--steps {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.da-cards--steps .da-card__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50%;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--md-primary-bg-color);
+  background: var(--md-primary-fg-color);
 }
 
 .da-card h3 {

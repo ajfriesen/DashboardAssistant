@@ -34,7 +34,7 @@ separate SD-card image.
 
 ## Touchscreens
 
-A touchscreen is recommended for wall-panel use. The official Raspberry Pi touch
+A touchscreen is recommended if you are mounting the screen. The official Raspberry Pi touch
 displays are tested and working.
 
 [Tested touchscreens&nbsp;→](touchscreens.md){ .da-btn .da-btn--ghost }

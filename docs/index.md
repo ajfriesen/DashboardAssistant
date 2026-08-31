@@ -9,19 +9,21 @@ hide:
 
 <div class="da-hero__text" markdown>
 
-<span class="da-hero__eyebrow">Home Assistant on your wall</span>
+<span class="da-hero__eyebrow">Five minutes, not a weekend</span>
 
-# Your Home Assistant Dashboard, <span class="da-accent">wherever you like</span> {: .da-hero__title }
+# A dashboard OS, <span class="da-accent">not a weekend project</span> {: .da-hero__title }
 
 <p class="da-hero__lead">
-Download one image, flash it to an SD card or SSD, and power on your device. It
-wakes up as a Home Assistant dashboard on your wall or desk. No Linux knowledge, no terminal, no weekend of tinkering. Just your smart home, on the wall.
+Flash one image and power it on. It signs itself in and boots straight to your
+dashboard — no login screen, ever.
 </p>
 
 <div class="da-hero__cta" markdown>
 [Get started&nbsp;→](getting-started.md){ .da-btn .da-btn--primary }
 [See it in action](in-action.md){ .da-btn .da-btn--ghost }
 </div>
+
+<p class="da-hero__hardware">x86 with mainline Linux support · Raspberry Pi 4 and 5</p>
 
 </div>
 
@@ -43,17 +45,46 @@ wakes up as a Home Assistant dashboard on your wall or desk. No Linux knowledge,
 
 </section>
 
-## Everything you need for a wall dashboard {: .da-section-title }
+## Flash. Boot. Use. {: .da-section-title }
 
-<p class="da-section-lead">Made for a screen on the wall — not a computer to look after.</p>
+<p class="da-section-lead">Roughly five minutes, most of it the flash.</p>
+
+<div class="da-cards da-cards--steps" markdown>
+
+<div class="da-card" markdown>
+<div class="da-card__icon">1</div>
+### Flash
+Write one image to an SD card or SSD and put it in your tablet, mini-PC or
+Raspberry Pi. Nothing to partition, no installer to click through.
+</div>
+
+<div class="da-card" markdown>
+<div class="da-card__icon">2</div>
+### Boot
+Power on. On Ethernet it just joins; on Wi-Fi it shows a QR code you scan with
+your phone. Then it pairs itself with Home Assistant.
+</div>
+
+<div class="da-card" markdown>
+<div class="da-card__icon">3</div>
+### Use
+It opens your dashboard and stays there. Nothing to log into, and it appears in
+Home Assistant as a device you can automate.
+</div>
+
+</div>
+
+## Everything you need {: .da-section-title }
+
+<p class="da-section-lead">Made for a screen you look at — not a computer you look after.</p>
 
 <div class="da-cards" markdown>
 
 <div class="da-card" markdown>
 <div class="da-card__icon">⚡</div>
-### Download, flash, boot
-Write one image to an SD card or SSD, pop it into your tablet, mini-PC or
-Raspberry Pi, and power on. No Linux knowledge, no complicated setup.
+### No Linux knowledge
+There is no desktop to configure, no lock screen to disable and no autostart to
+wire up. The image ships as the finished thing.
 </div>
 
 <div class="da-card" markdown>

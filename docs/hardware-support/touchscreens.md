@@ -4,7 +4,7 @@ icon: lucide/hand
 
 # Touchscreens
 
-A touchscreen is recommended for wall-panel use so you can wake the display and
+A touchscreen is recommended for a mounted screen so you can wake the display and
 use the on-screen controls, though it isn't required.
 
 ## Tested displays

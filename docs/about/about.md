@@ -1,7 +1,7 @@
 # About
 
 **Dashboard Assistant OS** turns any spare tablet, mini-PC or single-board
-computer into a dedicated Home Assistant wall panel. It is a minimal, declarative
+computer into a dedicated Home Assistant dashboard. It is a minimal, declarative
 NixOS system that boots straight into a full-screen browser locked to your
 dashboard — no desktop, no login screen, nothing to tap through.
 

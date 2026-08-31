@@ -2,7 +2,7 @@
 
 **A declarative, unbreakable Home Assistant Kiosk OS built on NixOS.** Flash it to
 a mini-PC or tablet, point it at your Home Assistant, and get a self-contained
-wall dashboard that integrates *back* into HA through a native custom integration
+dashboard that integrates *back* into HA through a native custom integration
 (installable via HACS) — so the screen itself becomes something you can see and
 control from your automations.
 
@@ -45,7 +45,7 @@ The motivation was born to make this easier, with no Linux knowledge needed.
   QR code to put it on your Wi-Fi, and it pairs with Home Assistant and logs
   itself in.
 - **Over-the-air updates.** Update the whole OS from Home Assistant.
-- **Unbreakable.** It's NixOS. A bad update never bricks the wall panel — the
+- **Unbreakable.** It's NixOS. A bad update never bricks the device — the
   device keeps every previous generation, and its LAN-only admin page lets you
   roll back to a known-good one from any machine on your network.
 - **Two-way Home Assistant integration.** Most kiosks *show* HA. This one also

@@ -17,7 +17,7 @@ site_name = "Dashboard Assistant"
 # meaningful description of the site content for use by search engines.
 #
 # Read more: https://zensical.org/docs/setup/basics/#site_description
-site_description = "Put Home Assistant on any screen in your home. Flash one image to a spare tablet or panel and it boots straight into your dashboard."
+site_description = "A dashboard OS for Home Assistant. Flash one image to an x86 tablet, mini-PC or Raspberry Pi and it boots straight into your dashboard."
 
 # The site_author attribute. This is used in the HTML head element.
 #

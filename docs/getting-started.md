@@ -6,7 +6,7 @@ hide:
 
 # Getting Started
 
-Going from a spare device to a Home Assistant panel on the wall takes four
+Going from a spare device to a working Home Assistant dashboard takes four
 steps. Follow them in order and you'll be up and running without a terminal or a
 weekend of tinkering.
 
@@ -37,7 +37,7 @@ device you can see, control and automate. There is no token to type. The
 
 ## 4. Use it day to day
 
-Once it's on the wall, you control it in two places: on the screen itself and
+Once it's up, you control it in two places: on the screen itself and
 from Home Assistant. The [Usage](usage/usage.md) guide covers the on-device
 controls, the integration's entities, one-tap OS updates and rolling back if an
 update ever misbehaves. If something looks off, the
