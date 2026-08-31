@@ -9,7 +9,7 @@ separate SD-card image.
 
 | Board | Status | Notes |
 |---|---|---|
-| Raspberry Pi 5 (aarch64) | ✅ Supported | Tested and working. |
-| Raspberry Pi 4 (aarch64) | ✅ Supported | Tested and working. |
+| Raspberry Pi 5 (aarch64) | :lucide-circle-check: Supported | Tested and working. |
+| Raspberry Pi 4 (aarch64) | :lucide-circle-check: Supported | Tested and working. |
 
 For the official Raspberry Pi touch displays, see [Touchscreens](touchscreens.md).

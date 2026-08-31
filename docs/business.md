@@ -41,14 +41,14 @@ about it and we'll figure out the details together.
 <div class="da-cards" markdown>
 
 <div class="da-card" markdown>
-<div class="da-card__icon">🔁</div>
+<div class="da-card__icon" markdown="span">:lucide-repeat:</div>
 ### Repeatable by design
 Flash the same image to the second, fifth or fiftieth screen and get the exact
 same result every time. No fiddly per-device setup, nothing to hand-configure.
 </div>
 
 <div class="da-card" markdown>
-<div class="da-card__icon">🛟</div>
+<div class="da-card__icon" markdown="span">:lucide-life-buoy:</div>
 ### Recoverable, not brickable
 Every version is kept as a generation. If an update ever misbehaves, roll back
 to a known-good one from the device's admin page, over the network. No site
@@ -56,14 +56,14 @@ visit, no re-flash.
 </div>
 
 <div class="da-card" markdown>
-<div class="da-card__icon">🏠</div>
+<div class="da-card__icon" markdown="span">:lucide-house:</div>
 ### Manageable from Home Assistant
 Each panel reports back as a device, with display, brightness, updates and more,
 so it fits the tooling and automations you already run.
 </div>
 
 <div class="da-card" markdown>
-<div class="da-card__icon">🌐</div>
+<div class="da-card__icon" markdown="span">:lucide-globe:</div>
 ### Any page, not just Home Assistant
 Point a screen at a dashboard, a signage page or any internal web app, and flip
 between them on a schedule or on demand.

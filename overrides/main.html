@@ -20,7 +20,13 @@
 {% endblock %}
 
 {% block announce %}
-  🚧 Dashboard Assistant is under active development — expect breaking changes.
+  {# The lucide triangle-alert, inlined: the banner is a Jinja block, so a
+     :lucide-*: shortcode never runs here. stroke="currentColor" keeps it on the
+     banner's text colour. #}
+  <svg class="da-announce-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+       fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+       stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3M12 9v4M12 17h.01"/></svg>
+  Dashboard Assistant is under active development — expect breaking changes.
   Follow along on
   <a href="https://github.com/ajfriesen/DashboardAssistant">GitHub</a>.
 {% endblock %}

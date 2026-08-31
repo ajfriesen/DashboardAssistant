@@ -28,17 +28,17 @@ forward:
 
 ## Ways to help
 
-- 💛 **Support** — a small recurring amount. Keeps the lights on and means a lot.
+- :lucide-heart: **Support** — a small recurring amount. Keeps the lights on and means a lot.
 
 
 ## Not in a position to sponsor?
 
 That's completely fine — these help just as much:
 
-- ⭐ **Star the [repo](https://github.com/ajfriesen/DashboardAssistant)** — it's
+- :lucide-star: **Star the [repo](https://github.com/ajfriesen/DashboardAssistant)** — it's
   the cheapest, most effective boost.
-- 🗣️ **Tell people.** Post your setup, share a screenshot, mention it in your
+- :lucide-megaphone: **Tell people.** Post your setup, share a screenshot, mention it in your
   Home Assistant community.
-- 🐛 **Create bug reports.** Bug reports, docs fixes or just say thanks on [GitHub discussions](https://github.com/ajfriesen/DashboardAssistant/discussions).
+- :lucide-bug: **Create bug reports.** Bug reports, docs fixes or just say thanks on [GitHub discussions](https://github.com/ajfriesen/DashboardAssistant/discussions).
 
-Thank you for keeping the project alive. 💛
+Thank you for keeping the project alive.

@@ -12,10 +12,10 @@ own page with the details.
 
 | Target | Status | Notes |
 |---|---|---|
-| x86_64 (mini-PC, laptop, tablet) | ✅ Supported | Primary, tested target. Ships as a flashable disk image. |
-| Raspberry Pi 5 (aarch64) | ✅ Supported | Tested and working. Ships as an SD-card image. |
-| Raspberry Pi 4 (aarch64) | ✅ Supported | Tested and working. Ships as an SD-card image. |
-| Other aarch64 boards | 🔭 Planned | Not yet packaged. |
+| x86_64 (mini-PC, laptop, tablet) | :lucide-circle-check: Supported | Primary, tested target. Ships as a flashable disk image. |
+| Raspberry Pi 5 (aarch64) | :lucide-circle-check: Supported | Tested and working. Ships as an SD-card image. |
+| Raspberry Pi 4 (aarch64) | :lucide-circle-check: Supported | Tested and working. Ships as an SD-card image. |
+| Other aarch64 boards | :lucide-clock: Planned | Not yet packaged. |
 
 ## x86_64
 

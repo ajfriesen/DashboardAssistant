@@ -81,49 +81,49 @@ Home Assistant as a device you can automate.
 <div class="da-cards" markdown>
 
 <div class="da-card" markdown>
-<div class="da-card__icon">⚡</div>
+<div class="da-card__icon" markdown="span">:lucide-package-check:</div>
 ### No Linux knowledge
 There is no desktop to configure, no lock screen to disable and no autostart to
 wire up. The image ships as the finished thing.
 </div>
 
 <div class="da-card" markdown>
-<div class="da-card__icon">🔑</div>
+<div class="da-card__icon" markdown="span">:lucide-key-round:</div>
 ### Signs itself in
 It logs in to Home Assistant for you and boots straight to your dashboard — no
 login screen to tap through every time.
 </div>
 
 <div class="da-card" markdown>
-<div class="da-card__icon">🏠</div>
+<div class="da-card__icon" markdown="span">:lucide-house:</div>
 ### Part of Home Assistant
 The screen shows up in Home Assistant like any other device. Turn it on or off,
 dim it, or have your automations do it for you.
 </div>
 
 <div class="da-card" markdown>
-<div class="da-card__icon">🌐</div>
+<div class="da-card__icon" markdown="span">:lucide-globe:</div>
 ### Show any page
 Add as many dashboards or websites as you like and flip between them — from Home
 Assistant or a tap on the screen.
 </div>
 
 <div class="da-card" markdown>
-<div class="da-card__icon">👆</div>
+<div class="da-card__icon" markdown="span">:lucide-pointer:</div>
 ### Made for touch
 Tap to wake the screen and type with the on-screen keyboard. No mouse or
 keyboard to plug in.
 </div>
 
 <div class="da-card" markdown>
-<div class="da-card__icon">🔄</div>
+<div class="da-card__icon" markdown="span">:lucide-refresh-cw:</div>
 ### Updates from Home Assistant
 When a new version is ready, install it from Home Assistant with one tap. No
 terminal, nothing to re-flash.
 </div>
 
 <div class="da-card" markdown>
-<div class="da-card__icon">🛟</div>
+<div class="da-card__icon" markdown="span">:lucide-history:</div>
 ### Easy to undo
 If an update ever misbehaves, go back to a version that worked — from a simple
 admin page on your own network, no re-flash, no site visit.

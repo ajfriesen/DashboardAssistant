@@ -279,27 +279,46 @@
   box-shadow: 0 10px 28px -18px rgba(0, 0, 0, 0.5);
 }
 
+/* --------------------------------------------------------------------------
+   Card icon tile
+   --------------------------------------------------------------------------
+   The icon sits in a rounded square, not a circle: the brand mark is a grid of
+   rounded tiles, so the radius here is the mark's own (rx 3.5 on a 14-unit
+   tile, i.e. a quarter of the side). Feature cards get the washed tile with an
+   ink glyph; the three-step section gets the solid amber fill, which reads as
+   "do these in order" against the quieter feature grid.
+
+   Icons come from `:lucide-*:` shortcodes, which inline an SVG with
+   stroke="currentColor" — so `color` below drives the stroke. Sizing has to be
+   explicit; the SVG has no intrinsic size to scale with font-size.
+   -------------------------------------------------------------------------- */
 .da-card__icon {
-  font-size: 1.5rem;
-  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 0.55rem;
+  color: var(--md-accent-fg-color);
+  background: color-mix(in srgb, var(--md-primary-fg-color) 16%, transparent);
 }
 
-/* The three-step section reuses .da-card, but its icon slot holds a step
-   number rather than an emoji — so it gets the amber fill and a fixed circle
-   instead of sitting at emoji size. */
+.da-card__icon .twemoji,
+.da-card__icon svg {
+  display: block;
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
 .da-cards--steps {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
+/* Step numbers are type, not a glyph: solid amber tile, dark ink numeral. */
 .da-cards--steps .da-card__icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.9rem;
-  height: 1.9rem;
-  border-radius: 50%;
   font-size: 0.95rem;
   font-weight: 700;
+  line-height: 1;
   color: var(--md-primary-bg-color);
   background: var(--md-primary-fg-color);
 }
@@ -316,18 +335,63 @@
   color: var(--md-default-fg-color--light);
 }
 
+/* Inline lucide icons in body copy — the sponsor list and the hardware status
+   tables. Sit them on the text baseline and give the two status glyphs the
+   brand's semantic rails, so a table column stays scannable without colour
+   being the only signal (the word next to it says the same thing). */
+.md-typeset li > .twemoji,
+.md-typeset td > .twemoji,
+.md-typeset td .twemoji {
+  vertical-align: -0.15em;
+}
+
+.md-typeset svg.lucide-circle-check { color: var(--da-sage); }
+.md-typeset svg.lucide-clock { color: var(--md-default-fg-color--light); }
+
+/* A list item that opens with an icon already has a marker — drop the bullet
+   rather than show both, and pull the row back into the bullet's column. */
+.md-typeset li:has(> .twemoji:first-child) {
+  list-style: none;
+  margin-left: -1.05em;
+}
+
+.md-typeset li:has(> .twemoji:first-child) > .twemoji {
+  color: var(--md-accent-fg-color);
+  margin-right: 0.15em;
+}
+
+/* Alert glyph in the announcement banner (overrides/main.html). */
+.da-announce-icon {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.15em;
+  margin-right: 0.15em;
+}
+
 /* --------------------------------------------------------------------------
    Beating heart on the "Sponsor" nav link
    --------------------------------------------------------------------------
-   The nav label stays plain text ("Sponsor"); the heart is added here as a
-   pseudo-element so it can be animated. Matches the Sponsor link in both the
-   top tabs and the sidebar, at any page depth (href ends in "sponsor/").
+   The tab bar renders labels as plain text — the page's `icon:` front matter
+   never reaches it — so the heart is added here as a pseudo-element, which
+   also lets it animate. Matches the Sponsor link in both the top tabs and the
+   sidebar, at any page depth (href ends in "sponsor/").
+
+   It is the lucide heart used as a mask rather than an emoji, so it takes the
+   amber ink like every other icon on the site instead of forcing the platform's
+   own red. Inlined as a data URI because a masked external file would be a
+   second request for one glyph.
    -------------------------------------------------------------------------- */
 .md-tabs__link[href$="sponsor/"]::before,
 .md-nav__link[href$="sponsor/"]::before {
-  content: "❤️";
+  content: "";
   display: inline-block;
+  width: 0.95em;
+  height: 0.95em;
   margin-right: 0.4em;
+  vertical-align: -0.15em;
+  background-color: var(--md-accent-fg-color);
+  -webkit-mask: url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M2%209.5a5.5%205.5%200%200%201%209.591-3.676.56.56%200%200%200%20.818%200A5.49%205.49%200%200%201%2022%209.5c0%202.29-1.5%204-3%205.5l-5.492%205.313a2%202%200%200%201-3%20.019L5%2015c-1.5-1.5-3-3.2-3-5.5%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M2%209.5a5.5%205.5%200%200%201%209.591-3.676.56.56%200%200%200%20.818%200A5.49%205.49%200%200%201%2022%209.5c0%202.29-1.5%204-3%205.5l-5.492%205.313a2%202%200%200%201-3%20.019L5%2015c-1.5-1.5-3-3.2-3-5.5%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat;
   transform-origin: center;
   animation: da-heartbeat 1.3s ease-in-out infinite;
 }
