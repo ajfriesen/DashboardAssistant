@@ -116,6 +116,13 @@ keyboard to plug in.
 </div>
 
 <div class="da-card" markdown>
+<div class="da-card__icon" markdown="span">:lucide-audio-lines:</div>
+### Also a speaker
+A built-in Sendspin player joins a synchronized group alongside your other
+speakers. Music Assistant runs it, and the audio never leaves your network.
+</div>
+
+<div class="da-card" markdown>
 <div class="da-card__icon" markdown="span">:lucide-refresh-cw:</div>
 ### Updates from Home Assistant
 When a new version is ready, install it from Home Assistant with one tap. No
