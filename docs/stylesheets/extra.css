@@ -303,11 +303,15 @@
   background: color-mix(in srgb, var(--md-primary-fg-color) 16%, transparent);
 }
 
-.da-card__icon .twemoji,
-.da-card__icon svg {
-  display: block;
-  width: 1.15rem;
-  height: 1.15rem;
+/* Size the glyph through the theme's own --md-icon-size knob rather than
+   setting width/height here: its `.md-typeset .twemoji svg` rule carries a
+   type selector, so it outspecifies anything scoped to .da-card__icon and the
+   svg ends up 1.125em wide against whatever height we asked for — a non-square
+   box that pushes a square viewBox off-centre. The knob has to be re-declared
+   on .twemoji itself; the theme declares it there too, so setting it on the
+   tile would just lose to that. */
+.da-card__icon .twemoji {
+  --md-icon-size: 1.15rem;
 }
 
 .da-cards--steps {
