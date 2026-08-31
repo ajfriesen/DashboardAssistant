@@ -280,6 +280,93 @@
 }
 
 /* --------------------------------------------------------------------------
+   Scenes — what the thing is like to live with
+   --------------------------------------------------------------------------
+   Alternating text/screenshot rows, sitting between the three steps and the
+   feature grid. Same two-column shape as .da-hero and the same 59.9em collapse,
+   so the page has one stacking point rather than two.
+
+   The screenshot reuses .da-tablet / .da-tablet__screen / .da-shot, which
+   in-action.md already uses for exactly this.
+   -------------------------------------------------------------------------- */
+.da-scenes {
+  display: grid;
+  gap: 3.5rem;
+  margin: 1.5rem 0 1rem;
+}
+
+.da-scene {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3rem;
+  align-items: center;
+}
+
+/* Consecutive scenes put the screenshot on opposite sides. `order` rather than
+   `direction`, which would also flip the text's own inline direction. */
+.da-scene:nth-child(even) > .da-scene__media { order: -1; }
+
+/* A scene with no screenshot yet — runs full width at a readable measure
+   instead of leaving an empty column. Zensical builds happily with a missing
+   image file and would ship a broken one to the live site, so a scene stays
+   text-only until its screenshot actually exists.
+
+   To promote one to image-led: drop this modifier from the .da-scene in
+   docs/index.md and give it a sibling
+
+     <div class="da-scene__media">
+       <div class="da-tablet">
+         <div class="da-tablet__screen">
+           <img class="da-shot" src="img/NAME.jpeg" alt="...">
+         </div>
+       </div>
+     </div>
+
+   The music scene is waiting on docs/img/music-assistant.jpeg — a shot of the
+   Music Assistant page running on a device.
+
+   Note the theme's root font-size is 20px, so 1rem is 20px here, not 16 — the
+   cap below is 560px, which matches the column a two-column scene gives its
+   text, so every scene holds the same measure. */
+.da-scene--text {
+  grid-template-columns: 1fr;
+  max-width: 28rem;
+}
+
+/* The scene screenshot is smaller than the hero's. A scene's text is only two
+   or three lines, and a full 560px tablet leaves ~190px of dead space either
+   side of it once align-items has centred the pair. */
+.da-scene__media .da-tablet {
+  max-width: 23rem;
+}
+
+.da-scene__text > :first-child { margin-top: 0; }
+.da-scene__text > :last-child { margin-bottom: 0; }
+
+/* Match the feature cards' heading scale rather than the h3 default, so a scene
+   title and a card title read as the same level. */
+.md-typeset .da-scene__text h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1.25rem;
+}
+
+.da-scene__text p {
+  margin: 0;
+  line-height: 1.65;
+  color: var(--md-default-fg-color--light);
+}
+
+@media screen and (max-width: 59.9em) {
+  .da-scene {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  /* Stacked, the screenshot always follows its text — the alternation only
+     means anything side by side. */
+  .da-scene:nth-child(even) > .da-scene__media { order: 0; }
+}
+
+/* --------------------------------------------------------------------------
    Card icon tile
    --------------------------------------------------------------------------
    The icon sits in a rounded square, not a circle: the brand mark is a grid of

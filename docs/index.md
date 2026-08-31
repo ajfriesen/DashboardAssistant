@@ -74,7 +74,54 @@ Home Assistant as a device you can automate.
 
 </div>
 
-## Everything you need {: .da-section-title }
+## It's not just for you {: .da-section-title }
+
+<p class="da-section-lead">A screen on the wall gets used by whoever walks past it.</p>
+
+<div class="da-scenes" markdown>
+
+<div class="da-scene" markdown>
+
+<div class="da-scene__text" markdown>
+### No app, no account, no login
+<p>
+It boots to your dashboard and stays there — no login screen, ever. Guests, kids
+and housemates tap the wall to turn on a lamp or nudge the heating, without an
+app on their phone or an account of their own. Nothing on that screen can
+re-point the device or roll it back; that lives on an admin page on your own
+network.
+</p>
+</div>
+
+<div class="da-scene__media">
+  <div class="da-tablet">
+    <div class="da-tablet__screen">
+      <img class="da-shot" src="img/home-assistant-light.jpeg" alt="A Home Assistant dashboard filling the panel, with no login screen or desktop around it">
+    </div>
+  </div>
+</div>
+
+</div>
+
+<div class="da-scene da-scene--text" markdown>
+
+<div class="da-scene__text" markdown>
+### Pick an album on the wall, hear it everywhere
+<p>
+The panel is a Sendspin player in your Music Assistant group, so it plays in step
+with your other speakers. And when Music Assistant runs as the Home Assistant
+add-on, its full interface is right there on the screen — browse the library and
+send what you pick to any room. Nobody has to log in.
+</p>
+</div>
+
+<!-- To make this scene image-led, see .da-scene--text in stylesheets/extra.css. -->
+
+</div>
+
+</div>
+
+## The boring parts, handled {: .da-section-title }
 
 <p class="da-section-lead">Made for a screen you look at — not a computer you look after.</p>
 
@@ -145,5 +192,6 @@ admin page on your own network, no re-flash, no site visit.
 
 <p class="da-section-lead" style="margin-top: 1rem;" markdown>
 Want to know what's running under the hood? It's all in
-[Stack for Nerds](stack-for-nerds.md).
+[Stack for Nerds](stack-for-nerds.md). Built by one person who wanted this to
+exist — [here's why](about/why.md).
 </p>
