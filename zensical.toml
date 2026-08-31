@@ -95,7 +95,7 @@ nav = [
 #
 # Read more: https://zensical.org/docs/customization/#additional-css
 #
-extra_css = ["stylesheets/extra.css"]
+extra_css = ["brand/colors.css", "stylesheets/brand-theme.css", "stylesheets/extra.css"]
 
 # With the `extra_javascript` option you can add your own JavaScript to your
 # project to customize the behavior according to your needs.
@@ -131,7 +131,7 @@ custom_dir = "overrides"
 # - https://zensical.org/docs/setup/logo-and-icons/#favicon
 # - https://developer.mozilla.org/en-US/docs/Glossary/Favicon
 #
-favicon = "img/trackpad_input_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.png"
+favicon = "brand/favicon.svg"
 
 # Zensical supports more than 60 different languages. This means that the
 # labels and tooltips that Zensical's templates produce are translated.
@@ -292,7 +292,7 @@ features = [
 # option in the "theme" subsection. The logo must be a relative path to a file
 # in your "docs_dir", e.g., to use `docs/assets/logo.png` you would set:
 # ----------------------------------------------------------------------------
-logo = "img/trackpad_input_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.svg"
+logo = "brand/mark-wide.svg"
 
 # ----------------------------------------------------------------------------
 # If you don't have a dedicated project logo, you can use a built-in icon from
@@ -312,9 +312,11 @@ logo = "img/trackpad_input_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.svg"
 # of suitably licensed fonts. There are options for a normal text font and for
 # a monospaced font used in code blocks.
 # ----------------------------------------------------------------------------
-#[project.theme.font]
-#text = "Inter"
-#code = "Jetbrains Mono"
+[project.theme.font]
+# Outfit is the brand typeface (see docs/brand/README.md). The wordmark needs
+# weight 600, which overrides/main.html loads explicitly.
+text = "Outfit"
+code = "JetBrains Mono"
 
 # ----------------------------------------------------------------------------
 # In the "palette" subsection you can configure options for the color scheme.
@@ -325,13 +327,20 @@ logo = "img/trackpad_input_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.svg"
 # Read more:
 # - https://zensical.org/docs/setup/colors/
 # ----------------------------------------------------------------------------
+# "custom" suppresses the theme's built-in indigo rules and hands the palette
+# to CSS: docs/stylesheets/brand-theme.css maps the brand tokens in
+# docs/brand/colors.css onto Material's --md-* variables for both schemes.
 [[project.theme.palette]]
 scheme = "default"
+primary = "custom"
+accent = "custom"
 toggle.icon = "lucide/sun"
 toggle.name = "Switch to dark mode"
 
 [[project.theme.palette]]
 scheme = "slate"
+primary = "custom"
+accent = "custom"
 toggle.icon = "lucide/moon"
 toggle.name = "Switch to light mode"
 

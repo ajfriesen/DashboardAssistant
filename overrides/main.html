@@ -7,6 +7,16 @@
     data-website-id="f53b06cf-9ffc-4eef-8b99-821402b9dbb9"
     data-performance="true"
     ></script>
+
+  {# Outfit at the weights the brand uses. theme.font already pulls Outfit, but
+     not necessarily 600 — which is the wordmark weight (docs/brand/README.md). #}
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  {# The SVG favicon comes from theme.favicon; these are the raster fallbacks,
+     which the TOML has no slot for. #}
+  <link rel="icon" href="{{ 'brand/favicon-32.png' | url }}" sizes="32x32">
+  <link rel="apple-touch-icon" href="{{ 'brand/apple-touch-icon-180.png' | url }}">
 {% endblock %}
 
 {% block announce %}

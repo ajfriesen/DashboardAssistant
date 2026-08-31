@@ -37,7 +37,9 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--md-primary-fg-color);
+  /* Amber is a fill (2.2:1 on white), so the label takes the ink variant and
+     only the pill behind it is tinted with the fill. */
+  color: var(--md-accent-fg-color);
   background: color-mix(in srgb, var(--md-primary-fg-color) 14%, transparent);
 }
 
@@ -49,7 +51,9 @@
   letter-spacing: -0.02em;
 }
 
-.da-hero__title .da-accent { color: var(--md-primary-fg-color); }
+/* Accent word in the headline — ink, not fill: #E8A33D is 2.2:1 on white and
+   fails even the large-text threshold. */
+.da-hero__title .da-accent { color: var(--md-accent-fg-color); }
 
 .da-hero__lead {
   margin: 0 0 1.75rem;
@@ -107,8 +111,8 @@
 }
 
 .md-typeset .da-btn--ghost:hover {
-  border-color: var(--md-primary-fg-color);
-  color: var(--md-primary-fg-color);
+  border-color: var(--md-accent-fg-color);
+  color: var(--md-accent-fg-color);
 }
 
 /* --------------------------------------------------------------------------

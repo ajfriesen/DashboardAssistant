@@ -1,0 +1,190 @@
+/* ==========================================================================
+   Dashboard Assistant — brand → theme bridge
+   --------------------------------------------------------------------------
+   Maps the `--da-*` tokens from brand/colors.css onto the theme's `--md-*`
+   palette variables, so the whole site (not just the landing page) renders in
+   the brand colours. Loaded after brand/colors.css and before
+   stylesheets/extra.css — see `extra_css` in zensical.toml. `primary = "custom"`
+   in the palette blocks stops the theme defining its own indigo, so these
+   declarations are the only ones in play (equal specificity, later source).
+
+   THE ONE RULE (brand/colors.css:2-3): #E8A33D is 2.2:1 on white. It is a FILL
+   colour and never lands on a variable that ends up as text. Amber as text is
+   --da-amber-ink (#8F5F14, 5.5:1 on white) / --da-amber-light (#F5B95C, 10:1
+   on dark) — which is what --md-typeset-a-color and --md-accent-fg-color get.
+
+   Where --md-primary-fg-color actually lands in this theme: `--md-typeset-a-color`
+   (overridden below, so it never reaches text) and `.md-button--primary` /
+   `.da-btn--primary`, whose background is the fill and whose label is
+   --md-primary-bg-color. The header is frosted glass over the page ground
+   (--md-default-bg-color--light), NOT a primary-coloured bar — so the amber
+   never becomes a large field behind text anywhere.
+
+   --lighter and --lightest are deliberately left on the theme's own alpha
+   values: they are hairline/placeholder slots, and an opaque brand colour there
+   reads far heavier than intended (e.g. the .da-btn--ghost border).
+   ========================================================================== */
+
+[data-md-color-scheme="default"] {
+  /* Fill — the primary button. */
+  --md-primary-fg-color:        var(--da-amber);
+  --md-primary-fg-color--light: var(--da-amber-light);
+  --md-primary-fg-color--dark:  var(--da-amber-deep);
+  --md-primary-bg-color:        var(--da-text);  /* label on amber, 7.9:1 */
+
+  /* Amber as text. Never --da-amber here. */
+  --md-accent-fg-color:         var(--da-amber-ink);
+  --md-accent-fg-color--transparent: var(--da-amber-wash);  /* announcement bar ground */
+  --md-typeset-a-color:         var(--da-amber-ink);
+
+  --md-default-bg-color:        var(--da-bg);
+  --md-default-fg-color:        var(--da-text);
+  --md-default-fg-color--light: var(--da-text-muted);
+
+  --md-code-bg-color:           var(--da-bg-subtle);
+  --md-code-fg-color:           var(--da-text);
+}
+
+[data-md-color-scheme="slate"] {
+  /* The theme derives the whole dark scale from --md-hue as hsla(hue,15%,…),
+     including the frosted header, tables, kbd and footer. Warming the hue to
+     the brand's 40deg keeps every derived value coherent with --da-bg; setting
+     only --md-default-bg-color would leave those on the stock blue-grey. */
+  --md-hue: 40;
+
+  --md-primary-fg-color:        var(--da-amber);
+  --md-primary-fg-color--light: var(--da-amber-light);
+  --md-primary-fg-color--dark:  var(--da-amber-deep);
+  --md-primary-bg-color:        #23211D;  /* the fill is amber in dark too, so
+                                             its label stays dark ink */
+
+  --md-accent-fg-color:         var(--da-amber-light);
+  --md-accent-fg-color--transparent: var(--da-amber-wash);  /* announcement bar ground */  /* 10:1 on dark */
+  --md-typeset-a-color:         var(--da-amber-light);
+
+  --md-default-bg-color:        var(--da-bg);
+  --md-default-fg-color:        var(--da-text);
+  --md-default-fg-color--light: var(--da-text-muted);
+
+  --md-code-bg-color:           var(--da-bg-subtle);
+  --md-code-fg-color:           var(--da-text);
+}
+
+/* --------------------------------------------------------------------------
+   Header wordmark
+   --------------------------------------------------------------------------
+   Outfit 600, tracking -0.025em — the wordmark spec from brand/README.md.
+
+   The two-tone split ("Assistant" in --da-amber-ink) that brand/wordmark.html
+   shows is deliberately NOT used here: the header fill is now amber, and amber
+   ink on amber has no contrast. The split lockup belongs on light surfaces.
+   -------------------------------------------------------------------------- */
+.md-header__topic > .md-ellipsis {
+  font-family: Outfit, "Helvetica Neue", Helvetica, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+/* --------------------------------------------------------------------------
+   Semantic rails on admonitions
+   --------------------------------------------------------------------------
+   The theme's modern variant has no border on an admonition: it tints the whole
+   block with the type colour at 10% alpha, paints the icon as a masked
+   ::before, and colours a collapsed <details> chevron with ::after. All three
+   are re-pointed here, replacing the stock blue/orange/green with the brand's
+   three rails: note/info/abstract/quote -> --da-info, tip/success/example ->
+   --da-sage, warning/danger/failure/bug -> --da-clay.
+   -------------------------------------------------------------------------- */
+
+.md-typeset .admonition.note,
+.md-typeset details.note,
+.md-typeset .admonition.info,
+.md-typeset details.info,
+.md-typeset .admonition.abstract,
+.md-typeset details.abstract,
+.md-typeset .admonition.quote,
+.md-typeset details.quote {
+  background-color: color-mix(in srgb, var(--da-info) 10%, transparent);
+}
+
+.md-typeset .note > .admonition-title::before,
+.md-typeset .note > summary::before,
+.md-typeset .info > .admonition-title::before,
+.md-typeset .info > summary::before,
+.md-typeset .abstract > .admonition-title::before,
+.md-typeset .abstract > summary::before,
+.md-typeset .quote > .admonition-title::before,
+.md-typeset .quote > summary::before {
+  background-color: var(--da-info);
+}
+
+.md-typeset .note > .admonition-title::after,
+.md-typeset .note > summary::after,
+.md-typeset .info > .admonition-title::after,
+.md-typeset .info > summary::after,
+.md-typeset .abstract > .admonition-title::after,
+.md-typeset .abstract > summary::after,
+.md-typeset .quote > .admonition-title::after,
+.md-typeset .quote > summary::after {
+  color: var(--da-info);
+}
+
+.md-typeset .admonition.tip,
+.md-typeset details.tip,
+.md-typeset .admonition.success,
+.md-typeset details.success,
+.md-typeset .admonition.example,
+.md-typeset details.example {
+  background-color: color-mix(in srgb, var(--da-sage) 10%, transparent);
+}
+
+.md-typeset .tip > .admonition-title::before,
+.md-typeset .tip > summary::before,
+.md-typeset .success > .admonition-title::before,
+.md-typeset .success > summary::before,
+.md-typeset .example > .admonition-title::before,
+.md-typeset .example > summary::before {
+  background-color: var(--da-sage);
+}
+
+.md-typeset .tip > .admonition-title::after,
+.md-typeset .tip > summary::after,
+.md-typeset .success > .admonition-title::after,
+.md-typeset .success > summary::after,
+.md-typeset .example > .admonition-title::after,
+.md-typeset .example > summary::after {
+  color: var(--da-sage);
+}
+
+.md-typeset .admonition.warning,
+.md-typeset details.warning,
+.md-typeset .admonition.danger,
+.md-typeset details.danger,
+.md-typeset .admonition.failure,
+.md-typeset details.failure,
+.md-typeset .admonition.bug,
+.md-typeset details.bug {
+  background-color: color-mix(in srgb, var(--da-clay) 10%, transparent);
+}
+
+.md-typeset .warning > .admonition-title::before,
+.md-typeset .warning > summary::before,
+.md-typeset .danger > .admonition-title::before,
+.md-typeset .danger > summary::before,
+.md-typeset .failure > .admonition-title::before,
+.md-typeset .failure > summary::before,
+.md-typeset .bug > .admonition-title::before,
+.md-typeset .bug > summary::before {
+  background-color: var(--da-clay);
+}
+
+.md-typeset .warning > .admonition-title::after,
+.md-typeset .warning > summary::after,
+.md-typeset .danger > .admonition-title::after,
+.md-typeset .danger > summary::after,
+.md-typeset .failure > .admonition-title::after,
+.md-typeset .failure > summary::after,
+.md-typeset .bug > .admonition-title::after,
+.md-typeset .bug > summary::after {
+  color: var(--da-clay);
+}
