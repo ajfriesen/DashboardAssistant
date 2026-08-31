@@ -1,0 +1,47 @@
+/* Dashboard Assistant — colour tokens
+   Amber (#E8A33D) is a FILL colour: 2.2:1 on white. Never set text in it.
+   Text uses --da-amber-ink (5.5:1 light) / --da-amber-light (10:1 dark). */
+
+:root {
+  --da-amber:        #E8A33D;  /* fills, logo tile, primary buttons */
+  --da-amber-deep:   #C4831F;  /* pressed / active                  */
+  --da-amber-ink:    #8F5F14;  /* amber as text, 5.5:1 on white     */
+  --da-amber-light:  #F5B95C;  /* amber as text on dark, 10:1       */
+  --da-amber-wash:   #FDF3E3;  /* callout backgrounds               */
+
+  --da-bg:           #FFFFFF;
+  --da-bg-subtle:    #F7F6F3;
+  --da-surface:      #EFEDE7;
+  --da-border:       #DFDBD2;
+  --da-text:         #23211D;
+  --da-text-muted:   #5C574F;  /* 7.2:1 */
+  --da-text-faint:   #75706A;  /* 4.6:1 — labels, not body copy */
+
+  --da-sage:         #6FA287;  /* tip / success rails    */
+  --da-clay:         #C8654A;  /* warning / breaking     */
+  --da-info:         #5E82A8;  /* note / info            */
+}
+
+[data-md-color-scheme="slate"] {
+  --da-amber-ink:    #F5B95C;
+  --da-amber-wash:   #2A2419;
+
+  --da-bg:           #1A1917;
+  --da-bg-subtle:    #23211D;
+  --da-surface:      #2A2822;
+  --da-border:       #35322B;
+  --da-text:         #F0EDE6;
+  --da-text-muted:   #A39D93;  /* 6.5:1 */
+  --da-text-faint:   #8A857C;
+}
+
+/* Wordmark — "Dashboard" in text colour, "Assistant" in amber ink.
+   Never colour the "Dashboard" half. */
+.da-wordmark {
+  font-family: Outfit, "Helvetica Neue", Helvetica, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  color: var(--da-text);
+  white-space: nowrap;
+}
+.da-wordmark > b { font-weight: 600; color: var(--da-amber-ink); }

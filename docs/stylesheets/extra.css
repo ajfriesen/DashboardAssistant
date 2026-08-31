@@ -69,8 +69,8 @@
 }
 
 /* Hardware line under the hero CTA — the supported-target slot from the brand
-   copy table (docs/brand/README.md). Deliberately quiet: it answers "will it
-   run on mine?" without competing with the buttons above it. */
+   copy table. Deliberately quiet: it answers "will it run on mine?" without
+   competing with the buttons above it. */
 .da-hero__hardware {
   margin: 1rem 0 0;
   font-size: 0.78rem;

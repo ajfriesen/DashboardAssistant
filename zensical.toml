@@ -313,8 +313,8 @@ logo = "brand/mark-wide.svg"
 # a monospaced font used in code blocks.
 # ----------------------------------------------------------------------------
 [project.theme.font]
-# Outfit is the brand typeface (see docs/brand/README.md). The wordmark needs
-# weight 600, which overrides/main.html loads explicitly.
+# Outfit is the brand typeface. The wordmark needs weight 600, which
+# overrides/main.html loads explicitly.
 text = "Outfit"
 code = "JetBrains Mono"
 

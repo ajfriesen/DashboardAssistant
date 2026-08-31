@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40" role="img" aria-label="Dashboard Assistant">
+  
+  <rect class="plate" x="0" y="0" width="40" height="40" rx="9"></rect>
+  <rect class="tile" x="6" y="6" width="14" height="14" rx="3.5"></rect>
+  <rect x="20" y="20" width="14" height="14" rx="3.5" fill="#E8A33D"></rect>
+</svg>
