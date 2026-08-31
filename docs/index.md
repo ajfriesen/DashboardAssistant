@@ -9,7 +9,7 @@ hide:
 
 <div class="da-hero__text" markdown>
 
-<span class="da-hero__eyebrow">Five minutes, not a weekend</span>
+<span class="da-hero__eyebrow">For Home Assistant</span>
 
 # A dashboard OS, <span class="da-accent">not a weekend project</span> {: .da-hero__title }
 
