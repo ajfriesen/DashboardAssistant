@@ -362,6 +362,11 @@ icon = "fontawesome/brands/github"
 link = "https://github.com/ajfriesen/DashboardAssistant"
 name = "Dashboard Assistant on GitHub"
 
+[[project.extra.social]]
+icon = "fontawesome/brands/discord"
+link = "https://discord.gg/GzNR9TqAy8"
+name = "Dashboard Assistant on Discord"
+
 # ----------------------------------------------------------------------------
 # In this section you can configure the Markdown extensions that are used when
 # rendering your documentation. We enable the most useful extensions by default,
