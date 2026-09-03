@@ -124,6 +124,34 @@ jobs:
             .#nixosConfigurations.dashboard-assistant-${{ matrix.model }}.config.system.build.toplevel \
             --out-link result-toplevel
 
+      # The root filesystem is btrfs (modules/hardware/sd-image-btrfs.nix), and on
+      # the Pi it is U-Boot — not the GPU firmware — that has to read
+      # extlinux.conf, the kernel and the initrd off that root partition. Stock
+      # rpi_arm64_defconfig is built without btrfs support, so we rebuild U-Boot
+      # with CONFIG_FS_BTRFS=y. If that ever silently stops taking effect (a
+      # nixpkgs bump moving buildUBoot's extraConfig hook, say) the image still
+      # builds and still flashes, and then the board simply never reaches Linux
+      # with no console output to explain why.
+      #
+      # So assert it here, where it costs a second, instead of discovering it on
+      # a card. Grep the built binary for the btrfs command strings the driver
+      # registers; a stock build has ext4load/fatload and none of these.
+      - name: Assert U-Boot can read btrfs
+        run: |
+          set -euo pipefail
+          uboot=$(nix build --no-link --print-out-paths --accept-flake-config \
+            ".#nixosConfigurations.dashboard-assistant-${{ matrix.model }}.config.hardware.raspberry-pi.firmware.uboot.package")
+          echo "U-Boot: $uboot"
+          if strings "$uboot/u-boot.bin" | grep -qi btrfs; then
+            echo "OK: btrfs support present in u-boot.bin"
+            strings "$uboot/u-boot.bin" | grep -i btrfs | sort -u | head
+          else
+            echo "FAIL: u-boot.bin has no btrfs support — a btrfs root would not boot." >&2
+            echo "Filesystem commands actually present:" >&2
+            strings "$uboot/u-boot.bin" | grep -E '^(ext4|ext2|fat|btrfs)(load|ls|size|write)$' | sort -u >&2
+            exit 1
+          fi
+
       # Built for a v* tag release, and on a manual run so a branch can produce a
       # flashable image to test with. A push to main only warms the cache above.
       - name: Build Pi image
