@@ -1,6 +1,7 @@
 ---
 icon: lucide/building-2
 hide:
+  - navigation
   - toc
 ---
 
@@ -8,90 +9,58 @@ hide:
 
 <div class="da-hero__text" markdown>
 
-<span class="da-hero__eyebrow">For businesses</span>
+<span class="da-hero__eyebrow">For manufacturers</span>
 
-# Home Assistant dashboards, <span class="da-accent">on every screen you run</span> {: .da-hero__title }
+# The software is ready. <span class="da-accent">The device isn't built yet.</span> {: .da-hero__title }
 
 <p class="da-hero__lead">
-Showrooms, offices, workshops, rentals, digital signage. Anywhere you want a
-live dashboard on the wall. Dashboard Assistant flashes to a spare tablet,
-mini-PC or single-board computer and boots straight into the screen you choose,
-unattended, for years.
+Dashboard Assistant turns a screen into a Home Assistant panel — flash it once
+and it boots straight to the dashboard, with no login and no desktop underneath.
+What it doesn't have is hardware anyone can buy it on. That's what I'm at the
+point of needing a partner for.
 </p>
 
 <div class="da-hero__cta" markdown>
-[Reach out&nbsp;→](#lets-talk){ .da-btn .da-btn--primary }
+[Let's talk&nbsp;→](#lets-talk){ .da-btn .da-btn--primary }
 [See it in action](in-action.md){ .da-btn .da-btn--ghost }
 </div>
 
+<p class="da-hero__hardware">Running today on x86_64 · Raspberry Pi 4 and 5</p>
+
+</div>
+
+<div class="da-tablet">
+  <div class="da-tablet__screen">
+    <img class="da-slide" src="img/home-assistant-light.jpeg" alt="A Home Assistant dashboard in light mode">
+    <img class="da-slide" src="img/home-assistant-dark.jpeg" alt="A Home Assistant dashboard in dark mode">
+    <img class="da-slide" src="img/recovery.jpeg" alt="Recovery: pick an older, known-good version to boot">
+    <img class="da-slide" src="img/keyboard.jpeg" alt="The on-screen keyboard">
+    <img class="da-slide" src="img/random-website.jpeg" alt="Any website on the panel">
+  </div>
 </div>
 
 </section>
 
-## Built in the open, shaped around you {: .da-section-title }
+## What I'm looking for {: .da-section-title }
 
 <p class="da-section-lead">
-Dashboard Assistant is developed in the open and moving quickly. There's room to
-tailor it to how you actually work. If you have a real use case, tell me
-about it and we'll figure out the details together.
+Someone to build the device this runs on.
 </p>
 
-## Why businesses look at it {: .da-section-title }
+There is no Dashboard Assistant tablet you can order today. People flash their
+own spare hardware, which works, but it means the only people who get one are
+the people willing to write an image to a disk. The obvious next step is a panel
+that arrives with the software already on it.
 
-<div class="da-cards" markdown>
+I am looking for a hardware partner.
 
-<div class="da-card" markdown>
-<div class="da-card__icon" markdown="span">:lucide-repeat:</div>
-### Repeatable by design
-Flash the same image to the second, fifth or fiftieth screen and get the exact
-same result every time. No fiddly per-device setup, nothing to hand-configure.
-</div>
-
-<div class="da-card" markdown>
-<div class="da-card__icon" markdown="span">:lucide-life-buoy:</div>
-### Recoverable, not brickable
-Every version is kept as a generation. If an update ever misbehaves, roll back
-to a known-good one from the device's admin page, over the network. No site
-visit, no re-flash.
-</div>
-
-<div class="da-card" markdown>
-<div class="da-card__icon" markdown="span">:lucide-house:</div>
-### Manageable from Home Assistant
-Each panel reports back as a device, with display, brightness, updates and more,
-so it fits the tooling and automations you already run.
-</div>
-
-<div class="da-card" markdown>
-<div class="da-card__icon" markdown="span">:lucide-globe:</div>
-### Any page, not just Home Assistant
-Point a screen at a dashboard, a signage page or any internal web app, and flip
-between them on a schedule or on demand.
-</div>
-
-</div>
-
-## Good to know {: .da-section-title }
-
-<p class="da-section-lead">
-A couple of practical details up front:
-</p>
-
-- **Runs on x86_64 and Raspberry Pi 4 and 5.** All are tested and working, so
-  you can standardise on mini-PCs, Raspberry Pis, or a mix. See
-  [Hardware Support](hardware-support/index.md) for the current state, including
-  tested touchscreens and how monitor dimming works.
-- **Support that fits your needs.** Rollout help, hardware guidance, a support
-  arrangement. Tell me what you'd need and we'll work it out together.
 
 ## Let's talk {: .da-section-title #lets-talk }
 
 <p class="da-section-lead">
-If you want to run Dashboard Assistant across your screens, or you're just
-weighing it up, reach out. Tell me what you're trying to put on the wall, how
-many screens, and what hardware you have. No obligation, no sales pitch.
+If you build tablets, wall panels or displays, I'd like to hear from you.
 </p>
 
 <div class="da-hero__cta" markdown>
-[Email me&nbsp;→](mailto:andre.friesen@gmail.com?subject=Dashboard%20Assistant%20for%20business){ .da-btn .da-btn--primary }
+[Email me&nbsp;→](mailto:andrej@dashboardassistant.org?subject=Dashboard%20Assistant%20%E2%80%94%20hardware%20partnership){ .da-btn .da-btn--primary }
 </div>
