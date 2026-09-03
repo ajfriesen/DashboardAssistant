@@ -1,0 +1,84 @@
+/* ==========================================================================
+   Dashboard Assistant — self-hosted fonts
+   --------------------------------------------------------------------------
+   Outfit and JetBrains Mono are served from docs/fonts/ instead of Google's
+   CDN, so no visitor IP is sent to Google (see docs/legal/datenschutz.md).
+
+   Because `theme.font = false` in zensical.toml suppresses the Google Fonts
+   <link>, it also suppresses the inline <style> that Zensical would otherwise
+   emit to set --md-text-font / --md-code-font. Those are therefore set here.
+
+   Both families are VARIABLE fonts: Google serves one file per family and
+   subset covering the whole weight axis, so each @font-face declares a weight
+   *range* rather than a single value. Outfit spans 100-900, JetBrains Mono
+   400-800 (per the fvar table). Outfit has no italic; browsers synthesise an
+   oblique for emphasis, which is what the Google-hosted version did too.
+
+   Both are licensed under the SIL Open Font License 1.1 — see
+   docs/fonts/OFL-Outfit.txt and docs/fonts/OFL-JetBrainsMono.txt.
+   ========================================================================== */
+
+:root {
+  --md-text-font: "Outfit";
+  --md-code-font: "JetBrains Mono";
+}
+
+/* JetBrains Mono italic — latin */
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: italic;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url("../fonts/jetbrains-mono-italic-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* JetBrains Mono italic — latin-ext */
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: italic;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url("../fonts/jetbrains-mono-italic-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* JetBrains Mono normal — latin */
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url("../fonts/jetbrains-mono-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* JetBrains Mono normal — latin-ext */
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url("../fonts/jetbrains-mono-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* Outfit normal — latin */
+@font-face {
+  font-family: "Outfit";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("../fonts/outfit-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Outfit normal — latin-ext */
+@font-face {
+  font-family: "Outfit";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("../fonts/outfit-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}

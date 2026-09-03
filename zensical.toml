@@ -38,8 +38,13 @@ repo_name = "ajfriesen/DashboardAssistant"
 # fragment.
 #
 # Read more: https://zensical.org/docs/setup/basics/#copyright
+# Zensical has no config key for arbitrary footer links — extra.social is
+# icon-links only — so the legal pages ride along in this HTML fragment. The
+# paths are absolute because the fragment renders on every page at every depth.
 copyright = """
-Copyright &copy; 2026 Andrej Friesen
+Copyright &copy; 2026 Andrej Friesen &middot;
+<a href="/legal/impressum/">Impressum</a> &middot;
+<a href="/legal/datenschutz/">Datenschutz</a>
 """
 
 # Zensical supports both implicit navigation and explicitly defined navigation.
@@ -95,7 +100,7 @@ nav = [
 #
 # Read more: https://zensical.org/docs/customization/#additional-css
 #
-extra_css = ["brand/colors.css", "stylesheets/brand-theme.css", "stylesheets/extra.css"]
+extra_css = ["stylesheets/fonts.css", "brand/colors.css", "stylesheets/brand-theme.css", "stylesheets/extra.css"]
 
 # With the `extra_javascript` option you can add your own JavaScript to your
 # project to customize the behavior according to your needs.
@@ -103,7 +108,11 @@ extra_css = ["brand/colors.css", "stylesheets/brand-theme.css", "stylesheets/ext
 # The path provided should be relative to the "docs_dir".
 #
 # Read more: https://zensical.org/docs/customization/#additional-javascript
-#extra_javascript = ["javascripts/extra.js"]
+# privacy-optout.js renders the analytics opt-out button on the Datenschutz
+# page. Zensical emits extra_javascript at the end of <body>, after its own
+# bundle, which is what makes `document$` available to it — the script relies
+# on that to survive instant navigation. Do not inline it into the page.
+extra_javascript = ["javascripts/privacy-optout.js"]
 
 # ----------------------------------------------------------------------------
 # Section for configuring theme options
@@ -295,6 +304,19 @@ features = [
 logo = "brand/mark-wide.svg"
 
 # ----------------------------------------------------------------------------
+# Fonts are self-hosted, so this is deliberately `false` rather than a
+# [project.theme.font] table: `false` is what makes base.html skip the
+# <link> to fonts.googleapis.com, which otherwise leaks every visitor's IP
+# address to Google (see docs/legal/datenschutz.md).
+#
+# The same switch also suppresses the inline <style> Zensical uses to set
+# --md-text-font / --md-code-font, so docs/stylesheets/fonts.css sets those
+# itself alongside the @font-face rules. Changing this back to a table would
+# silently restore the Google request.
+# ----------------------------------------------------------------------------
+font = false
+
+# ----------------------------------------------------------------------------
 # If you don't have a dedicated project logo, you can use a built-in icon from
 # the icon sets shipped in Zensical. Please note that the setting lives in a
 # different subsection, and that the above take precedence over the icon.
@@ -305,18 +327,6 @@ logo = "brand/mark-wide.svg"
 # ----------------------------------------------------------------------------
 #[project.theme.icon]
 #logo = "lucide/smile"
-
-# ----------------------------------------------------------------------------
-# In the "font" subsection you can configure the fonts used. By default, fonts
-# are loaded from Google Fonts, giving you a wide range of choices from a set
-# of suitably licensed fonts. There are options for a normal text font and for
-# a monospaced font used in code blocks.
-# ----------------------------------------------------------------------------
-[project.theme.font]
-# Outfit is the brand typeface. The wordmark needs weight 600, which
-# overrides/main.html loads explicitly.
-text = "Outfit"
-code = "JetBrains Mono"
 
 # ----------------------------------------------------------------------------
 # In the "palette" subsection you can configure options for the color scheme.

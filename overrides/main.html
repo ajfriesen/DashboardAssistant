@@ -1,17 +1,23 @@
 {% extends "base.html" %}
 
 {% block extrahead %}
+  {# data-do-not-track is opt-in: the tracker only checks the browser's DNT
+     signal when this attribute is literally the string "true"
+     (src/tracker/index.ts, `config('do-not-track') === _true`). Without it a
+     visitor sending DNT is still counted. Documented in
+     docs/legal/datenschutz.md. #}
   <script
     defer
     src="https://analytics.ajfriesen.com/curious-penguin"
     data-website-id="f53b06cf-9ffc-4eef-8b99-821402b9dbb9"
     data-performance="true"
+    data-do-not-track="true"
     ></script>
 
-  {# Outfit at the weights the brand uses. theme.font already pulls Outfit, but
-     not necessarily 600 — which is the weight the wordmark is set in. #}
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  {# No font <link> here on purpose. Outfit and JetBrains Mono are self-hosted
+     from docs/fonts/ and declared in docs/stylesheets/fonts.css, so nothing is
+     requested from Google and no visitor IP reaches it. Outfit is a variable
+     font covering 100-900, so the wordmark's weight 600 needs no extra file. #}
 
   {# The SVG favicon comes from theme.favicon; these are the raster fallbacks,
      which the TOML has no slot for. #}

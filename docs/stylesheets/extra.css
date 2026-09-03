@@ -501,3 +501,46 @@
     animation: none;
   }
 }
+
+/* --------------------------------------------------------------------------
+   Footer legal links
+   --------------------------------------------------------------------------
+   The Impressum/Datenschutz links live inside the `copyright` HTML fragment in
+   zensical.toml, because Zensical has no config key for footer links. The
+   theme gives `.md-copyright` a muted color and no link styling, so without
+   this the links are indistinguishable from the surrounding text.
+   -------------------------------------------------------------------------- */
+
+.md-copyright__highlight a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentcolor 40%, transparent);
+  text-underline-offset: 0.2em;
+}
+
+.md-copyright__highlight a:is(:hover, :focus-visible) {
+  color: var(--md-accent-fg-color);
+  text-decoration-color: currentcolor;
+}
+
+/* --------------------------------------------------------------------------
+   Analytics opt-out control (legal/datenschutz)
+   --------------------------------------------------------------------------
+   The button is built by docs/javascripts/privacy-optout.js. It reuses
+   .da-btn / .da-btn--ghost, which until now were only ever applied to <a>
+   elements — a <button> matches the same selectors but carries UA defaults an
+   anchor does not, so font, cursor and the native chrome are reset here.
+   -------------------------------------------------------------------------- */
+
+.md-typeset button.da-btn {
+  font-family: inherit;
+  line-height: inherit;
+  cursor: pointer;
+  appearance: none;
+  background: none;
+}
+
+.md-typeset .da-privacy-optout__status {
+  margin-bottom: 0.6rem;
+  color: var(--md-default-fg-color--light);
+}
