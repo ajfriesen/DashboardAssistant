@@ -10,6 +10,10 @@
 {
   imports = [
     "${modulesPath}/installer/sd-card/sd-image-aarch64.nix"
+    # btrfs+zstd root instead of sd-image's ext4, so the shipped Nix store is
+    # compressed. Also rebuilds U-Boot with btrfs support — without that the
+    # board cannot read extlinux.conf and never boots.
+    ./sd-image-btrfs.nix
   ];
 
   nixpkgs.hostPlatform = "aarch64-linux";
