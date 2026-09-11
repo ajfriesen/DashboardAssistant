@@ -16,6 +16,7 @@
     ./cleanup.nix
     ./memory.nix
     ./binary-cache.nix
+    ./btrfs-maintenance.nix
 
     # Impermanence (deferred / scaffold only). On the live ISO the root is
     # already an ephemeral squashfs+tmpfs overlay, so we do NOT declare

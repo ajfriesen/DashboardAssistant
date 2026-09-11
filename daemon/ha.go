@@ -170,6 +170,21 @@ type stateSnapshot struct {
 		Present bool    `json:"present"`
 		Celsius float64 `json:"celsius"`
 	} `json:"temperature"`
+	// Health of the btrfs root filesystem (see btrfs.go). Present=false on
+	// non-btrfs roots (legacy ext4 SD cards, the live ISO), same pattern as
+	// battery/temperature. OK folds the signals into the one bit HA's
+	// problem binary sensor shows; the counters ride along as attributes.
+	Btrfs struct {
+		Present        bool `json:"present"`
+		OK             bool `json:"ok"`
+		Readonly       bool `json:"readonly"`
+		WriteErrs      int  `json:"write_errs"`
+		ReadErrs       int  `json:"read_errs"`
+		FlushErrs      int  `json:"flush_errs"`
+		CorruptionErrs int  `json:"corruption_errs"`
+		GenerationErrs int  `json:"generation_errs"`
+		Devices        int  `json:"devices"`
+	} `json:"btrfs"`
 	Screenshot struct {
 		Available bool  `json:"available"`
 		UpdatedAt int64 `json:"updated_at,omitempty"`
@@ -362,6 +377,18 @@ func (h *HAHub) snapshot() stateSnapshot {
 		s.Temperature.Present = true
 		s.Temperature.Celsius = c
 	}
+	if b, ok := readBtrfsHealth(); ok {
+		s.Btrfs.Present = true
+		s.Btrfs.Readonly = b.Readonly
+		s.Btrfs.WriteErrs = b.WriteErrs
+		s.Btrfs.ReadErrs = b.ReadErrs
+		s.Btrfs.FlushErrs = b.FlushErrs
+		s.Btrfs.CorruptionErrs = b.CorruptionErrs
+		s.Btrfs.GenerationErrs = b.GenerationErrs
+		s.Btrfs.Devices = b.Devices
+		s.Btrfs.OK = !b.Readonly &&
+			b.WriteErrs+b.ReadErrs+b.FlushErrs+b.CorruptionErrs+b.GenerationErrs == 0
+	}
 
 	h.shotMu.Lock()
 	if len(h.shot) > 0 {
@@ -543,6 +570,7 @@ func (h *HAHub) handleIdentify(w http.ResponseWriter, r *http.Request) {
 func (h *HAHub) handleInfo(w http.ResponseWriter, r *http.Request) {
 	_, _, hasBattery := readBattery()
 	_, hasTemp := readTemperature()
+	_, hasBtrfs := readBtrfsHealth()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"name":            deviceName(),
 		"node_id":         h.nodeID,
@@ -554,6 +582,7 @@ func (h *HAHub) handleInfo(w http.ResponseWriter, r *http.Request) {
 		"installable":     h.upd.Installable(),
 		"has_battery":     hasBattery,
 		"has_temperature": hasTemp,
+		"has_btrfs":       hasBtrfs,
 		"has_sendspin":    h.snd.Available(),
 	})
 }
