@@ -108,13 +108,15 @@ build-rpi5:
 # modules/dev.nix). Flash this one when a Pi needs debugging — with sshd up you
 # reconfigure it in place with `just deploy-rpi5-dev` instead of pulling the card
 # and reflashing for every change. Never ship it: a release image has no sshd.
+# Unlike the release image this one is uncompressed (raw .img): the .zst pass
+# runs under emulation and costs ~2 minutes per build for no local benefit.
 [doc('Build the Raspberry Pi 5 SD-card image with root SSH (dev/debugging)')]
 build-rpi5-dev:
   nix build .#packages.aarch64-linux.rpi5-image-dev --accept-flake-config --out-link result-rpi5-dev
   @echo
-  @echo "Image: $(readlink -f result-rpi5-dev)/sd-image/"*.img.zst
+  @echo "Image: $(readlink -f result-rpi5-dev)/sd-image/"*.img
   @echo "Flash it (confirm the device first!):"
-  @echo "  zstdcat result-rpi5-dev/sd-image/*.img.zst | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync"
+  @echo "  sudo dd if=result-rpi5-dev/sd-image/*.img of=/dev/sdX bs=4M status=progress conv=fsync"
   @echo
   @echo "Then, for every change after that (no reflash):"
   @echo "  just deploy-rpi5-dev root@dashboard-assistant-<mac6>.local"

@@ -151,7 +151,18 @@
         # `nixos-rebuild switch --flake .#dashboard-assistant-rpi5-dev --target-host`,
         # so iterating no longer means pulling the card and reflashing. Build via
         # `.#rpi5-image-dev` or `just build-rpi5-dev`.
-        dashboard-assistant-rpi5-dev = mkRpi5System [ ./modules/dev.nix ];
+        dashboard-assistant-rpi5-dev = mkRpi5System [
+          ./modules/dev.nix
+          # Skip the .img.zst artifact compression for the local-only dev
+          # image: under binfmt emulation the compress/decompress/compress
+          # dance costs ~2 minutes per build and buys nothing locally — dd
+          # writes the same bytes to the card either way, and the outer pass
+          # only manages ~1.7x because the filesystem inside is already
+          # zstd-compressed. Release images keep it: 2.25 vs 3.86 GiB is what
+          # people download. Inline (not in dev.nix) because the x86 dev
+          # variants share dev.nix and have no sdImage options.
+          { sdImage.compressImage = lib.mkForce false; }
+        ];
       };
 
       # Raw btrfs+zstd EFI disk image built by disko: `nix build .#disk-image`
