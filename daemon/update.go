@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -79,6 +80,7 @@ type UpdateState struct {
 	Summary    string
 	Title      string
 	InProgress bool
+	LastError  string // why the most recent install attempt failed; "" after a success or before any attempt
 	Available  []ReleaseInfo
 }
 
@@ -96,7 +98,8 @@ type UpdateChecker struct {
 	installed    string
 	releases     []Release // recent releases, newest-first, drafts already dropped
 	haveReleases bool
-	installing   bool // an update is currently being applied
+	installing   bool   // an update is currently being applied
+	lastError    string // failure reason of the most recent install attempt (see FinishInstall)
 
 	observer func()
 }
@@ -254,7 +257,7 @@ func (u *UpdateChecker) State() UpdateState {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
-	st := UpdateState{Installed: u.installed, Latest: u.installed, InProgress: u.installing}
+	st := UpdateState{Installed: u.installed, Latest: u.installed, InProgress: u.installing, LastError: u.lastError}
 	if !u.haveReleases {
 		return st
 	}
@@ -328,11 +331,47 @@ func (u *UpdateChecker) HasVersion(tag string) bool {
 }
 
 // SetInstalling marks an update as in progress (or done), for the HA entity's
-// in_progress flag.
+// in_progress flag. Starting an attempt also clears the previous attempt's
+// failure reason, so a retry doesn't show a stale error while it runs.
 func (u *UpdateChecker) SetInstalling(v bool) {
 	u.mu.Lock()
 	u.installing = v
+	if v {
+		u.lastError = ""
+	}
 	u.mu.Unlock()
+}
+
+// FinishInstall records the outcome of an install attempt: clears the
+// in-progress flag and, on failure, captures a reason for the HA entity. The
+// update script's preflight guard leaves its refusal reason in a marker file
+// under stateDir (see modules/core/update.nix) — that message wins over the
+// generic fallback. On success the reason resets and the installed version is
+// re-read (the marker is already gone: the script clears it before switching).
+func (u *UpdateChecker) FinishInstall(tag, result string) {
+	msg := ""
+	if result != "done" {
+		if msg = readUpdateRefusal(); msg == "" {
+			msg = fmt.Sprintf("install of %s %s — see journalctl -u dashboard-assistant-update@%s", tag, result, tag)
+		}
+	}
+	u.mu.Lock()
+	u.installing = false
+	u.lastError = msg
+	u.mu.Unlock()
+	if result == "done" {
+		u.RefreshInstalled()
+	}
+}
+
+// readUpdateRefusal returns the preflight guard's refusal reason, or "" when
+// the last update run got past the guard (it clears the marker up front).
+func readUpdateRefusal() string {
+	b, err := os.ReadFile(filepath.Join(stateDir, "update-refused"))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
 }
 
 // RefreshInstalled re-reads the baked-in version file. Called after a successful
