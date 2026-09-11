@@ -11,7 +11,11 @@
 # the scoped polkit rule below when HA's Install button is pressed. The flake ref
 # and hardware attr are baked in; only the target tag is a runtime instance.
 # Safety net: the boot-assessment auto-rollback (disk target) and the manual
-# recovery UI let a bad update be reverted.
+# recovery UI let a bad update be reverted. A preflight in the update script
+# additionally refuses any release whose declared root filesystem differs from
+# the one actually mounted (e.g. an ext4-flashed SD card asked to switch onto a
+# btrfs-era release) — such a switch would activate cleanly and then hang in
+# stage 1 on the next reboot, and those devices must be reflashed instead.
 {
   config,
   lib,
@@ -29,6 +33,44 @@ let
     # it into the flake ref — only safe git-tag characters, no shell metachars.
     case "$ref" in "" | *[!A-Za-z0-9._-]*) echo "invalid ref: $ref" >&2; exit 1 ;; esac
     target="${cfg.flakeRef}/$ref#${cfg.flakeAttr}"
+
+    # Preflight: refuse a release whose declared root filesystem differs from
+    # the mounted one. `nixos-rebuild switch` would activate such a config
+    # without complaint (the running root is never remounted), and the device
+    # would then hang in stage 1 on the next reboot, trying to mount the root
+    # as the wrong type. On the SD targets there is no boot-assessment
+    # rollback (extlinux), so a headless board stays down until someone pulls
+    # the card. Concretely: ext4-flashed cards vs. the btrfs root shipped from
+    # sd-image-btrfs.nix onward — those devices need a reflash, not a switch.
+    # Building the toplevel here is not wasted work: nixos-rebuild below
+    # re-evaluates, but every build product comes out of the local store.
+    #
+    # A refusal is recorded in a marker file the daemon reads to surface the
+    # reason on the HA update entity (daemon/update.go); the path matches the
+    # daemon's stateDir default. Cleared up front so a stale reason from an
+    # earlier attempt can't outlive this run.
+    refused=/var/lib/dashboard-assistant/update-refused
+    mkdir -p /var/lib/dashboard-assistant
+    rm -f "$refused"
+
+    echo "dashboard-assistant-update: building $target"
+    toplevel=$(${lib.getExe' config.nix.package "nix"} build --no-link --print-out-paths --refresh \
+      "${cfg.flakeRef}/$ref#nixosConfigurations.${cfg.flakeAttr}.config.system.build.toplevel")
+    targetFs=$(${lib.getExe pkgs.gawk} '$2 == "/" { print $3 }' "$toplevel/etc/fstab")
+    runningFs=$(${lib.getExe' pkgs.util-linux "findmnt"} -n -o FSTYPE /)
+    if [ -z "$targetFs" ] || [ -z "$runningFs" ]; then
+      msg="Cannot determine the root filesystem (release: '$targetFs', device: '$runningFs'); refusing to switch."
+      echo "dashboard-assistant-update: $msg" >&2
+      echo "$msg" > "$refused"
+      exit 1
+    fi
+    if [ "$targetFs" != "$runningFs" ]; then
+      msg="Release $ref needs a $targetFs root filesystem, but this device runs $runningFs. An in-place update cannot convert it — reflash the device with the $ref image instead (settings re-seed from dashboard-assistant.yaml)."
+      echo "dashboard-assistant-update: $msg" >&2
+      echo "$msg" > "$refused"
+      exit 1
+    fi
+
     echo "dashboard-assistant-update: switching to $target"
     exec ${pkgs.nixos-rebuild}/bin/nixos-rebuild switch --flake "$target" --refresh
   '';

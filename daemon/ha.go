@@ -141,6 +141,7 @@ type stateSnapshot struct {
 		Title       string        `json:"title,omitempty"`
 		Summary     string        `json:"release_summary,omitempty"`
 		Installable bool          `json:"installable"`
+		LastError   string        `json:"last_error,omitempty"` // why the last install attempt failed (e.g. the preflight guard's "reflash required")
 		Available   []ReleaseInfo `json:"available"`
 	} `json:"update"`
 	Zoom  int `json:"zoom"`
@@ -332,6 +333,7 @@ func (h *HAHub) snapshot() stateSnapshot {
 	s.Update.Title = us.Title
 	s.Update.Summary = us.Summary
 	s.Update.Installable = h.upd.Installable()
+	s.Update.LastError = us.LastError
 	s.Update.Available = us.Available
 
 	s.Zoom = h.zoom.Level()
@@ -822,10 +824,8 @@ func (h *HAHub) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	log.Printf("ha: installing update %s", tag)
 
 	err := startUpdate(tag, func(result string) {
-		h.upd.SetInstalling(false)
-		if result == "done" {
-			h.upd.RefreshInstalled()
-		} else {
+		h.upd.FinishInstall(tag, result)
+		if result != "done" {
 			log.Printf("ha: update %s did not complete: %s", tag, result)
 		}
 		h.broadcast()
@@ -866,10 +866,8 @@ func (h *HAHub) handleInstallVersion(w http.ResponseWriter, r *http.Request) {
 	log.Printf("ha: installing version %s", tag)
 
 	err := startUpdate(tag, func(result string) {
-		h.upd.SetInstalling(false)
-		if result == "done" {
-			h.upd.RefreshInstalled()
-		} else {
+		h.upd.FinishInstall(tag, result)
+		if result != "done" {
 			log.Printf("ha: install %s did not complete: %s", tag, result)
 		}
 		h.broadcast()

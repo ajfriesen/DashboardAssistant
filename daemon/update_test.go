@@ -3,6 +3,9 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -201,5 +204,43 @@ func TestCheckerNoReleases(t *testing.T) {
 
 	if st := u.State(); st.Latest != "1.4.0" || st.Available != nil {
 		t.Fatalf("after 404, State = %+v, want mirror of installed, no available", st)
+	}
+}
+
+// FinishInstall prefers the preflight guard's refusal marker over the generic
+// failure line, and both SetInstalling(true) and a successful finish clear the
+// previous attempt's reason.
+func TestFinishInstallFailureReason(t *testing.T) {
+	orig := stateDir
+	stateDir = t.TempDir()
+	defer func() { stateDir = orig }()
+	marker := filepath.Join(stateDir, "update-refused")
+
+	u := &UpdateChecker{installed: "1.4.0"}
+
+	if err := os.WriteFile(marker, []byte("Release v9 needs a btrfs root filesystem\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	u.SetInstalling(true)
+	u.FinishInstall("v9", "failed")
+	if st := u.State(); st.InProgress || st.LastError != "Release v9 needs a btrfs root filesystem" {
+		t.Fatalf("refusal: in_progress=%v last_error=%q", st.InProgress, st.LastError)
+	}
+
+	if err := os.Remove(marker); err != nil {
+		t.Fatal(err)
+	}
+	u.FinishInstall("v9", "failed")
+	if st := u.State(); !strings.Contains(st.LastError, "dashboard-assistant-update@v9") {
+		t.Fatalf("fallback should name the unit, got %q", st.LastError)
+	}
+
+	u.SetInstalling(true)
+	if st := u.State(); st.LastError != "" {
+		t.Fatalf("retry should clear the previous reason, got %q", st.LastError)
+	}
+	u.FinishInstall("v9", "done")
+	if st := u.State(); st.InProgress || st.LastError != "" {
+		t.Fatalf("success: in_progress=%v last_error=%q", st.InProgress, st.LastError)
 	}
 }
