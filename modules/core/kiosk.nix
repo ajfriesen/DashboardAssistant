@@ -1110,6 +1110,15 @@ in
       };
     };
 
+    # No last-login records on an appliance. Beyond being useless here, they
+    # broke first boot on the 26.11 pin: greetd's PAM service now includes the
+    # `login` stack, where nixpkgs enables pam_lastlog2 as `required` — and
+    # nothing orders the one-shot lastlog2-import.service (lastlog → sqlite
+    # migration, first boot only) against greetd's autologin, so the racing
+    # required module failed pam_open_session with SYSTEM_ERR on the console.
+    # mkForce because nixpkgs' shadow.nix enables it at plain priority.
+    security.pam.services.login.lastlog.enable = lib.mkForce false;
+
     services.greetd = {
       enable = true;
       settings = {
