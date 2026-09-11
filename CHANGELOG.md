@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.3.0-rc.1](https://github.com/ajfriesen/DashboardAssistant/compare/v0.2.1-rc.1...v0.3.0-rc.1) (2026-09-11)
+
+
+### Features
+
+* **daemon:** surface the update failure reason on the HA entity ([d5bdc96](https://github.com/ajfriesen/DashboardAssistant/commit/d5bdc96adc60014b9da1ecb0e557cfda4af3393a))
+* **update:** refuse in-place updates onto a mismatched root filesystem ([23d9698](https://github.com/ajfriesen/DashboardAssistant/commit/23d9698bbe529c946d8bd4d05e1491e2cd20693d))
+
+
+### Bug Fixes
+
+* **docs:** centre the icons in the feature card tiles ([ff11887](https://github.com/ajfriesen/DashboardAssistant/commit/ff118878135cec7793afb68306bf98b025c96f8b))
+
+
+### Documentation
+
+* add Impressum and Datenschutzerklärung ([9c37881](https://github.com/ajfriesen/DashboardAssistant/commit/9c37881482882587a2915a59058486b4ea9b22f5))
+* add the brand assets the site loads ([00e6344](https://github.com/ajfriesen/DashboardAssistant/commit/00e6344ceea0bb81e43e53de8794bc39acac2207))
+* add the Discord invite to the footer ([9c2814d](https://github.com/ajfriesen/DashboardAssistant/commit/9c2814d15fbc04a80d38c0ebd9b8480b6c9aa646))
+* add the multi-room audio card to the home page ([ceb6bb1](https://github.com/ajfriesen/DashboardAssistant/commit/ceb6bb1ddafbdf1838789f178c832e87b2a453c1))
+* adopt the brand copy on the site ([0692e8a](https://github.com/ajfriesen/DashboardAssistant/commit/0692e8ad9bf609331638eb6256064f43da7b4b18))
+* aim the business page at hardware manufacturers ([f84b1d4](https://github.com/ajfriesen/DashboardAssistant/commit/f84b1d4af7348bfc36ba3d6bf0933f976aef9bad))
+* render the site in the brand palette ([9b8e92f](https://github.com/ajfriesen/DashboardAssistant/commit/9b8e92f2184ba62f1ad3a9fbb5d72a6e16f3d338))
+* replace the site's emoji with lucide icons ([d073014](https://github.com/ajfriesen/DashboardAssistant/commit/d0730145c6c8056aa626a81c99470de492f31240))
+* say what the front page is like to live with ([032b571](https://github.com/ajfriesen/DashboardAssistant/commit/032b571aec7fafe6097407da6955c4373be94b0b))
+* stop the hero eyebrow repeating the headline ([ef3539b](https://github.com/ajfriesen/DashboardAssistant/commit/ef3539b17257576ffba068efb005cc32850c2290))
+
 ## [0.2.1-rc.1](https://github.com/ajfriesen/DashboardAssistant/compare/v0.2.0-rc.1...v0.2.1-rc.1) (2026-08-30)
 
 
