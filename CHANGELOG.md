@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.0-rc.1](https://github.com/ajfriesen/DashboardAssistant/compare/v0.3.0-rc.1...v1.0.0-rc.1) (2026-09-11)
+
+
+### ⚠ BREAKING CHANGES
+
+* **rpi:** the Pi 4/5 SD images now build a btrfs root with zstd compression (the Nix store roughly halves), and U-Boot is rebuilt with btrfs read support. Devices flashed from earlier ext4 images cannot take this release in place — the update preflight guard (shipped in 0.3.0-rc.1) refuses the switch with a reflash-required message on the HA update entity. Reflash the SD card with this release's image; settings re-seed from dashboard-assistant.yaml on first boot.
+
+### Features
+
+* **daemon:** add check_updates endpoint to re-poll releases on demand ([f9e585e](https://github.com/ajfriesen/DashboardAssistant/commit/f9e585e742fb94e7b2816bea0bec72e4973888c2))
+* **rpi:** ship btrfs+zstd root SD images ([173d369](https://github.com/ajfriesen/DashboardAssistant/commit/173d3696bc308bca0da77eb646f063a9792f2b58))
+
 ## [0.3.0-rc.1](https://github.com/ajfriesen/DashboardAssistant/compare/v0.2.1-rc.1...v0.3.0-rc.1) (2026-09-11)
 
 
