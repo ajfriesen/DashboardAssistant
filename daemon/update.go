@@ -143,6 +143,12 @@ func (u *UpdateChecker) Run() {
 	}
 }
 
+// CheckNow re-polls the release source immediately, outside the regular tick,
+// with the same semantics as a scheduled check: a failure keeps the previous
+// result, a changed release set fires the observer. Safe to call concurrently
+// with Run — the checks serialize on the mutex when storing.
+func (u *UpdateChecker) CheckNow() { u.checkOnce() }
+
 func (u *UpdateChecker) checkOnce() {
 	rels, err := u.fetchReleases()
 	if err != nil {

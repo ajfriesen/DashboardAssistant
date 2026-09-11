@@ -400,6 +400,7 @@ func (h *HAHub) routes() http.Handler {
 	mux.HandleFunc("/api/ha/reset", h.auth(h.handleReset))
 	mux.HandleFunc("/api/ha/update", h.auth(h.handleUpdate))
 	mux.HandleFunc("/api/ha/install_version", h.auth(h.handleInstallVersion))
+	mux.HandleFunc("/api/ha/check_updates", h.auth(h.handleCheckUpdates))
 	mux.HandleFunc("/api/ha/screenshot", h.auth(h.handleScreenshot))
 	mux.HandleFunc("/api/ha/screenshot.jpg", h.auth(h.handleScreenshotImage))
 	return mux
@@ -879,6 +880,23 @@ func (h *HAHub) handleInstallVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "installing", "target": tag})
+}
+
+// handleCheckUpdates re-polls the release source right away instead of waiting
+// for the next scheduled tick — e.g. straight after publishing a release. A
+// changed release set broadcasts over SSE via the checker's observer as usual;
+// the response carries the post-check versions so a plain curl caller sees the
+// outcome without also watching the event stream.
+func (h *HAHub) handleCheckUpdates(w http.ResponseWriter, r *http.Request) {
+	if !requirePost(w, r) {
+		return
+	}
+	h.upd.CheckNow()
+	us := h.upd.State()
+	writeJSON(w, http.StatusOK, map[string]string{
+		"installed_version": us.Installed,
+		"latest_version":    us.Latest,
+	})
 }
 
 // handleScreenshot grabs the whole kiosk screen (in-session grim) and caches the
