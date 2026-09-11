@@ -36,6 +36,15 @@
   #    time — see the header of that file for why that matters.
   sdImage.rootFilesystemCreator = ./make-btrfs-fs-zstd.nix;
 
+  # Not one of the four btrfs steps, but the same "counter what sd-image drags
+  # in" concern: sd-image-aarch64 imports nixpkgs' profiles/base.nix, which
+  # mkDefault-enables ZFS support. Nothing here uses ZFS, yet it costs the zfs
+  # kernel module + userland in the closure, a running zfs-zed daemon on every
+  # device, and a forceImportRoot eval warning on each build. Plain false
+  # outranks the profile's mkDefault. (base.nix's networking.hostId — set only
+  # for ZFS — becomes inert and is left alone.)
+  boot.supportedFilesystems.zfs = false;
+
   # 2. mkForce because sd-image.nix assigns fileSystems."/" at plain priority,
   #    so a normal definition collides instead of overriding.
   #
