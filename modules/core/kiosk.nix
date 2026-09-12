@@ -156,7 +156,16 @@ let
         # Power on, then put the backlight back: the compositor restoring the
         # output does not restore it, so without this the panel stays black
         # while everything reports success. See brightnessRestore.
+        #
+        # Twice, deliberately: sway 1.12 accepts the first `power on` (success
+        # in the reply, power stays false in get_outputs) but never schedules
+        # the output commit that would apply it — nothing reaches the DRM
+        # driver until the next output reconfigure. Any output command
+        # triggers that apply, and re-issuing the same one is the only kick
+        # with no side effects (a transform poke would fight the rotation
+        # feature). Verified on-device: on alone → stuck; on twice → panel up.
         on)  ${pkgs.sway}/bin/swaymsg 'output * power on'  >/dev/null 2>&1 || true
+             ${pkgs.sway}/bin/swaymsg 'output * power on'  >/dev/null 2>&1 || true
              ${brightnessRestore} >/dev/null 2>&1 || true
              ${pkgs.coreutils}/bin/rm -f ${displayOffFlag} 2>/dev/null || true
              ${reportDisplayState} on  ;;
@@ -200,6 +209,8 @@ let
         last=$now
       fi
       if [ -e ${displayOffFlag} ]; then
+        # Twice for the sway 1.12 uncommitted-power-on quirk — see displayAgent.
+        ${pkgs.sway}/bin/swaymsg 'output * power on' >/dev/null 2>&1 || true
         ${pkgs.sway}/bin/swaymsg 'output * power on' >/dev/null 2>&1 || true
         # Same as the display agent: the output comes back, the backlight does not.
         ${brightnessRestore} >/dev/null 2>&1 || true
