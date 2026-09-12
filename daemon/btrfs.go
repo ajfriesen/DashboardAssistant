@@ -17,9 +17,14 @@ import (
 // filesystem having been forced read-only, which btrfs does on serious errors.
 
 // Swappable for tests, like stateDir (update_test.go).
+//
+// PID 1's mount table, not our own: the daemon runs under
+// ProtectSystem=strict, so in its private mount namespace / is a read-only
+// remount and /proc/self/mounts would report "ro" on every healthy system.
+// /proc/1/mounts shows the host's real state and is world-readable.
 var (
 	btrfsSysfsRoot = "/sys/fs/btrfs"
-	procMountsPath = "/proc/self/mounts"
+	procMountsPath = "/proc/1/mounts"
 )
 
 type btrfsHealth struct {
