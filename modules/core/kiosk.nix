@@ -580,6 +580,12 @@ let
         # compact portrait) matches the new orientation. Backgrounded so the
         # agent loop keeps reading the FIFO.
         rotate)
+          # Close the OSK across a rotation: its geometry AND its font scale
+          # (oskToggle picks GDK_DPI_SCALE at launch from the output width) are
+          # both wrong for the new orientation. Deterministic close-and-retap
+          # over mutating a live window — same philosophy as restarting waybar
+          # below instead of reshaping it.
+          ${pkgs.sway}/bin/swaymsg "[app_id=\"${oskAppId}\"] kill" >/dev/null 2>&1 || true
           ${swayRotate} "$arg" >/dev/null 2>&1 || true
           ${waybarStart} "$arg" >/dev/null 2>&1 &
           ;;
@@ -741,7 +747,7 @@ let
   # vboard has no auto-show and isn't a layer-shell surface, so we manage it by
   # hand: if its window is up, kill it (hide); otherwise launch it and dock it to
   # the bottom of the focused output — full width, ~40% tall, sitting just above
-  # the 72px button bar. Sway floats/pins/never-focuses it via the app_id rules
+  # the 50px button bar. Sway floats/pins/never-focuses it via the app_id rules
   # in the session config (see swayConfig below); this only handles show/hide and
   # geometry. Detection and close go through Sway's tree so we never have to
   # guess the (wrapped) process name.
@@ -757,7 +763,34 @@ let
       exit 0
     fi
 
-    ${vboard}/bin/vboard >/dev/null 2>&1 &
+    # Output geometry up front: the launch itself depends on the width now.
+    geom=$(${pkgs.sway}/bin/swaymsg -t get_outputs \
+      | ${lib.getExe pkgs.jq} -r \
+        '[.[] | select(.focused)][0].rect | "\(.x) \(.y) \(.width) \(.height)"')
+    # shellcheck disable=SC2086
+    set -- $geom
+    ox=$1; oy=$2; ow=$3; oh=$4
+
+    # vboard persists whatever geometry sway last forced on it (settings.conf,
+    # written on destroy) and maps at that stale size next time — an orientation
+    # change in between makes the first frame land wrong. Start clean; the dock
+    # logic below decides the geometry every time anyway.
+    ${pkgs.coreutils}/bin/rm -f "$HOME/.config/vboard/settings.conf"
+
+    # vboard's homogeneous key grid has a hard minimum width of ~900px at its
+    # built-in 19px key font (the word-labeled modifier keys set the column
+    # width), which fits the 960px landscape logical width but overflows the
+    # 600px portrait one — GTK silently ignores a resize below its minimum and
+    # the right third of the keyboard hangs off-screen. The font is a CSS
+    # pixel size, immune to GDK_DPI_SCALE (points only, tried and disproven
+    # on-device), so our vboard package patches it to honour VBOARD_FONT_PX
+    # (packages/vboard). Applied only on narrow outputs so landscape keeps the
+    # full-size keys.
+    if [ "$ow" -lt 700 ]; then
+      VBOARD_FONT_PX=11 ${vboard}/bin/vboard >/dev/null 2>&1 &
+    else
+      ${vboard}/bin/vboard >/dev/null 2>&1 &
+    fi
 
     # Wait for the window to map, then size and dock it. Poll briefly; give up
     # quietly if it never appears so a stray tap can't wedge the bar. `bar` is the
@@ -770,12 +803,6 @@ let
         | ${lib.getExe pkgs.jq} -r --arg a "$app" \
           '[.. | objects | select(.app_id? == $a)] | length')
       if [ "''${up:-0}" != "0" ]; then
-        geom=$(${pkgs.sway}/bin/swaymsg -t get_outputs \
-          | ${lib.getExe pkgs.jq} -r \
-            '[.[] | select(.focused)][0].rect | "\(.x) \(.y) \(.width) \(.height)"')
-        # shellcheck disable=SC2086
-        set -- $geom
-        ox=$1; oy=$2; ow=$3; oh=$4
         # vboard's keys carry CSS min-heights, so the keyboard has a hard minimum
         # height (5 rows + suggestion bar). Read the height it actually mapped at
         # and never force the window shorter than that, or the bottom key row gets
@@ -790,6 +817,19 @@ let
         ${pkgs.sway}/bin/swaymsg \
           "[app_id=\"$app\"] resize set width ''${ow}px height ''${kh}px, move absolute position ''${ox}px ''${ky}px" \
           >/dev/null 2>&1 || true
+        # Width analogue of the nh clamp: GTK refuses a resize below the grid's
+        # minimum. If the surface still mapped wider than the output, center it
+        # so the overflow clips evenly on both edges instead of eating the whole
+        # right-hand side of the keyboard.
+        nw=$(${pkgs.sway}/bin/swaymsg -t get_tree \
+          | ${lib.getExe pkgs.jq} -r --arg a "$app" \
+            '[.. | objects | select(.app_id? == $a)][0].rect.width // 0')
+        if [ "''${nw:-0}" -gt "$ow" ]; then
+          kx=$(( ox + (ow - nw) / 2 ))
+          ${pkgs.sway}/bin/swaymsg \
+            "[app_id=\"$app\"] move absolute position ''${kx}px ''${ky}px" \
+            >/dev/null 2>&1 || true
+        fi
         exit 0
       fi
       ${pkgs.coreutils}/bin/sleep 0.1

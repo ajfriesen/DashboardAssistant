@@ -50,6 +50,16 @@ stdenv.mkDerivation (finalAttrs: {
   # the store. None of that is needed here, so neuter it to a no-op.
   postPatch = ''
     printf '#!/bin/sh\nexit 0\n' > scripts/meson-post-install.sh
+
+    # Make the key-label font size env-tunable (VBOARD_FONT_PX, default the
+    # upstream 19). The homogeneous key grid's minimum width is set by the
+    # word-labeled modifier keys at this font size — ~900px at 19px — which
+    # overflows a 600px-wide portrait output, and the size is a CSS *pixel*
+    # value inside an f-string at STYLE_PROVIDER_PRIORITY_USER, so neither
+    # GDK_DPI_SCALE (points only) nor user gtk.css can shrink it from outside.
+    # The kiosk's OSK toggle sets VBOARD_FONT_PX on narrow outputs.
+    substituteInPlace vboard/window.py \
+      --replace-fail 'font-size: 19px;' 'font-size: {int(os.environ.get("VBOARD_FONT_PX", "19"))}px;'
   '';
 
   nativeBuildInputs = [
