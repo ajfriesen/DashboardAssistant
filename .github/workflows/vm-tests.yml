@@ -1,0 +1,22 @@
+# NixOS VM tests on every push/PR. GitHub's Linux runners have KVM enabled, so
+# the QEMU-based tests run at native speed. Each check is a full boot of the
+# core config with assertions on the things that have actually broken in the
+# field (ordering cycles, tmpfiles, seed provisioning, the onboarding AP).
+name: vm-tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [first-boot, wifi-onboarding]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
+      - run: nix build .#checks.x86_64-linux.${{ matrix.check }} --accept-flake-config -L

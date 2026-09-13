@@ -205,6 +205,7 @@
       # exercised on a machine that has none.
       checks.${system} = {
         wifi-onboarding = import ./tests/wifi-onboarding.nix { inherit pkgs version; };
+        first-boot = import ./tests/first-boot.nix { inherit pkgs version; };
       };
 
       devShells.${system}.default = pkgs.mkShell {
