@@ -218,6 +218,11 @@
           # bootloader lives in an EFI system partition), so QEMU needs firmware.
           pkgs.qemu
           pkgs.OVMF.fd
+          # Drive real boards from the host: power, serial console, USB storage.
+          # The VM tests cover what a VM can (see tests/), which leaves the
+          # hardware-specific failures — U-Boot, firmware, the touchscreen — only
+          # reproducible on a Pi or an x86 box sitting on the bench.
+          pkgs.python314Packages.labgrid
         ];
 
         # OVMF firmware for `just qemu-run`. Exported here rather than looked up
