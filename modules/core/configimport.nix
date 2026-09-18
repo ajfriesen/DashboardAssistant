@@ -48,13 +48,23 @@ let
   '';
 in
 {
-  options.dashboard.configImport.enable = lib.mkEnableOption ''
-    importing dashboard config (HA URL, token, Wi-Fi) from a dashboard-assistant.yaml
-    on an inserted USB stick, and from the ESP (/boot) on first boot.
+  options.dashboard.configImport.enable = lib.mkOption {
+    type = lib.types.bool;
+    default = true;
+    description = ''
+      Import dashboard config (HA URL, token, Wi-Fi) from a dashboard-assistant.yaml
+      on an inserted USB stick, and from the ESP (/boot) on first boot.
 
-    Security note: any USB carrying that file will be applied (this trusts
-    physical access). Leave disabled where the ports aren't trusted
-  '';
+      On by default: seed-file provisioning is the documented headless path (a
+      fleet operator drops one YAML and every panel comes up identically), so a
+      release image has to carry it. It used to be switched on only by
+      modules/local.nix, which meant the feature shipped by accident and was
+      absent from the VM tests.
+
+      Security note: any USB carrying that file will be applied (this trusts
+      physical access). Turn this off where the ports aren't trusted.
+    '';
+  };
 
   config = lib.mkIf cfg.enable {
     # USB hot-insert: start the per-device importer for each newly added USB
