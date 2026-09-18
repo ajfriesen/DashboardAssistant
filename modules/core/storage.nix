@@ -1,6 +1,5 @@
-# Runtime storage management for the *persistent* install (imported by the disk
-# target, NOT by the live ISO — the ISO's /nix/store is a read-only squashfs, so
-# GC there would only error).
+# Runtime storage management. Imported by every persistent target — the x86
+# disk image and both Pi SD images.
 #
 # The premise of this appliance is that nobody ever opens a terminal to run
 # `nix-collect-garbage`. Without that, every update kept forever is the classic

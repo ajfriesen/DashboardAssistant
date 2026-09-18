@@ -9,3 +9,5 @@ ha.yaml
 # Zensical docs build output
 /site/
 /.cache/
+# Writable copy of the disk image booted by `just qemu-run`
+.qemu-disk.raw

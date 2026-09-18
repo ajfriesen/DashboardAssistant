@@ -25,7 +25,7 @@
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
 
     # Wired for the future on-disk install path (tmpfs root + ext4 /persist).
-    # Not heavily used yet: the live ISO already provides an ephemeral root.
+    # Scaffolding only so far — see the commented block in modules/core/default.nix.
     impermanence.url = "github:nix-community/impermanence";
 
     # Declarative btrfs+zstd disk layout + image builder for the on-disk target.
@@ -97,21 +97,6 @@
     in
     {
       nixosConfigurations = {
-        # Installer ISO — boots from removable media (a spare USB stick) into a
-        # console installer that asks which internal disk to erase, then writes
-        # the persistent system below onto it. Deliberately does NOT run the
-        # kiosk itself, and does NOT take localModules: the installer needs none
-        # of the seed/kiosk options, and the system it writes carries them.
-        dashboard-assistant-x86-live = lib.nixosSystem {
-          inherit system;
-          specialArgs = { inherit impermanence version; };
-          modules = [
-            ./modules/hardware/generic-x86.nix
-            ./modules/installer/installer.nix
-            { installer.diskSystem = self.nixosConfigurations.dashboard-assistant-x86-disk; }
-          ];
-        };
-
         # Stable release — persistent, boots from a fixed SATA disk, updatable
         # with `nixos-rebuild switch`. A released device is reconfigured only via
         # the USB seed file. Build via `.#disk-image`. (sshd needs no override any
@@ -232,7 +217,16 @@
           pkgs.secretspec
           pkgs.pass
           pkgs.gnupg
+          # `just qemu-run` boots the raw disk image, which is UEFI-only (the
+          # bootloader lives in an EFI system partition), so QEMU needs firmware.
+          pkgs.qemu
+          pkgs.OVMF.fd
         ];
+
+        # OVMF firmware for `just qemu-run`. Exported here rather than looked up
+        # in the recipe so the VM boots the same firmware the pinned nixpkgs
+        # provides, with no dependency on the flake registry.
+        OVMF_FD = "${pkgs.OVMF.fd}/FV/OVMF.fd";
 
         # Point git at the version-controlled hook (.githooks/commit-msg) so every
         # commit is checked against Conventional Commits locally, not just PRs in

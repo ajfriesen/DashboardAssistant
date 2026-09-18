@@ -1,8 +1,8 @@
 # Memory-pressure resilience for the Chromium kiosk. This is a RAM concern, not
 # a disk one — it does NOT shrink the image or the store. The goal: a runaway
 # browser degrades into a fast, clean session restart instead of freezing on
-# disk swap or being OOM-killed uncleanly. Shared by the live ISO and the
-# on-disk install (both run the same kiosk).
+# disk swap or being OOM-killed uncleanly. Shared by every target that runs the
+# kiosk.
 { ... }:
 {
   # Compressed swap in RAM. Chromium's anonymous pages compress well (~2-3x with

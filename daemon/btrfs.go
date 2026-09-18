@@ -38,7 +38,7 @@ type btrfsHealth struct {
 }
 
 // readBtrfsHealth probes the btrfs filesystem backing "/". ok is false when
-// the root is not btrfs (legacy ext4 SD cards, the live ISO's overlay) — the
+// the root is not btrfs (legacy ext4 SD cards) — the
 // same "when applicable" gate as readBattery/readTemperature.
 func readBtrfsHealth() (btrfsHealth, bool) {
 	var h btrfsHealth

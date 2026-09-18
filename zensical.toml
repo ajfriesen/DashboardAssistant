@@ -62,10 +62,9 @@ nav = [
       "about/features.md",
       "stack-for-nerds.md",
   ]},
-  # Drafts live in the repo-level drafts/ folder (outside docs/) so Zensical
-  # doesn't publish them — it has no draft flag, and builds everything under
-  # docs/. To publish one, move it into docs/ and add it to the nav below:
-  #   drafts/installer/installer.md  — live installer (not working yet)
+  # Drafts, if any, live in a repo-level drafts/ folder (outside docs/) so
+  # Zensical does not publish them — it has no draft flag, and builds everything
+  # under docs/. To publish one, move it into docs/ and add it to the nav below.
   {"Getting Started" = [
      "getting-started.md",
      {"Flash" = [

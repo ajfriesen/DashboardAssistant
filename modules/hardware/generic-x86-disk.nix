@@ -1,7 +1,6 @@
 # On-disk install target (e.g. ODROID H2 with a SATA SSD).
 #
-# Unlike the live ISO, this is a persistent system with a real bootloader, so it
-# boots from a fixed SATA disk, survives reboots (token/state persist), and can
+# A persistent system with a real bootloader: it boots from a fixed SATA disk, survives reboots (token/state persist), and can
 # be updated in place with `nixos-rebuild switch`.
 { lib, pkgs, ... }:
 {
@@ -33,8 +32,7 @@
   imports = [
     # btrfs+zstd disk layout (disko). Provides fileSystems."/" and "/boot".
     ./disk-layout.nix
-    # Automatic GC / store dedup / low-disk safety net. Persistent-target only:
-    # the ephemeral ISO must not GC its read-only store.
+    # Automatic GC / store dedup / low-disk safety net.
     ../core/storage.nix
   ];
 

@@ -3,7 +3,6 @@ help:
   @echo "dashboard-assistant OS — just recipes"
   @echo
   @echo "Build images:"
-  @echo "  build-live-iso            Build the installer ISO (x86)"
   @echo "  build-disk-image             Build the stable raw disk image (btrfs+zstd)"
   @echo "  build-disk-image-dev         Build the dev raw disk image (SSH + debugging)"
   @echo "  build-disk-image-unstable    Build the raw disk image against nixos-unstable"
@@ -13,7 +12,7 @@ help:
   @echo "  deploy-rpi5-dev HOST   Push the working tree to a dev Pi over SSH (no reflash)"
   @echo
   @echo "Run / connect (QEMU):"
-  @echo "  qemu-run               Boot the built ISO in QEMU"
+  @echo "  qemu-run               Boot the built disk image in QEMU"
   @echo "  qemu-ssh               SSH into the VM, tunnelling the daemon (:8080) and CDP (:9222)"
   @echo "  net-check              Hit the networking API from inside the guest"
   @echo
@@ -29,18 +28,6 @@ help:
   @echo "  r2-lifecycle-show      Print the bucket's current lifecycle policy"
   @echo
   @echo "Run 'just --list' for the raw recipe list."
-
-[doc('Build the installer ISO (x86)')]
-build-live-iso:
-  nix build .#nixosConfigurations.dashboard-assistant-x86-live.config.system.build.isoImage
-  @iso=$(ls "$(readlink -f result)"/iso/*.iso); \
-    echo; \
-    echo "Image: $iso"; \
-    echo "Flash it to a spare USB stick (confirm the device first!):"; \
-    echo "  sudo dd if=$iso of=/dev/disk/by-id/ata-WDC_WDS100T2B0A-00SM50_195206A003DE bs=4M oflag=sync conv=fsync status=progress"; \
-    echo; \
-    echo "Then boot the target from that USB: it lists the internal disks, asks"; \
-    echo "which one to erase, installs onto it, and powers off to swap the stick."
 
 # Build the stable installable raw disk image (btrfs+zstd, built by disko). No
 # SSH daemon; reconfigure a deployed device only via the USB seed file. dd
@@ -133,18 +120,36 @@ deploy-rpi5-dev HOST ACTION="switch":
     --target-host {{HOST}} \
     --accept-flake-config
 
-# Boot the built ISO. The virtio-net NIC gets DHCP from QEMU's user-mode
-# network, so NetworkManager auto-connects it — first boot lands in the setup
-# wizard showing "Connected via ethernet" (the wired / existing-connection path).
-# Interact with the wizard directly on the QEMU display, or drive it from the
-# host via `just qemu-ssh` (see the loopback note there).
-[doc('Boot the built ISO in QEMU')]
+# Boot the built disk image (run `just build-disk-image` first). The virtio-net
+# NIC gets DHCP from QEMU's user-mode network, so NetworkManager auto-connects
+# it — first boot lands in the setup wizard showing "Connected via ethernet"
+# (the wired / existing-connection path). Interact with the wizard directly on
+# the QEMU display, or drive it from the host via `just qemu-ssh` (see the
+# loopback note there).
+#
+# The image is UEFI-only (C-4: systemd-boot in an EFI system partition), so this
+# needs OVMF firmware — $OVMF_FD comes from the dev shell. And it boots a
+# *writable copy*: the guest mounts / read-write and the first boot grows the
+# filesystem, so booting result/ directly would both fail (read-only store path)
+# and make the recipe single-use. Delete .qemu-disk.raw to start from a fresh
+# image.
+[doc('Boot the built disk image in QEMU')]
 qemu-run:
-  qemu-system-x86_64 \
+  #!/usr/bin/env bash
+  set -euo pipefail
+  : "${OVMF_FD:?not set — enter the dev shell with 'nix develop' or 'direnv allow'}"
+  raw="$(readlink -f result)/dashboard-assistant.raw"
+  [ -f "$raw" ] || { echo "no image at $raw — run 'just build-disk-image' first" >&2; exit 1; }
+  if [ ! -f .qemu-disk.raw ]; then
+    echo "copying $raw -> .qemu-disk.raw (writable; delete it to reset)"
+    install -m 644 "$raw" .qemu-disk.raw
+  fi
+  exec qemu-system-x86_64 \
     -enable-kvm \
     -m 2048 -smp 2 \
     -machine q35 \
-    -cdrom result/iso/*.iso \
+    -bios "$OVMF_FD" \
+    -drive file=.qemu-disk.raw,format=raw,if=virtio \
     -device virtio-vga-gl \
     -display gtk,gl=on \
     -netdev user,id=net0,hostfwd=tcp::2222-:22 \

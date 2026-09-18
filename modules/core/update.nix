@@ -5,8 +5,7 @@
 # release source to discover the "latest". The daemon exposes both as a single HA
 # `update` entity through the integration API (see daemon/update.go, daemon/ha.go).
 #
-# Applying (installable targets only — the persistent disk / SD image, not the
-# ephemeral ISO): a privileged, root-run `dashboard-assistant-update@<tag>.service` does the
+# Applying (installable targets only): a privileged, root-run `dashboard-assistant-update@<tag>.service` does the
 # `nixos-rebuild switch --flake <ref>/<tag>#<attr>`, triggered by the daemon over
 # the scoped polkit rule below when HA's Install button is pressed. The flake ref
 # and hardware attr are baked in; only the target tag is a runtime instance.
@@ -109,9 +108,9 @@ in
       default = false;
       description = ''
         Whether this image can apply updates in place. Enables the privileged
-        dashboard-assistant-update@ rebuild unit and the HA Install button. Leave off for the
-        ephemeral live ISO (a switch there wouldn't persist); on for the
-        persistent disk / SD targets.
+        dashboard-assistant-update@ rebuild unit and the HA Install button. On for
+        the persistent disk / SD targets; off by default so an image that cannot
+        persist a switch never offers one.
       '';
     };
 

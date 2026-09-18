@@ -18,10 +18,9 @@
     ./binary-cache.nix
     ./btrfs-maintenance.nix
 
-    # Impermanence (deferred / scaffold only). On the live ISO the root is
-    # already an ephemeral squashfs+tmpfs overlay, so we do NOT declare
-    # `fileSystems."/"` as tmpfs here. For the future on-disk install target,
-    # enable the input below and persist:
+    # Impermanence (deferred / scaffold only). Every target today boots a
+    # persistent root, so we do NOT declare `fileSystems."/"` as tmpfs here.
+    # For a future ephemeral-root target, enable the input below and persist:
     #   inputs.impermanence.nixosModules.impermanence
     #   environment.persistence."/persist".directories = [
     #     "/etc/NetworkManager/system-connections"

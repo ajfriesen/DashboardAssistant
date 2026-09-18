@@ -171,7 +171,7 @@ type stateSnapshot struct {
 		Celsius float64 `json:"celsius"`
 	} `json:"temperature"`
 	// Health of the btrfs root filesystem (see btrfs.go). Present=false on
-	// non-btrfs roots (legacy ext4 SD cards, the live ISO), same pattern as
+	// non-btrfs roots (legacy ext4 SD cards), same pattern as
 	// battery/temperature. OK folds the signals into the one bit HA's
 	// problem binary sensor shows; the counters ride along as attributes.
 	Btrfs struct {
