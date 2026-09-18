@@ -71,13 +71,23 @@ pkgs.testers.runNixOSTest {
     # Seed-file provisioning: drop a dashboard-assistant.yaml where the
     # first-boot import looks, run the import, and the daemon must accept and
     # persist it. This is the headless field-provisioning path.
+    #
+    # On a real device /boot is the ESP, mounted by the hardware module. This
+    # node has no disk layout, so create the directory the importer reads —
+    # what is under test is the import, not where the partition came from.
+    machine.succeed("mkdir -p /boot")
     machine.succeed(
         "printf 'ha_url: \"http://198.51.100.7:8123\"\\n' > /boot/dashboard-assistant.yaml"
     )
     machine.succeed("systemctl restart dashboard-assistant-boot-import.service")
+    # Read it back from the admin listener's info payload, which is where the
+    # daemon surfaces the HA URL. (Not /api/state — that returns only the
+    # splash state machine's current state, never the URL.)
     machine.wait_until_succeeds(
-        "curl -fsS http://localhost:8080/api/state | grep -q 198.51.100.7", timeout=30
+        "curl -fsS http://localhost:8099/api/admin/info | grep -q 198.51.100.7", timeout=30
     )
+    # ...and that it was persisted, not just held in memory.
+    machine.succeed("grep -q 198.51.100.7 /var/lib/dashboard-assistant/runtime.env")
 
     # The import must also mark the device provisioned, so the boot importer
     # never re-runs and the onboarding AP never raises.
