@@ -3,7 +3,9 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -22,6 +24,7 @@ func tempState(t *testing.T) string {
 	old := []*string{
 		&markerFile, &runtimeEnv, &tokenFile, &apiTokenFile, &pairedMarker,
 		&onlineMarker, &urlsFile, &zoomFile, &themeFile, &rotationFile,
+		&tlsCertFile, &tlsKeyFile,
 	}
 	saved := make([]string, len(old))
 	for i, p := range old {
@@ -200,5 +203,34 @@ func TestRestartKioskOutsideWindowRunsImmediately(t *testing.T) {
 	}
 	if got := calls.Load(); got != 2 {
 		t.Fatalf("spaced restarts = %d, want 2", got)
+	}
+}
+
+// clearProvisioningState deletes real files. tempState is what keeps a test run
+// from wiping a live device's state, and it only works if it redirects *every*
+// path that function touches — a mismatch is silent on a dev box, where the real
+// paths do not exist, and destructive on a device, where they do. This asserts
+// the two lists agree rather than trusting the next person to notice.
+func TestTempStateRedirectsEveryClearedPath(t *testing.T) {
+	dir := tempState(t)
+
+	// Create each path clearProvisioningState will remove, then check they all
+	// landed inside the temp dir.
+	for _, p := range provisioningStatePaths() {
+		if !strings.HasPrefix(p, dir) {
+			t.Errorf("path %q is not redirected by tempState; a test run would delete the real file", p)
+			continue
+		}
+		if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
+			t.Fatalf("seed %s: %v", p, err)
+		}
+	}
+	if err := clearProvisioningState(); err != nil {
+		t.Fatalf("clearProvisioningState: %v", err)
+	}
+	for _, p := range provisioningStatePaths() {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Errorf("%s survived the reset", p)
+		}
 	}
 }

@@ -15,7 +15,9 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"io"
@@ -441,6 +443,58 @@ func serveHAAPI(hub *HAHub) {
 	}
 }
 
+// serveHAAPITLS runs the same API over TLS. This is the listener the integration
+// uses; the cleartext one above stays for one release so an integration that
+// predates TLS keeps working, and /api/ha/identify advertises this port so a
+// current integration knows to come here instead.
+//
+// A failure here is loud. If the keypair cannot be loaded this port is simply
+// dead, and the integration reports "cannot connect" — which would send someone
+// hunting a network fault rather than reading the journal.
+func serveHAAPITLS(hub *HAHub) {
+	addr := envOr("DASHBOARD_ASSISTANT_API_TLS_ADDR", ":8443")
+	certPEM, keyPEM, err := ensureTLSKeypair()
+	if err != nil {
+		log.Printf("ERROR: ha api TLS disabled, no usable keypair: %v", err)
+		return
+	}
+	cert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		log.Printf("ERROR: ha api TLS disabled, keypair rejected: %v", err)
+		return
+	}
+
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: hub.routes(),
+		TLSConfig: &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			MinVersion:   tls.VersionTLS12,
+			// Stay on HTTP/1.1. ListenAndServeTLS would otherwise negotiate h2,
+			// which changes the wire behaviour of the SSE stream for no gain here.
+			NextProtos: []string{"http/1.1"},
+		},
+		// Deliberately no WriteTimeout: /api/ha/events is a long-lived SSE stream
+		// and any write deadline would cut it.
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	log.Printf("ha api (tls) listening on %s, cert %s", addr, certFingerprintHex(cert))
+	if err := srv.ListenAndServeTLS("", ""); err != nil {
+		log.Printf("ERROR: ha api TLS server stopped: %v", err)
+	}
+}
+
+// certFingerprintHex is the SHA-256 of the DER leaf certificate — the same value
+// the integration pins. Logged at startup so a pin mismatch can be diagnosed
+// from the device side without extra tooling.
+func certFingerprintHex(cert tls.Certificate) string {
+	if len(cert.Certificate) == 0 {
+		return "unknown"
+	}
+	sum := sha256.Sum256(cert.Certificate[0])
+	return hex.EncodeToString(sum[:])
+}
+
 // auth gates a handler behind the bearer token, compared in constant time.
 func (h *HAHub) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -556,10 +610,18 @@ func (h *HAHub) handleKioskLogin(w http.ResponseWriter, r *http.Request) {
 // flow calls it during discovery so every address the device is found at maps to
 // one entry, and a later DHCP address change updates that entry instead of adding
 // a duplicate.
+//
+// It also advertises the TLS port, because this is the only unauthenticated call
+// the integration makes before it has a token — /api/ha/info could not do the job,
+// being behind auth. Deliberately NOT the certificate fingerprint: this response
+// travels in cleartext, so a fingerprint published here would carry an assurance
+// it cannot actually make. The integration takes the pin from the TLS handshake.
 func (h *HAHub) handleIdentify(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"node_id": h.nodeID,
-		"name":    deviceName(),
+		"node_id":  h.nodeID,
+		"name":     deviceName(),
+		"tls_port": tlsPort(),
+		"version":  installedVersion(),
 	})
 }
 

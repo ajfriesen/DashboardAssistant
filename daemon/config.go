@@ -42,6 +42,8 @@ var (
 	screenshotFile   = stateDir + "/screenshot.jpg"  // latest whole-screen JPEG written by the grim agent, read back by the daemon
 	dmiFile          = stateDir + "/dmi.env"         // hardware serial, written by the daemon's root ExecStartPre (DMI is root-only)
 	sendspinFile     = stateDir + "/sendspin"        // persisted on/off for the Sendspin audio player, reapplied to its unit at daemon start
+	tlsCertFile      = stateDir + "/tls-cert.pem"    // self-signed cert for the LAN HA API; the integration pins its fingerprint
+	tlsKeyFile       = stateDir + "/tls-key.pem"     // its private key (0600 — nothing else on the device reads this)
 )
 
 const sessionUnit = "greetd.service" // the Sway kiosk session; restart relaunches it
@@ -126,15 +128,23 @@ func parseEnvFile(path string) (map[string]string, error) {
 	return m, sc.Err()
 }
 
+// writeAtomic writes via a temp file and a rename, so a reader never sees a
+// half-written file. Note it does not fsync: a power cut can still leave a
+// zero-length file behind, so callers must treat "exists but unparseable" as
+// recoverable rather than fatal.
+func writeAtomic(path string, data []byte, mode os.FileMode) error {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, mode); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
 // writeToken atomically stores the long-lived HA access token. Mode 0640: a
 // secret, but readable by the shared `dashboard` group (the kiosk that injects
 // it), unlike the group-writable runtime.env.
 func writeToken(tok string) error {
-	tmp := tokenFile + ".tmp"
-	if err := os.WriteFile(tmp, []byte(tok+"\n"), 0o640); err != nil {
-		return err
-	}
-	return os.Rename(tmp, tokenFile)
+	return writeAtomic(tokenFile, []byte(tok+"\n"), 0o640)
 }
 
 // markProvisioned drops the sticky marker. Also called by the flash-time seed.
@@ -178,11 +188,22 @@ func markOnline() {
 //
 // Dropping the paired marker is what reopens pairing, which is why reset is the
 // documented way back for a device that is already in Home Assistant.
-func clearProvisioningState() error {
-	for _, p := range []string{
+// provisioningStatePaths is every file a factory reset removes. Split out so the
+// test that guards tempState can assert against the same list.
+func provisioningStatePaths() []string {
+	return []string{
 		markerFile, runtimeEnv, tokenFile, apiTokenFile, pairedMarker,
 		onlineMarker, urlsFile, zoomFile, themeFile, rotationFile,
-	} {
+		// The TLS keypair goes too, for the same reason as the API token: the
+		// entry in Home Assistant stops working either way, and a reset device
+		// should come back with a fresh identity rather than one an old pin
+		// still matches. Regenerated on the next start.
+		tlsCertFile, tlsKeyFile,
+	}
+}
+
+func clearProvisioningState() error {
+	for _, p := range provisioningStatePaths() {
 		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("remove %s: %w", filepath.Base(p), err)
 		}

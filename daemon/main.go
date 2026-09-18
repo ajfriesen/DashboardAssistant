@@ -110,6 +110,9 @@ func main() {
 	// integration polls and subscribes to (SSE). Runs on its own port, separate
 	// from the loopback :8080 admin surface below.
 	go serveHAAPI(hub)
+	// The same API over TLS, on its own port. This is what a current integration
+	// connects to; the cleartext listener above stays one release for older ones.
+	go serveHAAPITLS(hub)
 
 	// Reverse channel: the in-session agents report the real display power state
 	// and touch activity here, keeping HA in sync with changes that never went
@@ -293,15 +296,31 @@ func (s *server) handleInfo(w http.ResponseWriter, r *http.Request) {
 		"version":    installedVersion(),
 		"ha_url":     haURL,
 		// The API endpoint the Home Assistant integration connects to. The token it
-		// needs is handed over by /api/ha/pair, never printed here.
-		"api_url": fmt.Sprintf("http://%s%s", primaryIP(), apiPort()),
+		// needs is handed over by /api/ha/pair, never printed here. TLS: the
+		// certificate is self-signed, so a browser will warn — the integration pins
+		// its fingerprint instead of validating a chain.
+		"api_url": fmt.Sprintf("https://%s:%d", primaryIP(), tlsPort()),
 	})
 }
 
 // apiPort returns the ":<port>" suffix of the HA API listener, for the api_url
 // reported by handleInfo.
 func apiPort() string {
-	addr := envOr("DASHBOARD_ASSISTANT_API_ADDR", ":8081")
+	return portOf(envOr("DASHBOARD_ASSISTANT_API_ADDR", ":8081"))
+}
+
+// tlsPort is the TLS API port, advertised by /api/ha/identify so the integration
+// knows where to go. Bare digits, not ":8443": it is a value in a JSON payload
+// here, not an address to bind.
+func tlsPort() int {
+	p, err := strconv.Atoi(strings.TrimPrefix(portOf(envOr("DASHBOARD_ASSISTANT_API_TLS_ADDR", ":8443")), ":"))
+	if err != nil {
+		return 8443
+	}
+	return p
+}
+
+func portOf(addr string) string {
 	if _, port, err := net.SplitHostPort(addr); err == nil && port != "" {
 		return ":" + port
 	}
