@@ -1,11 +1,8 @@
 package main
 
 import (
-	"context"
-	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"sync/atomic"
 	"testing"
@@ -137,26 +134,6 @@ func TestPairAutoConfirmOverridesPaired(t *testing.T) {
 	t.Setenv("DASHBOARD_ASSISTANT_PAIR_AUTO", "1")
 	if !NewPairing("tok").open() {
 		t.Fatal("auto-confirm must keep pairing open on a paired device")
-	}
-}
-
-// The pairing endpoint answers on the LAN listener but never on the setup AP,
-// whose join credential is printed on the device's own screen.
-func TestPairRefusedOnSetupAP(t *testing.T) {
-	tempState(t)
-	h := &HAHub{token: "tok", pair: NewPairing("tok")}
-	handler := notOnSetupAP(http.HandlerFunc(h.handlePair))
-
-	req := httptest.NewRequest(http.MethodPost, "/api/ha/pair", nil)
-	local := &net.TCPAddr{IP: net.ParseIP(apAddress), Port: 8081}
-	req = req.WithContext(context.WithValue(req.Context(), http.LocalAddrContextKey, local))
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("pair over the setup AP = %d, want %d", rec.Code, http.StatusForbidden)
-	}
-	if _, err := os.Stat(pairedMarker); err == nil {
-		t.Fatal("a refused request must not mark the device paired")
 	}
 }
 

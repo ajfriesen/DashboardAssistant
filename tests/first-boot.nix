@@ -90,7 +90,7 @@ pkgs.testers.runNixOSTest {
     machine.succeed("grep -q 198.51.100.7 /var/lib/dashboard-assistant/runtime.env")
 
     # The import must also mark the device provisioned, so the boot importer
-    # never re-runs and the onboarding AP never raises.
+    # never re-runs.
     machine.wait_until_succeeds("test -e /var/lib/dashboard-assistant/provisioned", timeout=30)
   '';
 }

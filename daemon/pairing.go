@@ -26,7 +26,7 @@ import "os"
 // the button and the window are gone. Re-pairing goes through a factory reset,
 // which clears the paired marker along with the rest of the device's state. The
 // token is still only ever handed out over the LAN listener, never broadcast in
-// mDNS, and never over the Wi-Fi setup AP (see notOnSetupAP).
+// mDNS.
 //
 // Upgrade note: a device that was already paired under the old rule has no marker
 // yet, so its window reopens until the integration's next authenticated request

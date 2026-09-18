@@ -404,11 +404,9 @@ func (h *HAHub) snapshot() stateSnapshot {
 func (h *HAHub) routes() http.Handler {
 	mux := http.NewServeMux()
 	// Unauthenticated on purpose: the gate is the pairing window, not a token the
-	// caller does not have yet. See handlePair.
-	// Deliberately unauthenticated, but never over the Wi-Fi setup AP: an unpaired
-	// device hands the token to whoever asks, and during onboarding "whoever asks"
-	// would include any phone that joined the setup network.
-	mux.Handle("/api/ha/pair", notOnSetupAP(http.HandlerFunc(h.handlePair)))
+	// caller does not have yet. Safe because it answers only on the owner's LAN,
+	// and because a device pairs once — see handlePair.
+	mux.HandleFunc("/api/ha/pair", h.handlePair)
 	// Unauthenticated, side-effect free: the stable identity the config flow keys
 	// zeroconf discovery on, so one device is one Home Assistant entry.
 	mux.HandleFunc("/api/ha/identify", h.handleIdentify)
@@ -809,7 +807,7 @@ func (h *HAHub) handlePower(w http.ResponseWriter, r *http.Request) {
 
 // handleReset factory-resets the device: it clears the provisioning + config
 // state (HA URL, kiosk login token, device API token, prefs) and reboots, so the
-// box comes back on the onboarding screen ready to be added again. Because the
+// box comes back on the waiting splash ready to be added again. Because the
 // API token is regenerated on the next boot, Home Assistant's current entry stops
 // working — remove it and re-add (re-pair) the device. The node id is preserved,
 // so it re-adds as the same device, not a duplicate.
@@ -827,7 +825,7 @@ func (h *HAHub) handleReset(w http.ResponseWriter, r *http.Request) {
 	log.Printf("ha: factory reset — provisioning cleared, rebooting")
 	writeJSON(w, http.StatusOK, map[string]string{"status": "resetting"})
 	// Reboot after the response flushes so the caller gets its 200 before the box
-	// goes down; the fresh boot regenerates the API token and shows onboarding.
+	// goes down; the fresh boot regenerates the API token and waits for a network.
 	go func() {
 		time.Sleep(time.Second)
 		if err := systemReboot(); err != nil {

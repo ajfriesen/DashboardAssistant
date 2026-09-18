@@ -1,7 +1,7 @@
 # Build-time provisioning seed (development / known-network images).
 #
 # Setting dashboardAssistant.seed.haUrl bakes runtime.env and the `provisioned` marker
-# into the image, so first boot skips the setup wizard and goes straight to the
+# into the image, so first boot skips the waiting splash and goes straight to the
 # dashboard. This is Option 3 (pre-seed at flash time) expressed as Nix config.
 { config, lib, ... }:
 let
@@ -15,7 +15,7 @@ in
       example = "https://homeassistant.int.ajfriesen.com";
       description = ''
         If set, pre-seed the Home Assistant URL and mark the device as
-        provisioned, bypassing the on-screen setup wizard. Leave null to use
+        provisioned, so it never waits on the splash for a seed file. Leave null to use
         interactive setup.
       '';
     };

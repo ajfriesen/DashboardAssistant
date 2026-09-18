@@ -35,10 +35,7 @@ func serveAdmin(srv *server) {
 	mux.HandleFunc("/api/admin/rollback", srv.handleRollback)
 	mux.HandleFunc("/api/admin/reset", srv.handleReset)
 	log.Printf("admin listening on %s", addr)
-	// Wrapped so a phone on the Wi-Fi setup AP cannot reach rollback or factory
-	// reset. This listener's whole authorization story is "you are on the owner's
-	// LAN", and the setup AP is a network where that is not true.
-	if err := http.ListenAndServe(addr, notOnSetupAP(mux)); err != nil {
+	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Printf("admin server error: %v", err)
 	}
 }
@@ -95,7 +92,7 @@ func (s *server) handleRollback(w http.ResponseWriter, r *http.Request) {
 
 // handleReset factory-resets the device: clears provisioning + config state (HA
 // URL, kiosk login token, device API token, prefs) and reboots onto the
-// onboarding screen. This is also how you re-pair: a reset device is
+// waiting splash. This is also how you re-pair: a reset device is
 // unprovisioned, and Pairing.open() is true while unprovisioned, so Home
 // Assistant re-discovers and claims a fresh token with no on-screen step. That
 // is the whole reason there is no "arm pairing" button anywhere any more.
@@ -121,7 +118,7 @@ func (s *server) handleReset(w http.ResponseWriter, r *http.Request) {
 	log.Printf("admin: factory reset — provisioning cleared, rebooting")
 	writeJSON(w, http.StatusOK, map[string]string{"state": "resetting"})
 	// Reboot after the response flushes so the caller sees its 200 before the box
-	// goes down; the fresh boot regenerates the API token and shows onboarding.
+	// goes down; the fresh boot regenerates the API token and waits for a network.
 	go func() {
 		time.Sleep(time.Second)
 		if err := systemReboot(); err != nil {

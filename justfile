@@ -122,7 +122,7 @@ deploy-rpi5-dev HOST ACTION="switch":
 
 # Boot the built disk image (run `just build-disk-image` first). The virtio-net
 # NIC gets DHCP from QEMU's user-mode network, so NetworkManager auto-connects
-# it — first boot lands in the setup wizard showing "Connected via ethernet"
+# it — first boot comes up online, showing the add-to-Home-Assistant splash
 # (the wired / existing-connection path). Interact with the wizard directly on
 # the QEMU display, or drive it from the host via `just qemu-ssh` (see the
 # loopback note there).

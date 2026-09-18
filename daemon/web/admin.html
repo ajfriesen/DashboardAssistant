@@ -93,7 +93,7 @@
         <h2>Factory reset</h2>
         <p class="hint">
           Clears the Home Assistant URL, the login token, the device API token and
-          your display preferences, then <b>reboots</b> onto the onboarding screen.
+          your display preferences, then <b>reboots</b> onto the waiting splash.
           The device re-appears in Home Assistant as the same device, ready to be
           added again — <b>remove the existing entry there first</b>, because its
           token stops working.
@@ -223,7 +223,7 @@
         const r = await fetch("/api/admin/reset", { method: "POST" });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || r.statusText);
-        say("resetMsg", "Reset done — rebooting onto the onboarding screen.", "ok");
+        say("resetMsg", "Reset done — rebooting onto the waiting splash.", "ok");
         $("resetConfirm").value = "";
       } catch (e) {
         say("resetMsg", e.message, "err");

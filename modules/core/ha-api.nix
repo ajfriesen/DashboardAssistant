@@ -42,7 +42,7 @@ in
         factory reset is the way back in. Note the default already covers first
         enrollment of a seeded device, so a fleet flashed with a seed file does not
         need this. The token is only ever handed out over the LAN listener, never
-        broadcast in mDNS, and never over the Wi-Fi setup AP.
+        broadcast in mDNS.
       '';
     };
 

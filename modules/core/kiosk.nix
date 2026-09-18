@@ -4,7 +4,7 @@
 # output power control — none of which Cage exposes.
 #
 # The launcher is state-aware: it asks the daemon (/api/state) which view to
-# show — the setup wizard, a reconnect splash, or the live dashboard.
+# show — the waiting splash or the live dashboard.
 {
   pkgs,
   lib,

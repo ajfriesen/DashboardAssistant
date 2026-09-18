@@ -194,7 +194,7 @@ func clearProvisioningState() error {
 // back onboardable rather than silently rejoining the network it was reset away
 // from. Without it, "reset the tablet, then take it to a different house" quietly
 // does not work: the old profile autoconnects, the device never looks stranded,
-// and the setup AP never appears.
+// and it waits for a seed file or Ethernet instead.
 //
 // The AP passphrase file is deliberately *not* removed. It may be on a printed
 // label or in a photo, and rotating a credential whose only job is to be readable

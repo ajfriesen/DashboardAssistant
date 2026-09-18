@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Dashboard Assistant — Setup</title>
+  <title>Dashboard Assistant</title>
   <style>
     :root { color-scheme: dark; }
     /* Count padding inside the 100vh so the centered splash never overflows into
@@ -30,7 +30,8 @@
     .steps.show { display: block; }
     .steps li { margin: .45rem 0; }
     .steps b, #devname { color: #e8edf2; }
-    /* QR: the seed-file guide. Primary help in SETUP, a fallback hint while CONNECTING. */
+    /* QR: the seed-file guide. Primary help in SETUP, and the only actionable
+       thing an offline device can offer. */
     .qr { display: none; flex-direction: column; align-items: center; gap: .55rem; }
     .qr.show { display: flex; }
     .qr img {
@@ -43,31 +44,12 @@
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     }
 
-    /* Wi-Fi setup panel. The device is broadcasting its own network and this is
-       the only place its passphrase is ever shown, so the credentials are set in
-       large monospace: someone is reading them off a wall and typing them into a
-       phone. */
-    .wifi { display: none; flex-direction: column; align-items: center; gap: 1rem; }
-    .wifi.show { display: flex; }
-    .wifi img {
-      width: 190px; height: 190px; image-rendering: pixelated;
-      background: #fff; padding: 10px; border-radius: 12px;
-    }
-    .creds { display: grid; grid-template-columns: auto auto; gap: .4rem 1.1rem; align-items: baseline; }
-    .creds dt { color: #9fb0c0; font-size: .9rem; text-align: right; }
-    .creds dd {
-      margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 1.25rem; color: #e8edf2; text-align: left;
-    }
-    .wifi .fallback { color: #9fb0c0; font-size: .88rem; max-width: 26rem; }
-    .wifi .fallback code { color: #6ea8fe; font-size: .95rem; }
-    .wifi .err { color: #ffb4a2; font-size: .95rem; }
   </style>
 </head>
 <body>
   <div class="spinner" id="spinner"></div>
-  <h1 id="title">Connecting to your network…</h1>
-  <p id="subtitle">Your dashboard will load automatically once the device is online.</p>
+  <h1 id="title">Waiting for network…</h1>
+  <p id="subtitle">Connect Ethernet, or provide Wi-Fi credentials in a seed file.</p>
 
   <ol class="steps" id="steps">
     <li>Open <b>Home Assistant</b> on your phone or computer.</li>
@@ -76,24 +58,10 @@
     <li>That's it — a fresh device pairs automatically, and your dashboard appears here.</li>
   </ol>
 
-  <div class="wifi" id="wifi">
-    <img id="wifiqr" alt="QR code that joins the setup Wi-Fi network" src="">
-    <dl class="creds">
-      <dt>Network</dt><dd id="apssid"></dd>
-      <dt>Password</dt><dd id="appsk"></dd>
-    </dl>
-    <p class="fallback">
-      Scan the code with your phone's camera to join, then follow the page that
-      opens. If nothing opens, go to <code id="apurl"></code> in your browser.
-    </p>
-    <p class="err" id="aperr"></p>
-  </div>
-
   <div class="qr" id="qr">
-    <img alt="QR code linking to the seed file setup guide"
-         src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMYAAADGAQMAAACzVW0eAAAABlBMVEUAAAD///+l2Z/dAAAAAnRSTlP//8i138cAAAAJcEhZcwAACxIAAAsSAdLdfvwAAAFWSURBVFiF7ZdBDgMhCEVJPIBH8uoeyQOYUP4Hp+007RYWNaZR3ywo8BFFvw35k59kiY1mv12bThxhjBpk2K6tsbvaV7Zttl9ViNlIe6fZvm297E+UIrqF3jW/ViPm0bC9Fjk7HLTPPMgkrpJxzbt+EomPhQVi3u91J5OYI48+MPsULkoQtaWwtAw/M6FUIQvHNJxxhtVHJelE56aZrmOvLpEH6YSShdUUrn0l/dJ2NqFE9inMb3mQTlBdmIN9UiUu6BokKgo8ioLnro26k0+YgDOqizxvjAoE4e3ql60w2ufGyCaoLpPKwMJmY39XgiDa5s7IR7/WnnmQS6KbiyA3NgXIzQpEj2RpPhans8sn3j0hH6fftziuQoZ61+m2c26pQs5Lwnv2lzyoQqK5s6qs72+MfMKK4vXv5tFc4tG+GijlO6wG8VdOvMD46L/qdTb5Nv7kF3kAJ0yu5hiZ9pgAAAAASUVORK5CYII=">
+    <img alt="QR code linking to the seed file setup guide" src="/waiting/qr.png">
     <span class="cap" id="qrcap">Scan for the setup guide</span>
-    <span class="url">dashboard-assistant.com/flash/seed/</span>
+    <span class="url">dashboardassistant.org/flash/seed/</span>
   </div>
 
   <script>
@@ -105,58 +73,32 @@
     let device = null;
     fetch("/api/info").then((r) => r.json()).then((d) => { device = d; }).catch(() => {});
 
-    // Reflect the current state in the copy. Five cases:
-    //   CONNECTING — provisioned/seeded but never yet online (first-time connect)
-    //   ONBOARDING — stranded with no network; the setup AP is up, show how to join
-    //   RECONNECT  — was online, link dropped
+    // Reflect the current state in the copy. Three cases reach this function:
     //   SETUP      — online, not yet added: guide the user to add it in HA
-    //   READY      — handled by poll() (reloads into the dashboard)
+    //   CONNECTING — never yet online
+    //   RECONNECT  — was online, link dropped
+    //   (READY is handled by poll(), which reloads into the dashboard)
+    //
+    // CONNECTING and RECONNECT deliberately show the same screen. The device has
+    // no way to get itself onto Wi-Fi — credentials come from a seed file — so
+    // the one useful thing this screen can do while offline is point at the guide
+    // that explains how to write one.
     function applyState(state) {
       const setup = state === "SETUP";
-      const onboarding = state === "ONBOARDING";
-      $("spinner").style.display = setup || onboarding ? "none" : "";
+      $("spinner").style.display = setup ? "none" : "";
       $("steps").classList.toggle("show", setup);
-      $("wifi").classList.toggle("show", onboarding);
-      if (onboarding) loadAP();
+      $("qr").classList.add("show");
 
-      if (onboarding) {
-        $("title").textContent = "Connect this display to Wi-Fi";
-        $("subtitle").textContent = "It is broadcasting its own network. Join it from your phone to finish setup.";
-        $("qr").classList.remove("show");
-      } else if (setup) {
+      if (setup) {
         $("title").textContent = "Add this device in Home Assistant";
         $("subtitle").textContent = "It's online and ready. Add it to Home Assistant — no token to type:";
         $("devname").textContent = device && device.name ? " — “" + device.name + "” — " : " ";
         $("qrcap").textContent = "New to this? Scan for the setup guide";
-        $("qr").classList.add("show");
-      } else if (state === "RECONNECT") {
-        $("title").textContent = "Reconnecting to your network…";
-        $("subtitle").textContent = "The dashboard will reappear automatically once the connection is back.";
-        $("qr").classList.remove("show");
       } else {
-        // CONNECTING (or anything pre-READY): first-time connect. Offer the seed
-        // guide as a fallback for a device that can't reach the network (Wi-Fi).
-        $("title").textContent = "Connecting to your network…";
-        $("subtitle").textContent = "Your dashboard will load automatically once the device is online.";
-        $("qrcap").textContent = "No network? Set up Wi-Fi with a seed file — scan for how";
-        $("qr").classList.add("show");
+        $("title").textContent = "Waiting for network…";
+        $("subtitle").textContent = "Connect Ethernet, or provide Wi-Fi credentials in a seed file. The dashboard loads automatically once the device is online.";
+        $("qrcap").textContent = "No network? Scan for how to set up Wi-Fi with a seed file";
       }
-    }
-
-    // Setup-AP details. Re-fetched on each ONBOARDING poll so a failed join can
-    // report why: the AP comes back with the same name and passphrase, and the
-    // error is the only new information.
-    async function loadAP() {
-      try {
-        const d = await (await fetch("/api/onboarding")).json();
-        $("apssid").textContent = d.ssid || "—";
-        $("appsk").textContent = d.psk || "—";
-        $("apurl").textContent = (d.portal_url || "").replace(/^https?:\/\//, "");
-        if (!$("wifiqr").src.endsWith("/api/onboarding/qr.png")) {
-          $("wifiqr").src = "/api/onboarding/qr.png";
-        }
-        $("aperr").textContent = d.last_error || "";
-      } catch (_) {}
     }
 
     // Poll state; when READY, the daemon relaunches the kiosk into the dashboard,
