@@ -192,12 +192,31 @@ func machineID() string {
 	return ""
 }
 
+// dmiPlaceholders are the strings boards ship when a DMI field was never
+// programmed. Treating them as values puts "To be filled by O.E.M." in the HA
+// Model sensor. Kept in step with the same list in modules/core/daemon.nix,
+// which filters the root-only serial fields before the daemon ever sees them.
+var dmiPlaceholders = map[string]bool{
+	"default string":         true,
+	"to be filled by o.e.m.": true,
+	"none":                   true,
+	"not specified":          true,
+	"system serial number":   true,
+	"0":                      true,
+}
+
+// readDMI returns a DMI field, or "" when it is missing or a placeholder.
+// Returning "" for junk lets readModel's fallback chain do the right thing.
 func readDMI(field string) string {
 	b, err := os.ReadFile("/sys/class/dmi/id/" + field)
 	if err != nil {
 		return ""
 	}
-	return strings.TrimSpace(string(b))
+	v := strings.TrimSpace(string(b))
+	if dmiPlaceholders[strings.ToLower(v)] {
+		return ""
+	}
+	return v
 }
 
 // readModel is the board model, e.g. "HARDKERNEL ODROID-H2" on x86 (DMI) or
