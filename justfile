@@ -21,7 +21,7 @@ help:
   @echo "  cdp-eval EXPR          Evaluate arbitrary JS in the kiosk page over CDP"
   @echo
   @echo "Introspect:"
-  @echo "  options                List the dashboard.* NixOS config options"
+  @echo "  options                List the dashboardAssistant.* NixOS config options"
   @echo
   @echo "R2 images bucket:"
   @echo "  r2-lifecycle-apply     Apply ops/r2-lifecycle.json to the bucket"
@@ -180,7 +180,7 @@ net-check:
 # Log the kiosk into Home Assistant by injecting a long-lived access token
 # straight into the page via CDP — no Chrome, no chrome://inspect, no version
 # mismatch. Requires `just qemu-ssh` running in another terminal (it tunnels
-# :9222) and dashboard.debug.chromiumRemoteDebugging = true baked into the image.
+# :9222). The CDP port is always open on loopback — no option needed.
 # Create the token in HA: Profile -> Security -> Long-lived access tokens.
 #   just inject-token "eyJhbGciOi..."
 [doc('Log the kiosk into HA by injecting a long-lived token via CDP')]
@@ -251,7 +251,7 @@ r2-lifecycle-show:
 
 # List the dashboard.* config options this OS defines (name, type, default,
 # description). Introspects the NixOS module options via optionAttrSetToDocList.
-[doc('List the dashboard.* NixOS config options')]
+[doc('List the dashboardAssistant.* NixOS config options')]
 options:
   #!/usr/bin/env bash
   set -euo pipefail
