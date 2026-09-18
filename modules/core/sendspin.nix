@@ -208,6 +208,25 @@ in
         Restart = "on-failure";
         RestartSec = 5;
 
+        # Bound the player's memory. 1.8.2 leaks through its mDNS discovery path
+        # — a device in the field reached 2.8 GB RSS (70% of a 4 GB Pi 5) in 28
+        # hours, which pushed the kiosk's Chromium renderer into swap and made
+        # the dashboard visibly laggy. Steady state is ~17 MB, so this is ~30x
+        # headroom: it never fires in normal operation, and when the leak does
+        # recur the cgroup OOM killer takes the player instead of the dashboard.
+        # The SIGKILL that follows counts as a failure, so `Restart=on-failure`
+        # above brings it back.
+        MemoryAccounting = true;
+        MemoryMax = "512M";
+
+        # Same incident, second symptom: the player logged "Discovered server"
+        # on every mDNS hit, which was 398k lines (99.6% of the whole journal)
+        # in one boot and 2.87 GB written to the SD card. Pinning `server` stops
+        # the rediscovery itself; this caps what any future upstream chattiness
+        # can cost in flash wear regardless.
+        LogRateLimitIntervalSec = 30;
+        LogRateLimitBurst = 100;
+
         # The player writes nothing: --daemon logs to stdout, and with no
         # writable config file the client_id falls back to the primary NIC's MAC
         # (pkg/sendspin/client_id.go), which is stable across reboots without
