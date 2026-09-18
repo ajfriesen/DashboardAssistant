@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -13,13 +14,28 @@ import (
 
 // tempState points the state-file vars this package reads at a fresh directory,
 // restoring them afterwards. The paths are package vars derived from stateDir at
-// init, so a test has to redirect the individual ones it touches.
+// init, so a test has to redirect them explicitly.
+// It redirects every path clearProvisioningState touches, not just the two the
+// pairing tests read: TestFactoryResetReopensPairing calls that function, and a
+// var left pointing at /var/lib/dashboard-assistant would have the test delete
+// live state when the suite is run on a device.
 func tempState(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	oldMarker, oldPaired := markerFile, pairedMarker
-	markerFile, pairedMarker = dir+"/provisioned", dir+"/paired"
-	t.Cleanup(func() { markerFile, pairedMarker = oldMarker, oldPaired })
+	old := []*string{
+		&markerFile, &runtimeEnv, &tokenFile, &apiTokenFile, &pairedMarker,
+		&onlineMarker, &urlsFile, &zoomFile, &themeFile, &rotationFile,
+	}
+	saved := make([]string, len(old))
+	for i, p := range old {
+		saved[i] = *p
+		*p = dir + "/" + filepath.Base(*p)
+	}
+	t.Cleanup(func() {
+		for i, p := range old {
+			*p = saved[i]
+		}
+	})
 	return dir
 }
 
