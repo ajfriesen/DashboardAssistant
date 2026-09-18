@@ -28,7 +28,28 @@ in
     port = lib.mkOption {
       type = lib.types.port;
       default = 8081;
-      description = "TCP port for the LAN Home Assistant API listener.";
+      description = ''
+        TCP port for the cleartext LAN Home Assistant API listener.
+
+        Retained for integrations that predate TLS support. A current integration
+        reads tlsPort from /api/ha/identify and connects there instead; this port
+        is expected to go away in a later release.
+      '';
+    };
+
+    tlsPort = lib.mkOption {
+      type = lib.types.port;
+      default = 8443;
+      description = ''
+        TCP port for the TLS Home Assistant API listener, and the one the
+        integration uses. The daemon generates a self-signed certificate on first
+        boot and the integration pins its SHA-256 fingerprint on first contact,
+        so there is no certificate authority and nothing to renew.
+
+        This encrypts the kiosk login token (a long-lived Home Assistant
+        credential) and the state stream, which were previously readable by
+        anyone capturing packets on the network.
+      '';
     };
 
     pairAutoConfirm = lib.mkOption {
@@ -64,13 +85,17 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    # Open just the API port on the LAN (never the internet).
-    networking.firewall.allowedTCPPorts = [ cfg.port ];
+    # Open just the API ports on the LAN (never the internet).
+    networking.firewall.allowedTCPPorts = [
+      cfg.port
+      cfg.tlsPort
+    ];
 
     # Merges with the DASHBOARD_ASSISTANT_ADDR set in daemon.nix.
     systemd.services.dashboard-assistant-daemon = {
       environment = {
         DASHBOARD_ASSISTANT_API_ADDR = ":${toString cfg.port}";
+        DASHBOARD_ASSISTANT_API_TLS_ADDR = ":${toString cfg.tlsPort}";
       }
       // lib.optionalAttrs cfg.pairAutoConfirm {
         DASHBOARD_ASSISTANT_PAIR_AUTO = "1";
