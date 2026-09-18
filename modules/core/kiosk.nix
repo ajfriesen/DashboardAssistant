@@ -848,8 +848,18 @@ let
   # panel that guests touch, so every button has to be safe in the hands of someone
   # who is not the owner. There used to be a ⚙ Config button opening a panel that
   # printed the API token and could roll the system back and reboot it; that moved
-  # to the LAN admin listener (daemon/admin.go). The ❤ page carries a read-only
+  # to the LAN admin listener (daemon/admin.go). The sponsor page carries a read-only
   # device-info view, which is as far as on-screen introspection goes.
+  # Sponsor button artwork. Referenced straight out of docs/brand/ rather than
+  # copied, so the bar can never drift from the shipped mark. This is the one
+  # place a raster beats the SVGs: it is the only *square* official asset, and
+  # the two SVGs cannot stand in for it — favicon.svg's .plate/.tile classes are
+  # defined nowhere in the repo (it renders black standalone) and mark-wide.svg
+  # is a 64x40 lockup. At 180px source for a 26px slot there is resolution to
+  # spare. waybar can load SVG here if a square one ever lands: its wrapper sets
+  # GDK_PIXBUF_MODULE_FILE to a librsvg loaders.cache that registers image/svg+xml.
+  sponsorLogo = ../../docs/brand/apple-touch-icon-180.png;
+
   waybarConfig = pkgs.writeText "ha-kiosk-waybar.json" ''
     {
       "layer": "bottom",
@@ -874,7 +884,7 @@ let
         "on-click": "${pagePrev}"
       },
       "custom/sponsor": {
-        "format": "❤",
+        "format": " ",
         "tooltip": false,
         "on-click": "${cdpNav} ${daemonBase}/sponsor"
       },
@@ -903,7 +913,7 @@ let
       "custom/kbd":     { "format": "⌨", "tooltip": false, "on-click": "${oskToggle}" },
       "custom/home":    { "format": "🏠", "tooltip": false, "on-click": "${navHome}" },
       "custom/prev":    { "format": "◀", "tooltip": false, "on-click": "${pagePrev}" },
-      "custom/sponsor": { "format": "❤", "tooltip": false, "on-click": "${cdpNav} ${daemonBase}/sponsor" },
+      "custom/sponsor": { "format": " ", "tooltip": false, "on-click": "${cdpNav} ${daemonBase}/sponsor" },
       "custom/next":    { "format": "▶", "tooltip": false, "on-click": "${pageNext}" }
     }
   '';
@@ -925,7 +935,7 @@ let
     #custom-kbd {
       padding: 0 16px;
       margin: 5px;
-      background: #1e2633;
+      background-color: #1e2633;
       border-radius: 10px;
     }
     #custom-home:active,
@@ -933,26 +943,41 @@ let
     #custom-sponsor:active,
     #custom-next:active,
     #custom-kbd:active {
-      background: #33415a;
+      /* background-color, not the `background` shorthand: the shorthand resets
+         background-image to none, which would blank the sponsor mark for as
+         long as a finger was on it (and :active outranks #custom-sponsor). */
+      background-color: #33415a;
     }
-    /* Beating heart. GTK CSS (waybar) has no `transform`, so the pulse is a
-       font-size beat — two quick systole/diastole bumps per cycle — with the
-       heart tinted red so it reads as "sponsor" at a glance. A fixed min-width
-       (wide enough for the largest beat frame) keeps the module's width steady
-       so the growing glyph never shoves Prev/Next sideways. */
+    /* Sponsor button: the Dashboard Assistant mark, in place of the ❤ glyph
+       that used to live here.
+
+       That heart pulsed via `animation` on `font-size`. GTK3 has no `transform`
+       so the original comment reached for font-size as the fallback, but it is
+       the most expensive property available to animate: every frame invalidates
+       text layout, so Pango reshapes and re-rasterises the glyph 60 times a
+       second, forever. On a Pi 5 that cost 46% of one core — 41,000 CPU-seconds
+       in 25 hours, 620 of them in waybar's own [pango] fontcon thread, for a bar
+       whose five labels are static strings. It was a real source of dashboard
+       lag and it read as intermittent only because wlroots stops frame callbacks
+       while the output is DPMS-off, parking GTK's frame clock along with the
+       animation. So it burned a core precisely while someone was looking at it.
+
+       A background-image costs nothing to hold still. If a pulse is ever wanted
+       back, animate `opacity` — and note that with the image in place font-size
+       would burn exactly the same CPU while changing nothing visible at all.
+
+       min-width/min-height keep the module box steady so the mark never shoves
+       Prev/Next sideways; the pill background comes from the shared rule above,
+       which keeps this button looking like its four neighbours. Sized 26px into
+       the 50px bar (see the OSK offset note keyed to that height). */
     #custom-sponsor {
-      color: #ff5a7a;
       padding: 0 20px;
       min-width: 32px;
-      animation: heartbeat 1.2s ease-in-out infinite;
-    }
-    @keyframes heartbeat {
-      0%   { font-size: 18px; }
-      15%  { font-size: 25px; }
-      30%  { font-size: 18px; }
-      45%  { font-size: 23px; }
-      60%  { font-size: 18px; }
-      100% { font-size: 18px; }
+      min-height: 32px;
+      background-image: url("${sponsorLogo}");
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: 26px 26px;
     }
   '';
 
