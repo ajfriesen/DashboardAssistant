@@ -56,8 +56,8 @@ If the card doesn't appear, or you preset a token, add it manually:
 1. Go to **Settings → Devices & services → Add integration**.
 2. Search for **Dashboard Assistant** and select it.
 3. Enter the connection details:
-    - **Host / port** — the device's IP or hostname; the API defaults to port
-      **8081**.
+    - **Host / port** — the device's IP or hostname; enter port **8081** and Home
+      Assistant will move itself to the encrypted port automatically.
     - **API token** — the `api_token` from the device's
       [seed file](../flash/seed.md). The device never displays its token, so
       if you did not preset one, use the automatic discovery path instead and
@@ -68,6 +68,18 @@ If the card doesn't appear, or you preset a token, add it manually:
     keeps a stranger on your network from adopting your panel. To pair it with
     a new Home Assistant instance, factory-reset it from its
     [admin page](admin.md) first.
+
+!!! info "The connection is encrypted"
+    Home Assistant talks to the display over TLS, and remembers the display's
+    certificate the first time it connects. Nothing on the wire is readable by
+    anyone else on your network — which matters most for the Home Assistant
+    login the display is given, since that is a credential to your Home
+    Assistant.
+
+    The certificate is the display's own, so there is nothing to buy, install or
+    renew. If you factory-reset the display it generates a new one, and Home
+    Assistant will ask you to re-authenticate — that prompt is expected after a
+    reset, and worth a second look if you have not just done one.
 
 ## What you get
 

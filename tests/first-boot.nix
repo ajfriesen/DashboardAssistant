@@ -68,6 +68,23 @@ pkgs.testers.runNixOSTest {
     ident = json.loads(machine.succeed("curl -fsS http://localhost:8081/api/ha/identify"))
     assert ident["node_id"].startswith("da_"), ident
 
+    # ...and advertises where TLS lives, which is how the integration knows to
+    # stop using the cleartext port above.
+    assert ident["tls_port"] == 8443, ident
+
+    # The TLS listener is up and serving the same API, which proves the daemon
+    # generated and loaded a keypair on first boot. -k because the certificate is
+    # self-signed by design; the integration pins its fingerprint rather than
+    # validating a chain.
+    tls_ident = json.loads(
+        machine.succeed("curl -fsSk https://localhost:8443/api/ha/identify")
+    )
+    assert tls_ident["node_id"] == ident["node_id"], tls_ident
+
+    # The private key must not be readable beyond the daemon. Unlike the HA token,
+    # nothing else on the device needs it.
+    machine.succeed("test \"$(stat -c %a /var/lib/dashboard-assistant/tls-key.pem)\" = 600")
+
     # Seed-file provisioning: drop a dashboard-assistant.yaml where the
     # first-boot import looks, run the import, and the daemon must accept and
     # persist it. This is the headless field-provisioning path.
