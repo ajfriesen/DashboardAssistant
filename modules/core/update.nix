@@ -147,7 +147,10 @@ in
 
       # Baked-in installed version the daemon reports to HA. World-readable
       # (0444), read at /etc/dashboard-assistant/version.
-      environment.etc."dashboard-assistant/version".text = version;
+      environment.etc."dashboard-assistant/version" = {
+        text = version;
+        mode = "0444";
+      };
 
       # Stamp the release onto the generation so the boot menu, `nixos-version`,
       # and `nixos-rebuild list-generations` all show which tag a generation was
