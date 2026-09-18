@@ -41,9 +41,9 @@ I was annoyed how much setup you needed in order to get a good dashboard experie
 Install some Linux Distribution, add packages, do this and that, configure things.
 The motivation was born to make this easier, with no Linux knowledge needed.
 
-- **Flash and go.** No Linux knowledge needed. Write one image, boot it, scan a
-  QR code to put it on your Wi-Fi, and it pairs with Home Assistant and logs
-  itself in.
+- **Flash and go.** No Linux knowledge needed. Write one image, drop a short YAML
+  file on the boot partition if you need Wi-Fi, and it pairs with Home Assistant
+  and logs itself in.
 - **Over-the-air updates.** Update the whole OS from Home Assistant.
 - **Unbreakable.** It's NixOS. A bad update never bricks the device — the
   device keeps every previous generation, and its LAN-only admin page lets you

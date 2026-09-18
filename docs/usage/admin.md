@@ -57,9 +57,7 @@ never been paired pairs on its own, including a device preconfigured with a
 The admin page needs the network, so it cannot help a device that will not join
 Wi-Fi. Three paths remain:
 
-- If the display has never been online, it broadcasts its own setup network.
-  Scan the QR code on its screen and configure Wi-Fi from your phone: see
-  [Wi-Fi setup](../flash/wifi.md).
 - Drop a [seed file](../flash/seed.md) on a USB stick and plug it in. The device
-  applies it and restarts the kiosk.
+  applies it and restarts the kiosk. This is the way back onto Wi-Fi.
+- Plug in Ethernet, which needs no configuration at all.
 - Pull the card or disk and read the journal directly, or reflash it.

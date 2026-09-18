@@ -55,9 +55,8 @@ full list.
 
 ## Provisioning
 
-A single device sets itself up on screen: the [Wi-Fi onboarding](flash/wifi.md)
-joins it to your network over its own access point and captive portal, and Home
-Assistant discovers it from there. For fleets and field deploys, a small
+On Ethernet a device gets online by itself and Home Assistant discovers it from
+there. Everything else — Wi-Fi credentials included — comes from a small
 **YAML seed file** (Home Assistant URL, token, Wi-Fi, dashboard URLs, optional
 integration token) dropped on a USB stick or the boot partition configures the
 device before it ever boots. Either way, nothing on the running panel can

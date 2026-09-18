@@ -96,7 +96,6 @@ internal disk, a Raspberry Pi image goes to the SD card (usually
        target drive, and flash.
 
 Once the flash finishes, move the disk into the target machine (or leave it in
-place) and boot it. On Ethernet the device gets online by itself; on Wi-Fi it
-starts the on-screen [Wi-Fi setup](wifi.md). To configure a device before it
-ever boots — for several tablets, or a headless install — use a
-[seed file](seed.md) instead.
+place) and boot it. On Ethernet the device gets online by itself. For Wi-Fi, or to
+configure a device before it ever boots, write a [seed file](seed.md) — that is
+also how you set up several tablets or do a headless install.

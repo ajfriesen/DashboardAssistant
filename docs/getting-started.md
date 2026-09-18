@@ -20,10 +20,10 @@ through downloading the latest image and writing it to your target disk.
 
 ## 2. Get it on your network
 
-On Ethernet there is nothing to do. On Wi-Fi, the display shows a QR code: scan it
-with your phone, and a page opens where you enter your network name and password.
-See [Wi-Fi setup](flash/wifi.md). If you are setting up several devices, a
-[seed file](flash/seed.md) does this ahead of time instead.
+On Ethernet there is nothing to do. For Wi-Fi, put your network name and password
+in a [seed file](flash/seed.md) — a short YAML file on the boot partition or a USB
+stick. The device reads it on first boot and joins. The same file configures every
+other setting, so it is also how you set up several devices at once.
 
 ## 3. Pair with Home Assistant
 

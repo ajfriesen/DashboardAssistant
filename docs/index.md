@@ -61,8 +61,8 @@ Raspberry Pi. Nothing to partition, no installer to click through.
 <div class="da-card" markdown>
 <div class="da-card__icon">2</div>
 ### Boot
-Power on. On Ethernet it just joins; on Wi-Fi it shows a QR code you scan with
-your phone. Then it pairs itself with Home Assistant.
+Power on. On Ethernet it just joins; on Wi-Fi it uses the credentials from your
+seed file. Then it pairs itself with Home Assistant.
 </div>
 
 <div class="da-card" markdown>

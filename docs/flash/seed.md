@@ -5,10 +5,9 @@ A **seed file** preconfigures a device before it ever boots. Drop a
 Assistant URL and Wi-Fi on first boot, which is what you want for field deploys or
 for flashing several tablets at once.
 
-For a single device you do not need one. A display that cannot get online
-broadcasts its own network and you set it up from your phone: see
-[Wi-Fi setup](wifi.md). A device that boots with a valid seed file joins your
-network directly and never broadcasts anything.
+You need one for any device that is not on Ethernet: the display has no way to ask
+for Wi-Fi credentials on screen, so the seed file is how they reach it. A device
+that boots with a valid seed file joins your network directly.
 
 !!! warning "Physical access = full trust"
     Any USB stick carrying a `dashboard-assistant.yaml` is applied automatically,
