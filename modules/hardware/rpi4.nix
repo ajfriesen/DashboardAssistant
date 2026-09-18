@@ -14,6 +14,10 @@
     # compressed. Also rebuilds U-Boot with btrfs support — without that the
     # board cannot read extlinux.conf and never boots.
     ./sd-image-btrfs.nix
+    # Automatic GC / store dedup / low-disk safety net. This is a persistent,
+    # in-place-updatable target, so without it every update keeps a generation
+    # forever and the SD card fills up.
+    ../core/storage.nix
   ];
 
   nixpkgs.hostPlatform = "aarch64-linux";
