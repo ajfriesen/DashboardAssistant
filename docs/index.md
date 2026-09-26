@@ -187,11 +187,4 @@ admin page on your own network, no re-flash, no site visit.
 
 <div class="da-hero__cta" markdown>
 [Get started&nbsp;→](getting-started.md){ .da-btn .da-btn--primary }
-[Stack for Nerds](stack-for-nerds.md){ .da-btn .da-btn--ghost }
 </div>
-
-<p class="da-section-lead" style="margin-top: 1rem;" markdown>
-Want to know what's running under the hood? It's all in
-[Stack for Nerds](stack-for-nerds.md). Built by one person who wanted this to
-exist — [here's why](about/why.md).
-</p>
