@@ -88,6 +88,10 @@ nav = [
   ]},
   { "Sponsor" = "sponsor.md" },
   { "For Business" = "business.md" },
+  { "License" = [
+   "license.md",
+   "license-faq.md",
+   ] },
 ]
 
 # With the "extra_css" option you can add your own CSS styling to customize
