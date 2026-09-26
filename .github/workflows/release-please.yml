@@ -80,6 +80,8 @@ jobs:
           body=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body -q .body)
           notes=$(mktemp)
           {
+            printf '%s\n' "$body"
+            echo
             echo "## Images"
             echo
             echo "Flashable images (published to R2 within a few minutes of this release):"
@@ -89,7 +91,5 @@ jobs:
             echo "| x86_64 | [\`$x86_name\`]($x86) |"
             echo "| Raspberry Pi 4 | [\`$rpi4_name\`]($base/rpi4/$rpi4_name) |"
             echo "| Raspberry Pi 5 | [\`$rpi5_name\`]($pi5) |"
-            echo
-            printf '%s\n' "$body"
           } > "$notes"
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$notes"
