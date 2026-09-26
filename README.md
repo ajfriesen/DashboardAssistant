@@ -30,7 +30,6 @@ control from your automations.
 - [Dashboard Assistant](#dashboard-assistant)
   - [Why](#why)
   - [Features](#features)
-  - [Roadmap/Todos/Thoughts](#roadmaptodosthoughts)
   - [Credits](#credits)
   - [License](#license)
   - [Author](#author)
@@ -66,26 +65,6 @@ the native integration (installable through HACS).
 See the [**Features**](https://dashboardassistant.org/about/features/)
 page for the full list and the complete Home Assistant entity reference
 (controls + sensors).
-
-## Roadmap/Todos/Thoughts
-
-- [x] Raspberry Pi 4 and 5 support with the official touchscreen
-- [ ] Testing Raspberry Pi 3 support
-- [ ] Possibly more SBC boards
-- [ ] Possibly Microsoft Surface Tablets
-- [x] Fix touch keyboard
-- [ ] Remove boot selection for generations on startup
-- [ ] Make the installation smaller
-- [ ] Track a NixOS Channel instead of unstable
-- [ ] Check if the provision file can always be used instead only on first boot
-- [ ] Adjust layout for menus, static nav bar on top
-- [ ] Removing menu items, like pages
-- [x] Add flashable images somewhere
-- [ ] Create a logo
-- [x] Add website + documentation
-- [ ] Add live logs in config and allow copy paste
-- [ ] Think bout allowing configuring the dashboard over the network
-- [ ] Think about encryption
 
 
 ## Credits
