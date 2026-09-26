@@ -1,5 +1,63 @@
 # Changelog
 
+## [1.1.0-rc.1](https://github.com/ajfriesen/DashboardAssistant/compare/v1.0.0-rc.1...v1.1.0-rc.1) (2026-09-26)
+
+
+### Features
+
+* **core:** enable seed-file config import by default ([3571490](https://github.com/ajfriesen/DashboardAssistant/commit/357149074b154f8b225d14dd7dbffa749c0af083))
+* **core:** make journal files NOCOW on btrfs roots ([1ca1b48](https://github.com/ajfriesen/DashboardAssistant/commit/1ca1b487d74d04b805a6b406e06e570149771fb2))
+* **core:** open the TLS API port ([31ee79b](https://github.com/ajfriesen/DashboardAssistant/commit/31ee79bae254d3f873ddf2e16d9b46a72999b07a))
+* **core:** scrub btrfs roots monthly ([2689c7a](https://github.com/ajfriesen/DashboardAssistant/commit/2689c7a2cc734a71f49a1a26f97ac944710dcda9))
+* **daemon:** report btrfs root filesystem health to HA ([b0898a5](https://github.com/ajfriesen/DashboardAssistant/commit/b0898a5e61ee30532c50d13bfc6c811b49966932))
+* **daemon:** serve the Home Assistant API over TLS ([cb5a421](https://github.com/ajfriesen/DashboardAssistant/commit/cb5a421b9ff69dcc1c1a4816657b1083b1f2b189))
+
+
+### Bug Fixes
+
+* **core:** break the boot-killing journal-flush ordering cycle ([f2eb4f3](https://github.com/ajfriesen/DashboardAssistant/commit/f2eb4f3c701c90433790ff96c2df727d118983e1))
+* **core:** declare the version file mode explicitly ([e3b0aef](https://github.com/ajfriesen/DashboardAssistant/commit/e3b0aef1056060b964ea67fb6b1328f6ad9583dc))
+* **core:** make journal files NOCOW from the first boot ([1140f19](https://github.com/ajfriesen/DashboardAssistant/commit/1140f196c67bee0284eb9423b661eda91775d6f7))
+* **daemon:** filter DMI placeholders out of the model string ([544e274](https://github.com/ajfriesen/DashboardAssistant/commit/544e274b1a101b6b0ddcb32220e577fa441397b2))
+* **daemon:** read root mount state from PID 1, not the service sandbox ([e6580f6](https://github.com/ajfriesen/DashboardAssistant/commit/e6580f6f1c2ef9e67a92ae0acc80ea6f50ec823d))
+* **daemon:** scope the factory-reset test to its temp state dir ([9c58059](https://github.com/ajfriesen/DashboardAssistant/commit/9c58059f14d07dc61b943edcf286ff84bcdeae6f))
+* **kiosk:** drop pam_lastlog2 from the login stack ([ebdd05c](https://github.com/ajfriesen/DashboardAssistant/commit/ebdd05ce3f23370b7470be01e859cb65d4ff6f92))
+* **kiosk:** issue swaymsg power on twice so the panel actually wakes ([5eb28f4](https://github.com/ajfriesen/DashboardAssistant/commit/5eb28f4c0dfde0da6554331b6a7c753c4d7f05a0))
+* **kiosk:** make the on-screen keyboard fit portrait outputs ([59558ee](https://github.com/ajfriesen/DashboardAssistant/commit/59558eebc9c71ac402f6085968427c7dc8174231))
+* **rpi:** drop ZFS support the sd-image profile smuggles in ([186849d](https://github.com/ajfriesen/DashboardAssistant/commit/186849d314ac3693cd3e9d3a757ed2ab4eb4d5ec))
+* **rpi:** garbage-collect the Nix store on the Pi targets ([751d201](https://github.com/ajfriesen/DashboardAssistant/commit/751d20183a145acf571dd3e8485210d0316672fd))
+* **rpi:** stop shipping build-user-owned filesystems in the btrfs images ([352e565](https://github.com/ajfriesen/DashboardAssistant/commit/352e56568375dd289bb1d638b37d42ea82d280d8))
+
+
+### Performance
+
+* **kiosk:** replace the animated heart with the static brand mark ([9157932](https://github.com/ajfriesen/DashboardAssistant/commit/9157932e040368a94bae9871255a025a920ba68a))
+* **rpi:** skip .img.zst compression for the dev image ([7414b1f](https://github.com/ajfriesen/DashboardAssistant/commit/7414b1f94b059c380c51b7076434ddaf9460285c))
+* **sendspin:** bound player memory and rate-limit its log ([61f2e4d](https://github.com/ajfriesen/DashboardAssistant/commit/61f2e4db35a71c204cdac40f2c7dbadf941177c5))
+
+
+### Reverts
+
+* journal NOCOW handling on btrfs roots ([0fe98d1](https://github.com/ajfriesen/DashboardAssistant/commit/0fe98d15feb283554a52faaaaf2c5a26a82dec93))
+* journal NOCOW handling on btrfs roots, again ([e19a49f](https://github.com/ajfriesen/DashboardAssistant/commit/e19a49ffa22d6bc2a41b47252eeabc43fe96bb06))
+
+
+### Documentation
+
+* add develeoper notes ([63cd970](https://github.com/ajfriesen/DashboardAssistant/commit/63cd9702a6658b32c223d7285ba8cd6def8f4a08))
+* add the kiosk performance post-mortem ([e5f1c19](https://github.com/ajfriesen/DashboardAssistant/commit/e5f1c192ead0ab3268f2ea4b1cb7f2afc5150210))
+* add the PolyForm Noncommercial license ([c91669c](https://github.com/ajfriesen/DashboardAssistant/commit/c91669c28d44cc53ca24feff508ef673ac1b39ef))
+* correct the license statement in the README ([981eab6](https://github.com/ajfriesen/DashboardAssistant/commit/981eab665ee976a954d05f7942ba4387d9607f00))
+* **justfile:** correct two stale recipe doc-strings ([619aa55](https://github.com/ajfriesen/DashboardAssistant/commit/619aa559bf74e5612a2158141ba2f7cf8f6c78e9))
+* make the seed file the Wi-Fi path ([a9267cc](https://github.com/ajfriesen/DashboardAssistant/commit/a9267cc70f5b3844423071d8e8dea2d325c71b1d))
+* publish the license and license FAQ on the site ([52b9cb7](https://github.com/ajfriesen/DashboardAssistant/commit/52b9cb7b2ddc5e60ceab63b446067e7c42deebe1))
+* **README.md:** remove roadmap from readme ([30051ce](https://github.com/ajfriesen/DashboardAssistant/commit/30051ce7dddc7b407b6443fe16f07e71dbdf7c5e))
+* Rearange docs ([8d78173](https://github.com/ajfriesen/DashboardAssistant/commit/8d78173d788f45fe8eb7e1743ad5f62d0c6be79d))
+* reorder navidation ([320c0ea](https://github.com/ajfriesen/DashboardAssistant/commit/320c0ea7898a499c35db50116137e79157c1a93c))
+* slim the release notes down to an Images table ([ead1878](https://github.com/ajfriesen/DashboardAssistant/commit/ead187831da26a43fc237e18094e9240303bb1dc))
+* update docs ([f32f57d](https://github.com/ajfriesen/DashboardAssistant/commit/f32f57d3ffcc4137d4282937ca5c2bdf11ea107d))
+* **x86:** document installing from a live Linux ([0b756b1](https://github.com/ajfriesen/DashboardAssistant/commit/0b756b1a6485c3f30cae31dc7e36ae80b33938ca))
+
 ## [1.0.0-rc.1](https://github.com/ajfriesen/DashboardAssistant/compare/v0.3.0-rc.1...v1.0.0-rc.1) (2026-09-11)
 
 
