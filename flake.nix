@@ -48,6 +48,12 @@
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
+      # Docs tooling only. The 26.05 pin carries zensical 0.0.43 (and the 26.05
+      # branch tip still does — no backports), while the docs workflow installs
+      # the latest from PyPI, so `zensical serve` locally would render with a
+      # much older generator than the one that builds dashboardassistant.org.
+      # Nothing in the images comes from here; see the devShell below.
+      pkgsUnstable = nixpkgs-unstable.legacyPackages.${system};
       lib = nixpkgs.lib;
 
       # Release version baked into every image. The daemon reports this to Home
@@ -200,7 +206,8 @@
           pkgs.jq
           pkgs.websocat
           # Static site generator for the docs/ site (`zensical serve`/`build`).
-          pkgs.zensical
+          # From unstable on purpose — see pkgsUnstable above.
+          pkgsUnstable.zensical
           # Conventional Commits: `cz commit` for a guided message, `cz check` to
           # lint one. Matches the integration repo's dev shell.
           pkgs.commitizen
