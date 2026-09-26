@@ -4,7 +4,7 @@
 >
 > Required Notice: Copyright Andrej Friesen (https://dashboardassistant.org)
 
-# PolyForm Noncommercial License 1.0.0
+# License
 
 <https://polyformproject.org/licenses/noncommercial/1.0.0>
 

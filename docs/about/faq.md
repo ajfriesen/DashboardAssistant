@@ -1,9 +1,10 @@
-# About
+# FAQ
 
-**Dashboard Assistant OS** turns any spare tablet, mini-PC or single-board
-computer into a dedicated Home Assistant dashboard. It is a minimal, declarative
-NixOS system that boots straight into a full-screen browser locked to your
-dashboard — no desktop, no login screen, nothing to tap through.
+Frequently asked questions:
+
+## Does it support Android?
+
+No.
 
 ## Why another kiosk OS?
 
@@ -25,13 +26,3 @@ a reboot. Dashboard Assistant takes the opposite approach:
   [via HACS](../usage/integration.md)) reports it back as a device with its own
   controls and sensors (display, brightness, zoom, screenshots, CPU,
   temperature and more).
-
-## Project status
-
-Dashboard Assistant is under active development. x86_64 is the primary, tested
-target today; Raspberry Pi and other aarch64 boards are a work in progress. See
-[Hardware Support](../hardware-support/index.md) for the current state.
-
-The project is developed in the open on
-[GitHub](https://github.com/ajfriesen/DashboardAssistant) — issues and pull
-requests are welcome.

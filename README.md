@@ -1,9 +1,7 @@
 # Dashboard Assistant
 
-**A declarative, unbreakable Home Assistant Kiosk OS built on NixOS.** Flash it to
-a mini-PC or tablet, point it at your Home Assistant, and get a self-contained
-dashboard that integrates *back* into HA through a native custom integration
-(installable via HACS) — so the screen itself becomes something you can see and
+**An unbreakable Home Assistant Kiosk OS built on NixOS.** Flash it to a mini-PC or tablet, point it at your Home Assistant, and get a self-contained dashboard that integrates *back* into HA through a native custom integration (installable via HACS).
+The screen itself becomes something you can see and
 control from your automations.
 
 

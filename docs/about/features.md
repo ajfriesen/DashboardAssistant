@@ -1,6 +1,6 @@
----
+<!-- ---
 icon: lucide/sparkles
----
+--- -->
 
 # Features
 

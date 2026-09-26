@@ -58,13 +58,15 @@ nav = [
   { "Home" = "index.md" },
     {"About" = [
       "about/why.md",
-      "about/about.md",
       "about/features.md",
-      "stack-for-nerds.md",
+      "about/faq.md",
+
+     {"License" = [
+      "about/license.md",
+      "about/license-faq.md",
+     ]},
+
   ]},
-  # Drafts, if any, live in a repo-level drafts/ folder (outside docs/) so
-  # Zensical does not publish them — it has no draft flag, and builds everything
-  # under docs/. To publish one, move it into docs/ and add it to the nav below.
   {"Getting Started" = [
      "getting-started.md",
      {"Flash" = [
@@ -88,10 +90,6 @@ nav = [
   ]},
   { "Sponsor" = "sponsor.md" },
   { "For Business" = "business.md" },
-  { "License" = [
-   "license.md",
-   "license-faq.md",
-   ] },
 ]
 
 # With the "extra_css" option you can add your own CSS styling to customize

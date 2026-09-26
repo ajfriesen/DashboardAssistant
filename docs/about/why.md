@@ -1,8 +1,8 @@
----
+<!-- ---
 icon: lucide/lightbulb
----
+--- -->
 
-# Why Dashboard Assistant
+# Why
 
 I wanted Home Assistant on the wall. What I *didn't* want was to babysit the
 thing that showed it. Every option I tried came with a catch — so I built the
