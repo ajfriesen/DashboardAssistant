@@ -60,12 +60,8 @@ nav = [
       "about/why.md",
       "about/features.md",
       "about/faq.md",
-
-     {"License" = [
       "about/license.md",
       "about/license-faq.md",
-     ]},
-
   ]},
   {"Getting Started" = [
      "getting-started.md",
