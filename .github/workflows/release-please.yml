@@ -80,7 +80,7 @@ jobs:
           body=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body -q .body)
           notes=$(mktemp)
           {
-            echo "## 📥 Download & flash"
+            echo "## Images"
             echo
             echo "Flashable images (published to R2 within a few minutes of this release):"
             echo
@@ -89,16 +89,6 @@ jobs:
             echo "| x86_64 | [\`$x86_name\`]($x86) |"
             echo "| Raspberry Pi 4 | [\`$rpi4_name\`]($base/rpi4/$rpi4_name) |"
             echo "| Raspberry Pi 5 | [\`$rpi5_name\`]($pi5) |"
-            echo
-            echo "x86_64 — write to the target's internal disk (confirm the device first!):"
-            echo '```'
-            echo "curl -L \"$x86\" | zstd -dc | sudo dd of=/dev/sdX bs=4M oflag=sync conv=fsync status=progress"
-            echo '```'
-            echo
-            echo "Raspberry Pi — write the SD image:"
-            echo '```'
-            echo "curl -L \"$pi5\" | zstd -dc | sudo dd of=/dev/mmcblkX bs=4M oflag=sync conv=fsync status=progress"
-            echo '```'
             echo
             printf '%s\n' "$body"
           } > "$notes"
