@@ -94,7 +94,9 @@ Inspired by [TouchKio](https://github.com/leukipp/touchkio).
 
 ## License
 
-Not yet licensed. Until a `LICENSE` file is added, all rights are reserved.
+DashboardAssistant is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE.md) (SPDX: `PolyForm-Noncommercial-1.0.0`) — free to use, modify, and redistribute for any noncommercial purpose.
+
+See the [License FAQ](https://dashboardassistant.org/license-faq) for what that means in practice, or reach out at andrej@dashboardassistant.org.
 
 ## Author
 
