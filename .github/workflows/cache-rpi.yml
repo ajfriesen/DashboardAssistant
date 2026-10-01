@@ -152,6 +152,47 @@ jobs:
             exit 1
           fi
 
+      # The firmware partition is the only place a Windows or macOS user can
+      # write a seed file (docs/flash/seed.md), so modules/core/configimport.nix
+      # stages a README.txt and a commented example onto it. It does that by
+      # *appending* to sdImage.populateFirmwareCommands, which nixos-hardware
+      # sets with lib.mkForce — so our definition has to be mkForce (mkAfter ...)
+      # to survive the merge at all. A plain mkAfter is dropped by
+      # filterOverrides before merging, silently.
+      #
+      # Both failure directions are quiet, and both ship a broken card:
+      #   - ours dropped  -> no README, no example; seeding still works but the
+      #                      partition no longer explains itself
+      #   - theirs dropped -> no config.txt, no u-boot.bin, no DTBs; the board
+      #                      flashes the green LED seven times and says nothing
+      # The second is guarded in-build by the loop configimport.nix emits. This
+      # step guards the first, which nothing else can see.
+      - name: Assert the seed-file drop zone is staged onto the firmware partition
+        run: |
+          set -euo pipefail
+          populate=$(nix eval --raw --accept-flake-config \
+            ".#nixosConfigurations.dashboard-assistant-${{ matrix.model }}.config.sdImage.populateFirmwareCommands")
+          echo "$populate"
+          fail=0
+          grep -q 'install-rpi-firmware' <<<"$populate" || {
+            echo "FAIL: nixos-hardware's firmware staging is gone from populateFirmwareCommands." >&2
+            echo "  Our mkForce (mkAfter ...) has overridden it outright rather than appending." >&2
+            fail=1
+          }
+          grep -q 'firmware/README.txt' <<<"$populate" || {
+            echo "FAIL: the seed-file README is not staged onto the firmware partition." >&2
+            echo "  Check that nixos-hardware raspberry-pi/common/firmware.nix still uses" >&2
+            echo "  lib.mkForce for populateFirmwareCommands; if it stopped, our" >&2
+            echo "  mkForce (mkAfter ...) in modules/core/configimport.nix now loses the merge." >&2
+            fail=1
+          }
+          grep -q 'dashboard-assistant.yaml.example' <<<"$populate" || {
+            echo "FAIL: the example seed file is not staged onto the firmware partition." >&2
+            fail=1
+          }
+          [ "$fail" = 0 ] && echo "OK: both nixos-hardware's staging and ours are present"
+          exit "$fail"
+
       # Built for a v* tag release, and on a manual run so a branch can produce a
       # flashable image to test with. A push to main only warms the cache above.
       - name: Build Pi image
