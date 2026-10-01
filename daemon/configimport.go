@@ -27,8 +27,16 @@ type importConfig struct {
 
 // applyImport parses a YAML bundle and applies whatever it carries: Wi-Fi first
 // (so the box is online), then the token, then the HA URL (which also marks the
-// device provisioned). It returns a short summary of what changed, so the caller
-// can decide whether to restart the kiosk.
+// device provisioned). It returns a short summary of what it applied, so the
+// caller can decide whether to restart the kiosk.
+//
+// Note the asymmetry: only the Wi-Fi entry reflects an actual *change*, because
+// NetworkManager has to be asked anyway to avoid duplicating a profile. The
+// others report every key present in the bundle, changed or not. That is good
+// enough because the boot importer does not re-POST an unchanged seed file at
+// all (modules/core/configimport.nix gates on its content hash), so the
+// redundant kiosk restart this could cause only arises on a repeated USB
+// insert, where it is harmless.
 func (s *server) applyImport(data []byte) ([]string, error) {
 	var cfg importConfig
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
@@ -41,10 +49,16 @@ func (s *server) applyImport(data []byte) ([]string, error) {
 		if s.nm == nil {
 			return applied, fmt.Errorf("wifi requested but NetworkManager is unavailable")
 		}
-		if err := s.nm.Provision(cfg.WiFi.SSID, cfg.WiFi.PSK); err != nil {
+		changed, err := s.nm.Provision(cfg.WiFi.SSID, cfg.WiFi.PSK)
+		if err != nil {
 			return applied, fmt.Errorf("wifi provision: %w", err)
 		}
-		applied = append(applied, "wifi:"+cfg.WiFi.SSID)
+		// Only when it really changed: re-importing an edited seed file applies
+		// the whole file, and a device already on this SSID needs no kiosk
+		// restart on account of its Wi-Fi.
+		if changed {
+			applied = append(applied, "wifi:"+cfg.WiFi.SSID)
+		}
 	}
 
 	if cfg.Token != "" {

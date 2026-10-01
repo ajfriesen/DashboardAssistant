@@ -30,6 +30,7 @@ var (
 	displayStateFifo = stateDir + "/display-state.fifo"
 	apiTokenFile     = stateDir + "/api-token"       // device HA API token, generated on first boot / written by config import
 	pairedMarker     = stateDir + "/paired"          // set the first time Home Assistant actually uses the device token; closes the pairing window
+	seedHashFile     = stateDir + "/seed-hash"       // sha256 of the last seed file the boot importer applied; re-import is gated on this changing (modules/core/configimport.nix)
 	urlsFile         = stateDir + "/urls.json"       // pushable page list (name+url), web UI / config import
 	navFifo          = stateDir + "/nav.fifo"        // daemon writes a URL; in-session agent navigates Chromium there
 	zoomFifo         = stateDir + "/zoom.fifo"       // daemon writes "zoom <pct>"; in-session agent applies CSS zoom over CDP
@@ -194,6 +195,11 @@ func provisioningStatePaths() []string {
 	return []string{
 		markerFile, runtimeEnv, tokenFile, apiTokenFile, pairedMarker,
 		onlineMarker, urlsFile, zoomFile, themeFile, rotationFile,
+		// The recorded seed-file hash goes too, so a reset device re-imports
+		// the card it is sitting on instead of ignoring it. Without this a
+		// factory reset would appear to work and then come back unprovisioned
+		// with no way to re-seed short of editing the YAML on the card.
+		seedHashFile,
 		// The TLS keypair goes too, for the same reason as the API token: the
 		// entry in Home Assistant stops working either way, and a reset device
 		// should come back with a fresh identity rather than one an old pin

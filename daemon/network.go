@@ -194,12 +194,28 @@ func friendlyType(nmType string) string {
 // Connected is the live gate between RECONNECT and READY.
 func (nm *NetworkManager) Connected() bool { return nm.NetInfo().Connected }
 
-// Provision adds a persistent Wi-Fi connection and activates it immediately.
-// A blank psk provisions an open network. It returns once NetworkManager has
-// accepted the connection (activation continues asynchronously).
-func (nm *NetworkManager) Provision(ssid, psk string) error {
+// Provision makes the given Wi-Fi network this device's saved connection and
+// activates it, and reports whether anything actually changed. A blank psk
+// provisions an open network. It returns once NetworkManager has accepted the
+// connection (activation continues asynchronously).
+//
+// Idempotency is load-bearing because the seed file can be imported more than
+// once: modules/core/configimport.nix re-imports whenever the YAML on the card
+// changes, and the whole file is applied, so any edit lands here again with the
+// same SSID. AddAndActivateConnection always *adds*, so without the update path
+// below every edit would leave another "MyNet", "MyNet 1", "MyNet 2", ... in
+// /etc/NetworkManager/system-connections, each holding the passphrase.
+//
+// "Already activated on this SSID" is the only state in which doing nothing is
+// certainly right, and it is the one observable without asking NM for secrets:
+// a wrong or changed passphrase cannot reach ACTIVATED, so it falls through to
+// the update-and-activate path.
+func (nm *NetworkManager) Provision(ssid, psk string) (bool, error) {
 	if nm.wifiDevice() == "" {
-		return fmt.Errorf("no Wi-Fi device")
+		return false, fmt.Errorf("no Wi-Fi device")
+	}
+	if st := nm.NetInfo(); st.Connected && st.Type == "wifi" && st.Name == ssid {
+		return false, nil
 	}
 	// Clear a soft rfkill first. A blocked radio parks the device in UNAVAILABLE
 	// and the owner watches "Connecting…" forever with nothing to act on — and
@@ -232,13 +248,54 @@ func (nm *NetworkManager) Provision(ssid, psk string) error {
 	}
 
 	obj := nm.conn.Object(nmService, nmPath)
+
+	// Reuse a saved profile for this SSID rather than adding a second one.
+	// Update replaces *all* settings, so the existing uuid has to be carried
+	// over or NM treats it as a different connection.
+	if existing, uuid := nm.wifiProfileFor(ssid); existing != "" {
+		if uuid != "" {
+			settings["connection"]["uuid"] = dbus.MakeVariant(uuid)
+		}
+		if err := nm.conn.Object(nmService, existing).
+			Call(nmSettingsCon+".Update", 0, settings).Err; err != nil {
+			return false, fmt.Errorf("update %s: %w", ssid, err)
+		}
+		var activePath dbus.ObjectPath
+		if err := obj.Call(nmIface+".ActivateConnection", 0,
+			existing, nm.wifiDevice(), dbus.ObjectPath("/")).Store(&activePath); err != nil {
+			return false, fmt.Errorf("ActivateConnection %s: %w", ssid, err)
+		}
+		return true, nil
+	}
+
 	var connPath, activePath dbus.ObjectPath
 	err := obj.Call(nmIface+".AddAndActivateConnection", 0,
 		settings, nm.wifiDevice(), dbus.ObjectPath("/")).Store(&connPath, &activePath)
 	if err != nil {
-		return fmt.Errorf("AddAndActivateConnection: %w", err)
+		return false, fmt.Errorf("AddAndActivateConnection: %w", err)
 	}
-	return nil
+	return true, nil
+}
+
+// wifiProfileFor returns the saved Wi-Fi connection whose id is ssid, plus its
+// uuid. Empty path when there is none.
+func (nm *NetworkManager) wifiProfileFor(ssid string) (dbus.ObjectPath, string) {
+	for _, c := range nm.listConnections() {
+		id, settings := nm.connectionInfo(c)
+		if id != ssid {
+			continue
+		}
+		conn, ok := settings["connection"]
+		if !ok {
+			continue
+		}
+		if typ, ok := conn["type"].Value().(string); !ok || typ != "802-11-wireless" {
+			continue
+		}
+		uuid, _ := conn["uuid"].Value().(string)
+		return c, uuid
+	}
+	return "", ""
 }
 
 // EnableWireless clears a soft rfkill so the radio can be used. Without it a
