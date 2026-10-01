@@ -85,6 +85,27 @@ pkgs.testers.runNixOSTest {
     # nothing else on the device needs it.
     machine.succeed("test \"$(stat -c %a /var/lib/dashboard-assistant/tls-key.pem)\" = 600")
 
+    # No seed file on this boot. The importer is no longer gated on the
+    # provisioned marker (it is gated on the seed file's content hash instead),
+    # so it must have run — and must have done nothing, quietly.
+    machine.succeed(
+        "test \"$(systemctl show -p Result --value dashboard-assistant-boot-import.service)\" = success"
+    )
+    machine.succeed(
+        "test \"$(systemctl show -p ExecMainStatus --value dashboard-assistant-boot-import.service)\" = 0"
+    )
+    machine.fail("journalctl -b -u dashboard-assistant-boot-import | grep -q importing")
+    machine.fail("test -e /var/lib/dashboard-assistant/seed-hash")
+    machine.fail("test -e /var/lib/dashboard-assistant/provisioned")
+
+    # The importer must be ordered ahead of the session, so that the kiosk
+    # restart an import triggers cannot land mid-autologin. greetd is disabled
+    # on this node, so the edge can only be asserted as declared, never
+    # exercised — labgrid/test_first_boot.py does that part on hardware.
+    machine.succeed(
+        "systemctl show -p Before dashboard-assistant-boot-import.service | grep -q greetd.service"
+    )
+
     # Seed-file provisioning: drop a dashboard-assistant.yaml where the
     # first-boot import looks, run the import, and the daemon must accept and
     # persist it. This is the headless field-provisioning path.
@@ -106,8 +127,69 @@ pkgs.testers.runNixOSTest {
     # ...and that it was persisted, not just held in memory.
     machine.succeed("grep -q 198.51.100.7 /var/lib/dashboard-assistant/runtime.env")
 
-    # The import must also mark the device provisioned, so the boot importer
-    # never re-runs.
+    # The import also marks the device provisioned, which is what skips the
+    # waiting splash. It no longer stops the importer from running again --
+    # that is the content hash's job, asserted across the reboots below.
     machine.wait_until_succeeds("test -e /var/lib/dashboard-assistant/provisioned", timeout=30)
+
+    # ...and the hash of what was imported is recorded, since that is what makes
+    # the next boot a no-op.
+    machine.succeed("test -s /var/lib/dashboard-assistant/seed-hash")
+    first_hash = machine.succeed("cat /var/lib/dashboard-assistant/seed-hash").strip()
+
+    # A malformed file must fail loudly and must NOT be recorded as imported --
+    # otherwise a typo is swallowed once and the device silently never picks the
+    # file up again, which is the bug class this whole mechanism exists to kill.
+    machine.succeed("cp /boot/dashboard-assistant.yaml /tmp/good.yaml")
+    machine.succeed("printf 'ha_url: \"unterminated\\n' > /boot/dashboard-assistant.yaml")
+    machine.fail("systemctl restart dashboard-assistant-boot-import.service")
+    assert machine.succeed("cat /var/lib/dashboard-assistant/seed-hash").strip() == first_hash
+    machine.succeed("cp /tmp/good.yaml /boot/dashboard-assistant.yaml")
+    machine.succeed("systemctl reset-failed dashboard-assistant-boot-import.service")
+
+    # ------------------------------------------------------------------
+    # Hash gating across real reboots. runNixOSTest reuses the same qcow2
+    # across shutdown()/start(), so state persists and these are genuine boots.
+    # ------------------------------------------------------------------
+
+    def reboot():
+        machine.shutdown()
+        machine.start()
+        machine.wait_for_unit("multi-user.target")
+        machine.wait_for_unit("dashboard-assistant-daemon.service")
+        # Every boot has to stay clean, not just the first one. The importer now
+        # runs on all of them and is ordered against the session.
+        machine.fail("journalctl -b | grep -q 'Breaking ordering cycle'")
+        machine.fail("journalctl -b | grep -q 'Deleting job'")
+        machine.succeed("systemctl --failed --no-legend | grep -q . && exit 1 || exit 0")
+
+    # Boot 2: the file is untouched, so nothing may be imported — and a change
+    # made on the device in the meantime has to survive. This is the whole point
+    # of hashing the contents instead of re-applying unconditionally.
+    machine.succeed(
+        "sed -i s/198.51.100.7/198.51.100.8/ /var/lib/dashboard-assistant/runtime.env"
+    )
+    reboot()
+    machine.succeed("journalctl -b -u dashboard-assistant-boot-import | grep -q unchanged")
+    machine.succeed("grep -q 198.51.100.8 /var/lib/dashboard-assistant/runtime.env")
+
+    # Boot 3: edit the file on the boot medium. The edit wins — this is
+    # re-provisioning in place, which the old provisioned-marker gate made
+    # impossible (and silently so).
+    machine.succeed(
+        "printf 'ha_url: \"http://198.51.100.9:8123\"\\n' > /boot/dashboard-assistant.yaml"
+    )
+    reboot()
+    machine.wait_until_succeeds(
+        "grep -q 198.51.100.9 /var/lib/dashboard-assistant/runtime.env", timeout=30
+    )
+    assert machine.succeed("cat /var/lib/dashboard-assistant/seed-hash").strip() != first_hash
+
+    # Boot 4: delete the file. Nothing is applied and the device keeps what it
+    # has — deleting the seed file must not reset a working device.
+    machine.succeed("rm -f /boot/dashboard-assistant.yaml")
+    reboot()
+    machine.fail("journalctl -b -u dashboard-assistant-boot-import | grep -q importing")
+    machine.succeed("grep -q 198.51.100.9 /var/lib/dashboard-assistant/runtime.env")
   '';
 }
