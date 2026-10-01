@@ -17,6 +17,9 @@ in
         If set, pre-seed the Home Assistant URL and mark the device as
         provisioned, so it never waits on the splash for a seed file. Leave null to use
         interactive setup.
+
+        A seed file on the boot medium still overrides this on boot; see
+        {option}`dashboard.configImport.enable`.
       '';
     };
   };
@@ -24,6 +27,18 @@ in
   config = lib.mkIf (cfg.haUrl != null) {
     # f+ = always create/truncate, so rebuilding with a new URL updates it.
     # (The dir itself is created by kiosk.nix.)
+    #
+    # The `provisioned` marker written here no longer gates the seed-file
+    # importer — modules/core/configimport.nix dropped that condition in favour
+    # of a content-hash check, so a card carrying a dashboard-assistant.yaml is
+    # still honoured on an image built with this option set. The precedence is
+    # deterministic rather than racy, and it favours the card: these tmpfiles
+    # rules run at sysinit, the importer runs at multi-user. That is the
+    # intended order — a baked URL is a default, the file in someone's hand is
+    # an instruction.
+    #
+    # What the marker still does is skip the waiting splash (daemon's
+    # Provisioned()).
     systemd.tmpfiles.rules = [
       "f+ /var/lib/dashboard-assistant/runtime.env 0664 dashboard-assistant dashboard-assistant - HA_URL=${cfg.haUrl}"
       "f+ /var/lib/dashboard-assistant/provisioned  0664 dashboard-assistant dashboard-assistant - 1"
