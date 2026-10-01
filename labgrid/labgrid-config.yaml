@@ -1,0 +1,24 @@
+# labgrid *exporter* configuration — `labgrid-exporter labgrid-config.yaml`,
+# alongside a `labgrid-coordinator`.
+#
+# Unused by the tests: bench.yaml declares the same resources directly, because
+# everything here runs on one machine and labgrid's remote path would ssh to
+# itself and rsync a 4 GiB image onto the same disk (see bench.yaml). Kept for the
+# day a second board or a CI runner needs to reach these over the network — at
+# which point the place also needs matches:
+#
+#   labgrid-client -p raspberrypi5 create
+#   labgrid-client -p raspberrypi5 add-match "*/raspberrypi5/*"
+#
+# Top-level keys are group names; everything under one is a resource name. (Only
+# resources belong there — an attempt at `location: desk` here never reached the
+# coordinator, because the exporter tried to read it as a resource definition.)
+raspberrypi5:
+  USBSDMuxDevice:
+    match:
+      ID_SERIAL_SHORT: '00048.01623'
+  USBSerialPort:
+    match:
+      ID_SERIAL_SHORT: E665B8388780722E
+      # if00 is the Debug Probe's CMSIS-DAP interface, if01 the UART.
+      ID_USB_INTERFACE_NUM: '01'

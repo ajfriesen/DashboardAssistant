@@ -11,3 +11,11 @@ ha.yaml
 /.cache/
 # Writable copy of the disk image booted by `just qemu-run`
 .qemu-disk.raw
+
+# labgrid coordinator/exporter runtime state, written into whatever directory the
+# coordinator was started in — not configuration (labgrid/labgrid-config.yaml is).
+/labgrid/places.yaml
+/labgrid/resources.yaml
+# Serial transcripts captured by `just hw-test`
+/labgrid/logs/
+__pycache__/

@@ -9,7 +9,7 @@
 # so it needs U-Boot as an intermediary. Like the Pi 4 there's no systemd-boot,
 # so the ABA auto-rollback (bootCounting) doesn't apply — manual rollback from the
 # recovery UI still works.
-{ modulesPath, ... }:
+{ modulesPath, lib, ... }:
 {
   imports = [
     "${modulesPath}/installer/sd-card/sd-image-aarch64.nix"
@@ -38,6 +38,29 @@
   # the green LED 7 times ("kernel image not found") with a black screen, exactly
   # as the Pi 4 profile documents.
   hardware.raspberry-pi.firmware.uboot.enable = true;
+
+  # Put the kernel console on the Pi 5's dedicated debug UART, which is where a
+  # Debug Probe on the 3-pin connector listens — and where the boot ROM, the RP1
+  # firmware and U-Boot already print.
+  #
+  # sd-image-aarch64 supplies console=ttyS0 / ttyAMA0 / tty0, none of which reach
+  # it on this board. The device tree is unambiguous:
+  #
+  #   uart10 = /soc@107c000000/serial@7d001000   <- the debug connector, pl011
+  #   uart0  = /axi/pcie@.../rp1/serial@30000    <- GPIO 14/15
+  #   console     = ...serial@7d001000
+  #   stdout-path = "serial10:115200n8"
+  #
+  # so the debug UART is ttyAMA10, and ttyAMA0 is the GPIO header's — which the
+  # sd-image config.txt switches off anyway ("[pi5] enable_uart=0"). An explicit
+  # console= on the cmdline overrides the DT's stdout-path, so without this the
+  # kernel says nothing at all on the probe: U-Boot narrates the whole boot, then
+  # the log stops dead at "Starting kernel ...". systemd's getty generator also
+  # reads this list, so adding it is what puts a login prompt on the probe.
+  #
+  # mkBefore to stay ahead of the sd-image defaults: the *last* console= becomes
+  # /dev/console, and that should remain tty0 as it is today.
+  boot.kernelParams = lib.mkBefore [ "console=ttyAMA10,115200n8" ];
 
   # sd-image-aarch64 sets hardware.enableAllHardware, whose broad initrd module
   # list assumes a mainline kernel and names many modules the stripped linux-rpi

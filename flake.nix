@@ -64,6 +64,18 @@
       # edit it by hand.
       version = "1.0.0-rc.1"; # x-release-please-version
 
+      # Interpreter for the hardware bench (labgrid/). labgrid and pytest have to
+      # share one env: labgrid ships its fixtures as a pytest11 entry point, so a
+      # pytest from any other Python simply does not see them and --lg-env becomes
+      # an unknown option. Bound here rather than inline in the devShell so the
+      # interpreter itself can be exported as LABGRID_PYTHON — other packages in
+      # the shell (zensical) drag their own python3 onto PATH, and which one wins
+      # is an accident of ordering.
+      labgridPython = pkgs.python314.withPackages (ps: [
+        ps.labgrid
+        ps.pytest
+      ]);
+
       # Optional per-build overrides (e.g. a seeded HA URL / debug flags). See
       # modules/local.example.nix. Must be git-tracked to be picked up.
       localModules = lib.optional (builtins.pathExists ./modules/local.nix) ./modules/local.nix;
@@ -228,9 +240,36 @@
           # Drive real boards from the host: power, serial console, USB storage.
           # The VM tests cover what a VM can (see tests/), which leaves the
           # hardware-specific failures — U-Boot, firmware, the touchscreen — only
-          # reproducible on a Pi or an x86 box sitting on the bench.
-          pkgs.python314Packages.labgrid
+          # reproducible on a Pi or an x86 box sitting on the bench. See labgrid/
+          # for the bench wiring and `just hw-test`.
+          #
+          # Puts pytest, labgrid-client, labgrid-exporter and labgrid-coordinator
+          # on PATH. See the labgridPython binding above for why it is one env.
+          labgridPython
+          # labgrid's USBSDMuxDriver does not talk to the mux itself, it execs
+          # this. Needs the host side too (sg module + udev rules) — see
+          # labgrid/README.md.
+          pkgs.usbsdmux
+          # Inspect a built sd-image's FAT partition without mounting it or
+          # needing root: `mdir`/`mtype`/`minfo -i "$img@@$((16384*512))"` reads
+          # partition 1 straight out of the .img, `partx` finds its offset, and
+          # `fsck.vfat` checks the extracted filesystem. That is how the README
+          # and example seed file staged onto the firmware partition get verified
+          # (modules/core/configimport.nix), and labgrid/README.md has documented
+          # an mcopy invocation this shell could not run until now.
+          pkgs.mtools
+          pkgs.dosfstools
+          pkgs.util-linux
+          # `just hw-console`: watch the board's UART by hand, which is how you
+          # confirm the console lands where the harness expects.
+          pkgs.picocom
         ];
+
+        # Unambiguous path to the interpreter that has labgrid, for scripts that
+        # need to `import labgrid` rather than run pytest (`just hw-flash`). Bare
+        # `python3` in this shell is whichever python landed on PATH first, which
+        # is usually not this one.
+        LABGRID_PYTHON = "${labgridPython}/bin/python3";
 
         # OVMF firmware for `just qemu-run`. Exported here rather than looked up
         # in the recipe so the VM boots the same firmware the pinned nixpkgs
