@@ -99,3 +99,7 @@ Once the flash finishes, move the disk into the target machine (or leave it in
 place) and boot it. On Ethernet the device gets online by itself. For Wi-Fi, or to
 configure a device before it ever boots, write a [seed file](seed.md) — that is
 also how you set up several tablets or do a headless install.
+
+On a freshly flashed Raspberry Pi card, the small `FIRMWARE` partition your file
+manager shows carries a `README.txt` and an example seed file. That is where the
+seed file goes, and the README on the card repeats the instructions.
