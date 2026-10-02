@@ -10,9 +10,9 @@ name: cache-rpi
 # modules/core/binary-cache.nix.
 #
 # Both boards run as a matrix. The Pi 4 builds from the pinned nixpkgs (26.05);
-# the Pi 5 is pinned to nixpkgs-unstable in flake.nix (its kernel + sd-image pi5
-# support are newer than 26.05) — nothing board-specific is needed here, the
-# flake attrs already carry that.
+# the Pi 5 is pinned to nixpkgs-unstable in flake.nix (its kernel is newer than
+# 26.05) — nothing board-specific is needed here, the flake attrs already carry
+# that.
 #
 # Native arm64 (ubuntu-24.04-arm) is free for public repos and builds the kernel
 # in real time instead of emulating it, so this workflow is the fast path even
@@ -25,14 +25,19 @@ name: cache-rpi
 #        --push dashboardassistant).
 # The Attic push only runs on the canonical repo; forks build without it.
 #
-# When an SD image is built it goes to the same Cloudflare R2 bucket the x86_64 image
-# uses, never to the run itself — GitHub Actions artifacts are far too slow to
-# move an image this size. The layout mirrors release-image.yml, with the board as
-# both the directory and part of the filename:
-#   release/<board>/dashboard-assistant-<board>-<version>.img.zst
-#   release/<board>/latest.img.zst                    (newest full release)
+# Two jobs. `build` compiles the aarch64 system closure on a native arm64 runner
+# and pushes it to Attic; `image` then assembles the flashable image on an x86
+# runner, because disko's image builder boots a QEMU VM and the arm64 runners
+# have no /dev/kvm (see that job's comment).
+#
+# When an image is built it goes to the same Cloudflare R2 bucket the x86_64
+# image uses, never to the run itself — GitHub Actions artifacts are far too slow
+# to move an image this size. The layout mirrors release-image.yml, with the
+# board as both the directory and part of the filename:
+#   release/<board>/dashboard-assistant-<board>-<version>.raw.zst
+#   release/<board>/latest.raw.zst                    (newest full release)
 #   pre-release/<board>/…               (same, for a hyphened SemVer tag)
-#   dev/<board>/dashboard-assistant-<board>-<commit>.img.zst
+#   dev/<board>/dashboard-assistant-<board>-<commit>.raw.zst
 # A v* tag publishes a release; a manual run publishes a dev build keyed by the
 # short commit, so a branch can be tested without ever touching the `latest`
 # pointer people flash. dev/ objects are swept after 7 days by the bucket
@@ -76,7 +81,7 @@ env:
 
 jobs:
   build:
-    name: Build ${{ matrix.model }} system and push to Attic
+    name: Build ${{ matrix.model }} closure and push to Attic
     runs-on: ubuntu-24.04-arm
     strategy:
       # Don't let a Pi 5 build break cancel an already-succeeding Pi 4 push (or
@@ -104,12 +109,6 @@ jobs:
       - name: Install Attic client
         run: nix profile install github:NixOS/nixpkgs/nixos-26.05#attic-client
 
-      # aws CLI isn't guaranteed on the arm64 runner image, so pull the prebuilt
-      # binary from cache.nixos.org (only needed when we actually upload to R2).
-      - name: Install AWS CLI
-        if: ${{ vars.R2_BUCKET != '' }}
-        run: nix profile install github:NixOS/nixpkgs/nixos-26.05#awscli2
-
       # Build the full system toplevel: its closure references the kernel, initrd
       # and every system package, and that closure — not the image — is what makes
       # a later local build (or an OTA update) a cache hit. This runs on every push
@@ -124,92 +123,167 @@ jobs:
             .#nixosConfigurations.dashboard-assistant-${{ matrix.model }}.config.system.build.toplevel \
             --out-link result-toplevel
 
-      # The root filesystem is btrfs (modules/hardware/sd-image-btrfs.nix), and on
-      # the Pi it is U-Boot — not the GPU firmware — that has to read
-      # extlinux.conf, the kernel and the initrd off that root partition. Stock
-      # rpi_arm64_defconfig is built without btrfs support, so we rebuild U-Boot
-      # with CONFIG_FS_BTRFS=y. If that ever silently stops taking effect (a
-      # nixpkgs bump moving buildUBoot's extraConfig hook, say) the image still
-      # builds and still flashes, and then the board simply never reaches Linux
-      # with no console output to explain why.
+      # The Pi boots: GPU firmware -> u-boot.bin -> \EFI\BOOT\BOOTAA64.EFI ->
+      # systemd-boot -> Linux. U-Boot is in that chain purely to provide the UEFI
+      # environment, which it does through CONFIG_EFI_LOADER (on by default for
+      # armv8) and BOOTMETH_EFILOADER, the bit that scans each filesystem for
+      # boot<arch>.efi.
       #
-      # So assert it here, where it costs a second, instead of discovering it on
-      # a card. Grep the built binary for the btrfs command strings the driver
-      # registers; a stock build has ext4load/fatload and none of these.
-      - name: Assert U-Boot can read btrfs
+      # If a nixpkgs bump ever ships an rpi_arm64_defconfig built without the EFI
+      # loader, the image still builds and still flashes, and then U-Boot drops to
+      # its own prompt instead of chainloading systemd-boot — a board that never
+      # reaches Linux, with nothing in the Nix build to explain why. So assert it
+      # here, where it costs a second, instead of discovering it on a card.
+      #
+      # This replaces the inverse assertion this workflow used to make. The old
+      # images needed U-Boot rebuilt with CONFIG_FS_BTRFS=y, because extlinux.conf
+      # and the kernel lived on the btrfs root; now they live on the ESP, so the
+      # stock package is correct and a btrfs-enabled build would just be dead
+      # weight.
+      - name: Assert U-Boot provides the UEFI loader
         run: |
           set -euo pipefail
           uboot=$(nix build --no-link --print-out-paths --accept-flake-config \
             ".#nixosConfigurations.dashboard-assistant-${{ matrix.model }}.config.hardware.raspberry-pi.firmware.uboot.package")
           echo "U-Boot: $uboot"
-          if strings "$uboot/u-boot.bin" | grep -qi btrfs; then
-            echo "OK: btrfs support present in u-boot.bin"
-            strings "$uboot/u-boot.bin" | grep -i btrfs | sort -u | head
-          else
-            echo "FAIL: u-boot.bin has no btrfs support — a btrfs root would not boot." >&2
-            echo "Filesystem commands actually present:" >&2
-            strings "$uboot/u-boot.bin" | grep -E '^(ext4|ext2|fat|btrfs)(load|ls|size|write)$' | sort -u >&2
-            exit 1
-          fi
-
-      # The firmware partition is the only place a Windows or macOS user can
-      # write a seed file (docs/flash/seed.md), so modules/core/configimport.nix
-      # stages a README.txt and a commented example onto it. It does that by
-      # *appending* to sdImage.populateFirmwareCommands, which nixos-hardware
-      # sets with lib.mkForce — so our definition has to be mkForce (mkAfter ...)
-      # to survive the merge at all. A plain mkAfter is dropped by
-      # filterOverrides before merging, silently.
-      #
-      # Both failure directions are quiet, and both ship a broken card:
-      #   - ours dropped  -> no README, no example; seeding still works but the
-      #                      partition no longer explains itself
-      #   - theirs dropped -> no config.txt, no u-boot.bin, no DTBs; the board
-      #                      flashes the green LED seven times and says nothing
-      # The second is guarded in-build by the loop configimport.nix emits. This
-      # step guards the first, which nothing else can see.
-      - name: Assert the seed-file drop zone is staged onto the firmware partition
-        run: |
-          set -euo pipefail
-          populate=$(nix eval --raw --accept-flake-config \
-            ".#nixosConfigurations.dashboard-assistant-${{ matrix.model }}.config.sdImage.populateFirmwareCommands")
-          echo "$populate"
           fail=0
-          grep -q 'install-rpi-firmware' <<<"$populate" || {
-            echo "FAIL: nixos-hardware's firmware staging is gone from populateFirmwareCommands." >&2
-            echo "  Our mkForce (mkAfter ...) has overridden it outright rather than appending." >&2
-            fail=1
-          }
-          grep -q 'firmware/README.txt' <<<"$populate" || {
-            echo "FAIL: the seed-file README is not staged onto the firmware partition." >&2
-            echo "  Check that nixos-hardware raspberry-pi/common/firmware.nix still uses" >&2
-            echo "  lib.mkForce for populateFirmwareCommands; if it stopped, our" >&2
-            echo "  mkForce (mkAfter ...) in modules/core/configimport.nix now loses the merge." >&2
-            fail=1
-          }
-          grep -q 'dashboard-assistant.yaml.example' <<<"$populate" || {
-            echo "FAIL: the example seed file is not staged onto the firmware partition." >&2
-            fail=1
-          }
-          [ "$fail" = 0 ] && echo "OK: both nixos-hardware's staging and ours are present"
+          for sym in BOOTAA64.EFI '/EFI/BOOT/' bootefi; do
+            if strings "$uboot/u-boot.bin" | grep -qF "$sym"; then
+              echo "OK: $sym present"
+            else
+              echo "FAIL: u-boot.bin has no '$sym' — it cannot chainload systemd-boot." >&2
+              fail=1
+            fi
+          done
           exit "$fail"
 
-      # Built for a v* tag release, and on a manual run so a branch can produce a
-      # flashable image to test with. A push to main only warms the cache above.
+      # Two things have to land on the ESP for a flashed card to boot and to
+      # explain itself, and they get there by different routes. Both failures are
+      # quiet and both ship a broken card, so assert the wiring by eval.
+      #
+      #   - the Raspberry Pi boot chain (config.txt, u-boot.bin, DTBs, overlays/)
+      #     comes from a disko postMountHook in rpi-disk-image.nix, because
+      #     nixos-install ends in `switch-to-configuration boot`, which installs
+      #     the bootloader and exits *before* activation — so nixos-hardware's
+      #     activation script cannot do this job at image build time. Lose the
+      #     hook and the board flashes the green LED seven times and says nothing.
+      #   - the seed-file README and example come from systemd-boot's extraFiles
+      #     (modules/core/configimport.nix). Lose them and seeding still works but
+      #     the partition stops explaining itself to whoever opens the card.
+      - name: Assert the ESP carries the boot chain and the seed-file drop zone
+        run: |
+          set -euo pipefail
+          attr=".#nixosConfigurations.dashboard-assistant-${{ matrix.model }}.config"
+          fail=0
+
+          hook=$(nix eval --raw --accept-flake-config \
+            "$attr.disko.devices.disk.main.content.partitions.ESP.content.postMountHook")
+          echo "$hook"
+          for want in config.txt u-boot.bin overlays; do
+            grep -q "$want" <<<"$hook" || {
+              echo "FAIL: the ESP staging hook no longer installs $want." >&2
+              fail=1
+            }
+          done
+
+          extra=$(nix eval --json --accept-flake-config \
+            "$attr.boot.loader.systemd-boot.extraFiles" | nix run nixpkgs#jq -- -r 'keys[]')
+          echo "extraFiles: $extra"
+          for want in README.txt dashboard-assistant.yaml.example; do
+            grep -qx "$want" <<<"$extra" || {
+              echo "FAIL: $want is not staged onto the ESP via systemd-boot extraFiles." >&2
+              fail=1
+            }
+          done
+          exit "$fail"
+
+      - name: Push closures to Attic
+        if: ${{ github.repository == 'ajfriesen/DashboardAssistant' }}
+        env:
+          ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
+        run: |
+          set -euo pipefail
+          attic login ci "$ATTIC_ENDPOINT" "$ATTIC_TOKEN"
+          # Push ONLY the system toplevel closure — the kernel, its modules and
+          # every system package. We deliberately do NOT push the image: the SD
+          # image blob doesn't retain store references to the kernel, so it's
+          # useless as a substitution target and it's the single largest object
+          # (routinely >100 MB), which is exactly what the ingress chokes on. The
+          # flashable image itself is published to R2 above.
+          attic push "ci:$ATTIC_CACHE" result-toplevel
+
+  # Assemble and publish the flashable image — on x86, deliberately, even though
+  # the image is aarch64.
+  #
+  # disko builds images by booting a QEMU VM. The arm64 runners above have no
+  # /dev/kvm, so an aarch64 guest there would fall back to TCG: emulation on top
+  # of no acceleration. Here the VM is x86 and runs natively
+  # (dashboardAssistant.diskImage.builderPkgs), and the only emulated part is
+  # nixos-install's chroot into the aarch64 system. The expensive half — the
+  # kernel and the system closure — was already compiled natively by the job
+  # above and comes back out of Attic.
+  #
+  # Built for a v* tag release, and on a manual run so a branch can produce a
+  # flashable image to test with. A push to main only warms the cache.
+  image:
+    name: Build and publish ${{ matrix.model }} image
+    needs: build
+    if: ${{ github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        model: [rpi4, rpi5]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            extra-platforms = aarch64-linux
+            extra-substituters = https://nix-cache.dashboardassistant.org/dashboardassistant
+            extra-trusted-public-keys = dashboardassistant:qyNbqk1+S/2a2dqe7XcDfCGnSGT6ACBXgPr5/4BNLYU=
+
+      # Register aarch64 binfmt handlers with the `F` (fix-binary) flag, which is
+      # what makes them usable from inside a chroot — exactly what
+      # nixos-install does, and the reason disko's docs ask for
+      # `boot.binfmt.preferStaticEmulators` on a NixOS build host. Without it the
+      # image build dies with "chroot: failed to run command '…/activate': No
+      # such file or directory", which does not look like an emulation problem at
+      # all.
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Install AWS CLI
+        if: ${{ vars.R2_BUCKET != '' }}
+        run: nix profile install github:NixOS/nixpkgs/nixos-26.05#awscli2
+
       - name: Build Pi image
-        if: ${{ github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' }}
         run: |
           nix build --print-build-logs --accept-flake-config \
             .#packages.aarch64-linux.${{ matrix.model }}-image \
             --out-link result-${{ matrix.model }}
 
-      # Publish the flashable SD image to R2 (mirrors release-image.yml): a v* tag
-      # goes to release/<board>/ — or pre-release/<board>/ for a hyphened
-      # prerelease tag — as an immutable versioned object plus a `latest` pointer;
-      # a manual run goes to dev/<board>/ keyed by the short commit, with no
-      # pointer, so a test build can never become the image people flash. The
-      # sd-image is already zstd-compressed, so we cp it straight to R2.
-      - name: Publish SD image to R2
-        if: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && vars.R2_BUCKET != '' }}
+      # disko emits a single uncompressed .raw, unlike the old sd-image builder
+      # which produced .img.zst itself. Compress it here rather than in the
+      # image derivation: it keeps the build output identical to the x86 target's
+      # and keeps a ~4 GiB zstd pass out of every local `just build-rpi5`.
+      - name: Compress the image
+        run: |
+          set -euo pipefail
+          raw=$(ls result-${{ matrix.model }}/*.raw)
+          nix run nixpkgs#zstd -- -T0 -19 --long=27 "$raw" -o image.raw.zst
+          ls -l image.raw.zst
+
+      # Publish to R2 (mirrors release-image.yml): a v* tag goes to
+      # release/<board>/ — or pre-release/<board>/ for a hyphened prerelease tag
+      # — as an immutable versioned object plus a `latest` pointer; a manual run
+      # goes to dev/<board>/ keyed by the short commit, with no pointer, so a
+      # test build can never become the image people flash.
+      - name: Publish image to R2
+        if: ${{ vars.R2_BUCKET != '' }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -218,7 +292,7 @@ jobs:
           set -euo pipefail
           model="${{ matrix.model }}"
           bucket="${{ vars.R2_BUCKET }}"
-          img=$(ls result-"$model"/sd-image/*.img.zst)
+          img=image.raw.zst
           nixos=$(nix eval --raw ".#nixosConfigurations.dashboard-assistant-${model}.config.system.nixos.version")
           baked=$(nix eval --raw \
             ".#nixosConfigurations.dashboard-assistant-${model}.config.environment.etc.\"dashboard-assistant/version\".text")
@@ -233,14 +307,14 @@ jobs:
             id="${GITHUB_SHA::7}"
           fi
           dir="$channel/$model"
-          name="dashboard-assistant-$model-$id.img.zst"
+          name="dashboard-assistant-$model-$id.raw.zst"
           sha=$(sha256sum "$img" | cut -d' ' -f1)
           built=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           # Metadata (x-amz-meta-*) attached to every object; see release-image.yml.
           # `ref` is the tag on a release build and the branch on a dev one.
           meta="board=$model,arch=aarch64,channel=$channel,version=$version,ref=$GITHUB_REF_NAME,commit=$GITHUB_SHA,nixos-version=$nixos,built=$built,sha256=$sha,run-url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           keys=("$dir/$name")
-          [ "$channel" = dev ] || keys+=("$dir/latest.img.zst")
+          [ "$channel" = dev ] || keys+=("$dir/latest.raw.zst")
           for key in "${keys[@]}"; do
             aws s3 cp "$img" "s3://$bucket/$key" \
               --endpoint-url "$R2_ENDPOINT" \
@@ -260,7 +334,7 @@ jobs:
       # nowhere to put it — and it is far too large to hand back as a run
       # artifact, so say so plainly instead of failing at the upload.
       - name: Note that publishing was skipped
-        if: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && vars.R2_BUCKET == '' }}
+        if: ${{ vars.R2_BUCKET == '' }}
         run: |
           {
             echo "### ${{ matrix.model }} image built, not published"
@@ -269,18 +343,3 @@ jobs:
             echo "nowhere to publish the image to. See the workflow header for the"
             echo "variables and secrets it needs."
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Push closures to Attic
-        if: ${{ github.repository == 'ajfriesen/DashboardAssistant' }}
-        env:
-          ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
-        run: |
-          set -euo pipefail
-          attic login ci "$ATTIC_ENDPOINT" "$ATTIC_TOKEN"
-          # Push ONLY the system toplevel closure — the kernel, its modules and
-          # every system package. We deliberately do NOT push the image: the SD
-          # image blob doesn't retain store references to the kernel, so it's
-          # useless as a substitution target and it's the single largest object
-          # (routinely >100 MB), which is exactly what the ingress chokes on. The
-          # flashable image itself is published to R2 above.
-          attic push "ci:$ATTIC_CACHE" result-toplevel
