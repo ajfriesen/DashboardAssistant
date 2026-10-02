@@ -4,12 +4,12 @@
 #
 #   1. USB hot-insert: udev fires a per-device service that mounts an inserted
 #      USB filesystem read-only and, if it holds dashboard-assistant.yaml, imports it.
-#   2. Boot medium: the flashed card/disk carries a small FAT partition editable
-#      on any computer, so dropping dashboard-assistant.yaml on it provisions a
+#   2. Boot medium: the flashed card/disk carries a FAT partition editable on
+#      any computer, so dropping dashboard-assistant.yaml on it provisions a
 #      freshly flashed image on first boot — and editing it later re-provisions
-#      the device in place. Which partition that is differs per target, and this
-#      module also stages a README onto it; see bootImport and the sdImage block
-#      below.
+#      the device in place. That partition is `/boot` (the ESP) on every target
+#      now — x86 and both Raspberry Pis — which is what lets this module have a
+#      single code path; see bootImport below.
 #
 # YAML schema (all keys optional):
 #   ha_url: "https://homeassistant.local:8123"
@@ -18,7 +18,6 @@
 {
   config,
   lib,
-  options,
   pkgs,
   ...
 }:
@@ -97,9 +96,10 @@ let
 
       journalctl -u dashboard-assistant-boot-import
 
-    Everything else on this partition (config.txt, u-boot.bin, *.dtb,
-    overlays/) is the Raspberry Pi boot chain. Deleting any of it makes the
-    device unbootable.
+    Everything else on this partition is how the device starts up: the
+    bootloader, the Linux kernels, and on a Raspberry Pi the firmware files as
+    well (config.txt, u-boot.bin, *.dtb, overlays/). Deleting any of it makes
+    the device unbootable.
 
     Full documentation: ${seedDocsURL}
   '';
@@ -145,22 +145,16 @@ let
     #    url: "http://homeassistant.local:8123/lovelace/kitchen"
   '';
 
-  # Look for the seed file on whichever partition the user could actually have
-  # written it to, which is not the same place on every target:
+  # The seed file lives on /boot, the FAT EFI system partition, which is
+  # mounted on every target. It is the one partition a user can write to from
+  # Windows or macOS after flashing, which is the whole point of the feature.
   #
-  #   x86 disk image  /boot IS the ESP (vfat), already mounted. Unchanged.
-  #   rpi4 / rpi5     /boot is a directory on the btrfs root — a user cannot write
-  #                   there from Windows or macOS at all. The partition they DO
-  #                   see after flashing is the FAT one, labelled by
-  #                   dashboard.configImport.firmwarePartitionLabel, which the
-  #                   sd-image declares `noauto`, so it is never mounted.
-  #
-  # Hence the fallback: mount that partition read-only, just long enough to read
-  # the file. Read-only and momentary on purpose — it holds config.txt,
-  # u-boot.bin and the DTBs, i.e. the whole boot chain, and this is a device
-  # people switch off at the wall. Keeping a vfat mounted read-write for the life
-  # of a kiosk is how an SD card ends up with an unbootable firmware partition and
-  # no console to explain why. Same shape as usbImport above.
+  # This used to need a second code path: the sd-image targets put /boot on the
+  # btrfs root, where no desktop OS can reach it, and exposed a separate
+  # unmounted FAT `FIRMWARE` partition instead — so the importer had to find it
+  # by label, mount it read-only and unmount it again. The Pi images are built
+  # by disko from the same layout as x86 now, so /boot *is* that partition and
+  # the fallback is gone along with the option that named it.
   #
   # Re-import is gated on the file's CONTENT HASH, not on a provisioned marker.
   # That is what lets a user re-provision a device in place by editing the card
@@ -192,19 +186,8 @@ let
       exit 0
     }
 
-    # Already-mounted boot partition (the x86 ESP).
-    if [ -f /boot/${seedFileName} ]; then
-      tryImport /boot/${seedFileName} /boot
-    fi
-
-    # ...otherwise the sd-image firmware partition, which is not mounted.
-    fw=${lib.escapeShellArg "/dev/disk/by-label/${cfg.firmwarePartitionLabel}"}
-    [ -e "$fw" ] || exit 0
-    mnt="$(${pkgs.coreutils}/bin/mktemp -d)"
-    trap '${pkgs.util-linux}/bin/umount "$mnt" 2>/dev/null || true; ${pkgs.coreutils}/bin/rmdir "$mnt" 2>/dev/null || true' EXIT
-    ${pkgs.util-linux}/bin/mount -o ro "$fw" "$mnt" 2>/dev/null || exit 0
-    [ -f "$mnt/${seedFileName}" ] || exit 0
-    tryImport "$mnt/${seedFileName}" "$fw"
+    [ -f /boot/${seedFileName} ] || exit 0
+    tryImport /boot/${seedFileName} /boot
   '';
 in
 {
@@ -227,29 +210,6 @@ in
       '';
     };
 
-    firmwarePartitionLabel = lib.mkOption {
-      type = lib.types.str;
-      default = "FIRMWARE";
-      description = ''
-        Filesystem label of the FAT partition the boot importer mounts when
-        `/boot` itself carries no seed file.
-
-        That partition is the drop zone a user can actually write to after
-        flashing an sd-image: on the Pi targets `/boot` is a directory on the
-        btrfs root, and the only partition Windows and macOS can see is the FAT
-        one. The sd-image targets set this from
-        {option}`sdImage.firmwarePartitionName`, so renaming the partition
-        cannot silently break seeding again — which is exactly what happened
-        once (see labgrid/README.md).
-
-        The default is harmless on the x86 disk image, where `/boot` *is* the
-        ESP and nothing carries this label: the fallback is skipped because
-        /dev/disk/by-label/&lt;label&gt; does not exist. Kept as a plain default
-        rather than null for that reason — the failure mode this feature has
-        actually shipped is "the importer did not look at the partition", and a
-        default that always looks cannot reproduce it.
-      '';
-    };
   };
 
   config = lib.mkMerge [
@@ -314,64 +274,24 @@ in
       };
     })
 
-    # Make the FAT partition a drop zone that explains itself, and keep the label
-    # the importer searches identical to the one the image is built with.
+    # Make /boot a drop zone that explains itself. Staged through
+    # systemd-boot's extraFiles rather than a per-target image hook, which is
+    # what makes one definition cover every target: the bootloader installer
+    # runs both inside disko's image build (nixos-install ends in
+    # `switch-to-configuration boot`) and on every later system switch, so the
+    # files land on a freshly flashed card and are restored if someone deletes
+    # them and then updates.
     #
-    # lib.optionalAttrs, not lib.mkIf: on the x86 disk image there is no sdImage
-    # option at all, so these must be absent from the *definition*, not merely
-    # disabled. Exactly the pattern nixos-hardware's
-    # raspberry-pi/common/firmware.nix uses, for the same reason.
-    (lib.optionalAttrs (options ? sdImage) (
-      lib.mkIf cfg.enable {
-        # One source of truth. Renaming the partition used to be able to break
-        # seeding silently (labgrid/README.md, "What this bench found").
-        dashboard.configImport.firmwarePartitionLabel = config.sdImage.firmwarePartitionName;
-
-        # 30 MiB (the upstream default) leaves 4.49 MiB free on the built Pi 5
-        # image: 48 files, 25,056,606 bytes used. That is less than one
-        # raspberrypifw bump — a single start*.elf is 0.85-4.9 MiB today — so one
-        # more board's blob set would turn a routine input bump into a
-        # release-blocking build failure. And we now invite users to write here.
-        # 64 MiB leaves ~38 MiB. The extra is truncate'd zeros inside the FAT free
-        # space, which zstd flattens, so the shipped .img.zst does not grow; only
-        # the uncompressed .img does, by 34 MiB on 3.87 GiB.
-        sdImage.firmwareSize = lib.mkDefault 64;
-
-        # Append to nixos-hardware's U-Boot/firmware staging rather than replacing
-        # it. mkForce matches its priority so our text is not discarded; mkAfter
-        # orders us last among the priority-50 definitions, which types.lines then
-        # concatenates. A *plain* mkAfter is dropped by filterOverrides before the
-        # merge ever happens — that is the trap here, and the eval check in
-        # .github/workflows is what guards it.
-        #
-        # Dropping files into ./firmware rather than into the finished image means
-        # sd-image.nix's own determinism and verification cover them: it next runs
-        # `find firmware -exec touch --date=2000-01-01 {} +`, mcopy's everything in
-        # sorted order, and gates on `fsck.vfat -vn`. postBuildCommands runs after
-        # all three and would have meant re-implementing them.
-        sdImage.populateFirmwareCommands = lib.mkForce (
-          lib.mkAfter ''
-            # A guard, not decoration. This block only lands because nixos-hardware
-            # also uses mkForce here. If it ever drops to plain priority, ours wins
-            # outright and the firmware partition ships with nothing but these two
-            # files: no config.txt, no u-boot.bin, no DTBs — a board that flashes the
-            # green LED seven times and says nothing about why. Fail the build.
-            for f in config.txt u-boot.bin; do
-              if [ ! -f "./firmware/$f" ]; then
-                echo "sd-image: ./firmware/$f is missing after populateFirmwareCommands." >&2
-                echo "  modules/core/configimport.nix appends with mkForce (mkAfter ...); check that" >&2
-                echo "  nixos-hardware raspberry-pi/common/firmware.nix still sets it with lib.mkForce." >&2
-                exit 1
-              fi
-            done
-
-            # install, not cp: store paths are 0444, and 0644 makes the determinism
-            # touch that sd-image.nix runs next unconditional.
-            install -m 0644 ${dropzoneReadme} ./firmware/README.txt
-            install -m 0644 ${dropzoneExample} ./firmware/${seedFileName}.example
-          ''
-        );
-      }
-    ))
+    # This is also the x86 image's first copy of these files. Under the
+    # sd-image builder the README and the example only ever reached the Pi
+    # targets, because they were staged via sdImage.populateFirmwareCommands —
+    # which the x86 image has no equivalent of — while docs/flash/seed.md told
+    # x86 users to write a seed file onto the ESP all the same.
+    (lib.mkIf cfg.enable {
+      boot.loader.systemd-boot.extraFiles = {
+        "README.txt" = dropzoneReadme;
+        "${seedFileName}.example" = dropzoneExample;
+      };
+    })
   ];
 }

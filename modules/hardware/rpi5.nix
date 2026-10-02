@@ -1,84 +1,69 @@
 # Raspberry Pi 5 (aarch64) hardware profile — SD-card image target.
 #
-# Built from nixpkgs-unstable (see flake.nix): the Pi 5 kernel/firmware and the
-# sd-image-aarch64 [pi5]/bcm2712 support only landed after the pinned 26.05
-# release. Board specifics (linux-rpi kernel, RP1 southbridge, PCIe/NVMe, v3d
-# GPU) come from the nixos-hardware raspberry-pi-5 module wired in via flake.nix.
+# Built from nixpkgs-unstable (see flake.nix): the Pi 5 kernel/firmware bits are
+# newer than the pinned 26.05. Board specifics (linux-rpi kernel, RP1
+# southbridge, PCIe/NVMe, v3d GPU) come from the nixos-hardware raspberry-pi-5
+# module wired in via flake.nix.
 #
-# Boot chain is the same as the Pi 4: the GPU firmware can't read extlinux.conf,
-# so it needs U-Boot as an intermediary. Like the Pi 4 there's no systemd-boot,
-# so the ABA auto-rollback (bootCounting) doesn't apply — manual rollback from the
-# recovery UI still works.
-{ modulesPath, lib, ... }:
+# Layout and boot chain are shared with the Pi 4 and, as far as the partition
+# table goes, with x86 — see modules/hardware/rpi-disk-image.nix and
+# modules/hardware/disk-layout.nix.
+{
+  lib,
+  pkgsBuild,
+  ...
+}:
 {
   imports = [
-    "${modulesPath}/installer/sd-card/sd-image-aarch64.nix"
-    # btrfs+zstd root instead of sd-image's ext4, so the shipped Nix store is
-    # compressed. Also rebuilds U-Boot with btrfs support — without that the
-    # board cannot read extlinux.conf and never boots.
-    ./sd-image-btrfs.nix
-    # Automatic GC / store dedup / low-disk safety net. This is a persistent,
-    # in-place-updatable target, so without it every update keeps a generation
-    # forever and the SD card fills up.
-    ../core/storage.nix
+    # disko GPT layout + U-Boot-as-UEFI + systemd-boot, shared with the Pi 4.
+    ./rpi-disk-image.nix
   ];
 
   nixpkgs.hostPlatform = "aarch64-linux";
 
-  # In-place updates: rebuild this config from the release tag. No systemd-boot
-  # auto-rollback here (extlinux), but manual rollback from the recovery UI works.
+  # Build the image in a native x86 VM and emulate only nixos-install's chroot.
+  # See dashboardAssistant.diskImage.builderPkgs for why this is not optional.
+  dashboardAssistant.diskImage.builderPkgs = pkgsBuild;
+  dashboardAssistant.diskLayout.imageName = "dashboard-assistant-rpi5";
+
+  # In-place updates: rebuild this config from the release tag. Unlike the old
+  # extlinux images this one can also roll back by itself once boot counting is
+  # switched on — systemd-boot provides it (see rpi-disk-image.nix).
   dashboardAssistant.update.installable = true;
   dashboardAssistant.update.flakeAttr = "dashboard-assistant-rpi5";
-
-  # Boot chain: copy u-boot.bin onto the firmware partition and point config.txt's
-  # kernel= at it (plus arm_64bit=1), so start*.elf → u-boot.bin → extlinux.conf →
-  # Linux. nixos-hardware's firmware.nix mkForce-overrides the sd-image builder's
-  # own populateFirmwareCommands and only stages U-Boot / writes kernel= when this
-  # is set — without it there is no kernel on the FAT partition and the Pi flashes
-  # the green LED 7 times ("kernel image not found") with a black screen, exactly
-  # as the Pi 4 profile documents.
-  hardware.raspberry-pi.firmware.uboot.enable = true;
 
   # Put the kernel console on the Pi 5's dedicated debug UART, which is where a
   # Debug Probe on the 3-pin connector listens — and where the boot ROM, the RP1
   # firmware and U-Boot already print.
   #
-  # sd-image-aarch64 supplies console=ttyS0 / ttyAMA0 / tty0, none of which reach
-  # it on this board. The device tree is unambiguous:
+  # The device tree is unambiguous:
   #
   #   uart10 = /soc@107c000000/serial@7d001000   <- the debug connector, pl011
   #   uart0  = /axi/pcie@.../rp1/serial@30000    <- GPIO 14/15
   #   console     = ...serial@7d001000
   #   stdout-path = "serial10:115200n8"
   #
-  # so the debug UART is ttyAMA10, and ttyAMA0 is the GPIO header's — which the
-  # sd-image config.txt switches off anyway ("[pi5] enable_uart=0"). An explicit
-  # console= on the cmdline overrides the DT's stdout-path, so without this the
-  # kernel says nothing at all on the probe: U-Boot narrates the whole boot, then
-  # the log stops dead at "Starting kernel ...". systemd's getty generator also
+  # so the debug UART is ttyAMA10, and ttyAMA0 is the GPIO header's — which
+  # config.txt switches off anyway ("[pi5] enable_uart=0"). An explicit console=
+  # on the cmdline overrides the DT's stdout-path, so without this the kernel
+  # says nothing at all on the probe: U-Boot narrates the whole boot, then the
+  # log stops dead at "Starting kernel ...". systemd's getty generator also
   # reads this list, so adding it is what puts a login prompt on the probe.
   #
-  # mkBefore to stay ahead of the sd-image defaults: the *last* console= becomes
-  # /dev/console, and that should remain tty0 as it is today.
+  # This survives the move to systemd-boot: the firmware-merged DTB still
+  # reaches the kernel through U-Boot's EFI handoff, and `printk: console
+  # [ttyAMA10] enabled` was verified on the bench.
+  #
+  # mkBefore to stay ahead of any defaults: the *last* console= becomes
+  # /dev/console, and that should remain tty0.
   boot.kernelParams = lib.mkBefore [ "console=ttyAMA10,115200n8" ];
 
-  # sd-image-aarch64 sets hardware.enableAllHardware, whose broad initrd module
-  # list assumes a mainline kernel and names many modules the stripped linux-rpi
-  # kernel doesn't ship (tpm-crb, dw-hdmi, the generic SATA/SCSI drivers, ...), so
-  # the initrd module-closure fails at build time ("Module tpm-crb not found").
-  # The Pi 5 only needs its own boot modules — mmc_block for the SD card plus the
-  # nvme/pcie/rp1 set the nixos-hardware profile already lists, all of which the
-  # linux-rpi kernel *does* ship. Rather than chasing an ever-shifting disable
-  # list across unstable kernel bumps (as the Pi 4 profile does for its pinned
-  # 26.05 kernel), let the closure skip the modules this kernel lacks: the
-  # genuinely-needed ones are present and stay included.
+  # The stripped linux-rpi kernel does not ship every module the nixos-hardware
+  # profile names (tpm-crb, dw-hdmi, the generic SATA/SCSI drivers, ...), so the
+  # initrd module-closure would fail at build time ("Module tpm-crb not found").
+  # Rather than chasing an ever-shifting disable list across unstable kernel
+  # bumps, let the closure skip the modules this kernel lacks: the genuinely
+  # needed ones are present and stay included.
   # See boot.initrd.allowMissingModules and https://github.com/NixOS/nixpkgs/issues/154163
   boot.initrd.allowMissingModules = true;
-
-  # Broad Wi-Fi / device firmware, plus the Pi's own firmware blobs.
-  hardware.enableRedistributableFirmware = true;
-
-  # The card grows to fill on first boot (like the x86 image), so one image
-  # fits any SD card / capacity.
-  sdImage.compressImage = true;
 }

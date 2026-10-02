@@ -103,8 +103,17 @@
         extraModules:
         nixpkgs-unstable.lib.nixosSystem {
           system = "aarch64-linux";
-          specialArgs = { inherit impermanence version; };
+          # pkgsBuild is the *build machine's* pkgs, used only to run disko's
+          # image-builder VM at native speed; see
+          # dashboardAssistant.diskImage.builderPkgs. It has to come from the
+          # same channel as the system (unstable here) so the VM's kernel and
+          # qemu match the disko module instance.
+          specialArgs = {
+            inherit impermanence version;
+            pkgsBuild = nixpkgs-unstable.legacyPackages.${system};
+          };
           modules = [
+            disko.nixosModules.disko
             nixos-hardware.nixosModules.raspberry-pi-5
             ./modules/hardware/rpi5.nix
             ./modules/core/default.nix
@@ -131,8 +140,12 @@
         # it via binfmt emulation, fetching most from the binary cache).
         dashboard-assistant-rpi4 = lib.nixosSystem {
           system = "aarch64-linux";
-          specialArgs = { inherit impermanence version; };
+          specialArgs = {
+            inherit impermanence version;
+            pkgsBuild = pkgs;
+          };
           modules = [
+            disko.nixosModules.disko
             nixos-hardware.nixosModules.raspberry-pi-4
             ./modules/hardware/rpi4.nix
             ./modules/core/default.nix
@@ -154,18 +167,11 @@
         # `nixos-rebuild switch --flake .#dashboard-assistant-rpi5-dev --target-host`,
         # so iterating no longer means pulling the card and reflashing. Build via
         # `.#rpi5-image-dev` or `just build-rpi5-dev`.
-        dashboard-assistant-rpi5-dev = mkRpi5System [
-          ./modules/dev.nix
-          # Skip the .img.zst artifact compression for the local-only dev
-          # image: under binfmt emulation the compress/decompress/compress
-          # dance costs ~2 minutes per build and buys nothing locally — dd
-          # writes the same bytes to the card either way, and the outer pass
-          # only manages ~1.7x because the filesystem inside is already
-          # zstd-compressed. Release images keep it: 2.25 vs 3.86 GiB is what
-          # people download. Inline (not in dev.nix) because the x86 dev
-          # variants share dev.nix and have no sdImage options.
-          { sdImage.compressImage = lib.mkForce false; }
-        ];
+        # Dev flavour of the Pi 5 image — same base plus modules/dev.nix.
+        # No compression knob any more: disko emits a single uncompressed
+        # .raw for every target, the same as the x86 images, and release
+        # artifacts are compressed by the publishing workflow instead.
+        dashboard-assistant-rpi5-dev = mkRpi5System [ ./modules/dev.nix ];
       };
 
       # Raw btrfs+zstd EFI disk image built by disko: `nix build .#disk-image`
@@ -187,20 +193,25 @@
         sendspin-player = pkgs.callPackage ./packages/sendspin-go/sendspin-go.nix { };
       };
 
-      # Raspberry Pi 4 SD-card image: `nix build .#rpi4-image`, then flash
-      # result/sd-image/*.img.zst to the card (zstdcat | dd, or unzstd first).
+      # Raspberry Pi SD-card images, built by disko from the same
+      # modules/hardware/disk-layout.nix the x86 image uses — so all three
+      # targets emit a raw GPT image and are flashed identically:
+      #   sudo dd if=result-rpi5/dashboard-assistant-rpi5.raw of=/dev/sdX ...
+      #
+      # These are aarch64 derivations built on an x86 host through binfmt, but
+      # the image-builder VM itself runs natively (see
+      # dashboardAssistant.diskImage.builderPkgs), so only nixos-install's
+      # chroot is emulated.
       packages.aarch64-linux.rpi4-image =
-        self.nixosConfigurations.dashboard-assistant-rpi4.config.system.build.sdImage;
+        self.nixosConfigurations.dashboard-assistant-rpi4.config.system.build.diskoImages;
 
-      # Raspberry Pi 5 SD-card image (built from unstable): `nix build .#rpi5-image`,
-      # then flash result/sd-image/*.img.zst to the card (same as the Pi 4).
       packages.aarch64-linux.rpi5-image =
-        self.nixosConfigurations.dashboard-assistant-rpi5.config.system.build.sdImage;
+        self.nixosConfigurations.dashboard-assistant-rpi5.config.system.build.diskoImages;
 
       # Same image plus root SSH, for debugging on real hardware without
       # reflashing between changes: `nix build .#rpi5-image-dev`.
       packages.aarch64-linux.rpi5-image-dev =
-        self.nixosConfigurations.dashboard-assistant-rpi5-dev.config.system.build.sdImage;
+        self.nixosConfigurations.dashboard-assistant-rpi5-dev.config.system.build.diskoImages;
 
       # VM tests. `nix flake check`, or `nix build .#checks.x86_64-linux.first-boot`
       # for one.

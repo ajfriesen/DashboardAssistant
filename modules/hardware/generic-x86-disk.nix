@@ -4,34 +4,13 @@
 # be updated in place with `nixos-rebuild switch`.
 { lib, pkgs, ... }:
 {
-  # disko's in-VM image builder (make-disk-image) builds the VM kernel with
-  # `pkgs.aggregateModules`, whose output has no `.target`. This nixpkgs' vmTools
-  # reads `kernel.target` to locate the bootable image, so the image build fails
-  # with "kernel-modules has no target attribute". Re-attach it (bzImage on
-  # x86_64) in the pkgs instance disko uses for image building only. Drop this
-  # once disko upstream tracks the vmTools change.
-  disko.imageBuilder.pkgs = pkgs.extend (
-    final: prev: {
-      aggregateModules =
-        modules:
-        (prev.aggregateModules modules).overrideAttrs (old: {
-          passthru = (old.passthru or { }) // {
-            target = "bzImage"; # x86_64 kernel image name (this target is x86_64-only)
-          };
-        });
-    }
-  );
-
-  # disko's image-builder VM only auto-loads a fixed rootModules list (virtio, 9p,
-  # virtiofs, +zfs when used) — btrfs is not among them, and the minimal VM has no
-  # on-demand modprobe. So mounting the freshly-formatted btrfs root falls back to
-  # a FUSE handler and fails ("fuseblk: Unknown parameter 'subvol'"), aborting the
-  # image build. Load the btrfs module in the builder VM so it can mount our root.
-  disko.imageBuilder.extraRootModules = [ "btrfs" ];
-
   imports = [
-    # btrfs+zstd disk layout (disko). Provides fileSystems."/" and "/boot".
+    # btrfs+zstd GPT layout (disko). Provides fileSystems."/" and "/boot".
+    # Shared with the Raspberry Pi targets; this one takes the defaults.
     ./disk-layout.nix
+    # VM fix-ups disko's image builder needs (kernel target, btrfs module).
+    # Native here, so no builderPkgs override.
+    ./disko-image-builder.nix
     # Automatic GC / store dedup / low-disk safety net.
     ../core/storage.nix
   ];

@@ -79,39 +79,44 @@ build-disk-image-unstable:
 # if the cache is cold or unreachable. Then flash the image to an SD card.
 # Note: the flake substituter is only honoured if you're a trusted Nix user
 # (nix.settings.trusted-users on this workstation).
+#
+# Built by disko from the same layout as the x86 image, so the artifact is a
+# single raw GPT image and is flashed exactly like one — no .zst, no sd-image
+# subdirectory. The image-builder VM runs natively (see
+# dashboardAssistant.diskImage.builderPkgs); only nixos-install's chroot is
+# emulated, which needs binfmt plus boot.binfmt.preferStaticEmulators on this
+# workstation.
 [doc('Build the Raspberry Pi 4 SD-card image (aarch64)')]
 build-rpi4:
   nix build .#packages.aarch64-linux.rpi4-image --accept-flake-config --out-link result-rpi4
   @echo
-  @echo "Image: $(readlink -f result-rpi4)/sd-image/"*.img.zst
+  @echo "Image: $(readlink -f result-rpi4)/dashboard-assistant-rpi4.raw"
   @echo "Flash it (confirm the device first!):"
-  @echo "  zstdcat result-rpi4/sd-image/*.img.zst | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync"
+  @echo "  sudo dd if=result-rpi4/dashboard-assistant-rpi4.raw of=/dev/sdX bs=4M status=progress conv=fsync"
 
 # Build the Raspberry Pi 5 (aarch64) SD-card image. Always built from
-# nixos-unstable (pinned in flake.nix, not via override): the Pi 5 kernel and
-# the sd-image pi5 support are newer than the pinned 26.05. Same emulated-build /
-# binary-cache story as build-rpi4. Then flash the image to an SD card.
+# nixos-unstable (pinned in flake.nix, not via override): the Pi 5 kernel is
+# newer than the pinned 26.05. Same emulated-build / binary-cache story as
+# build-rpi4, and the same raw disko artifact.
 [doc('Build the Raspberry Pi 5 SD-card image (aarch64, unstable)')]
 build-rpi5:
   nix build .#packages.aarch64-linux.rpi5-image --accept-flake-config --out-link result-rpi5
   @echo
-  @echo "Image: $(readlink -f result-rpi5)/sd-image/"*.img.zst
+  @echo "Image: $(readlink -f result-rpi5)/dashboard-assistant-rpi5.raw"
   @echo "Flash it (confirm the device first!):"
-  @echo "  zstdcat result-rpi5/sd-image/*.img.zst | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync"
+  @echo "  sudo dd if=result-rpi5/dashboard-assistant-rpi5.raw of=/dev/sdX bs=4M status=progress conv=fsync"
 
 # Build the dev flavour of the Pi 5 image: same system plus root SSH (the keys in
 # modules/dev.nix). Flash this one when a Pi needs debugging — with sshd up you
 # reconfigure it in place with `just deploy-rpi5-dev` instead of pulling the card
 # and reflashing for every change. Never ship it: a release image has no sshd.
-# Unlike the release image this one is uncompressed (raw .img): the .zst pass
-# runs under emulation and costs ~2 minutes per build for no local benefit.
 [doc('Build the Raspberry Pi 5 SD-card image with root SSH (dev/debugging)')]
 build-rpi5-dev:
   nix build .#packages.aarch64-linux.rpi5-image-dev --accept-flake-config --out-link result-rpi5-dev
   @echo
-  @echo "Image: $(readlink -f result-rpi5-dev)/sd-image/"*.img
+  @echo "Image: $(readlink -f result-rpi5-dev)/dashboard-assistant-rpi5.raw"
   @echo "Flash it (confirm the device first!):"
-  @echo "  sudo dd if=result-rpi5-dev/sd-image/*.img of=/dev/sdX bs=4M status=progress conv=fsync"
+  @echo "  sudo dd if=result-rpi5-dev/dashboard-assistant-rpi5.raw of=/dev/sdX bs=4M status=progress conv=fsync"
   @echo
   @echo "Then, for every change after that (no reflash):"
   @echo "  just deploy-rpi5-dev root@dashboard-assistant-<mac6>.local"
