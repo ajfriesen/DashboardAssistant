@@ -206,16 +206,30 @@ func (nm *NetworkManager) Connected() bool { return nm.NetInfo().Connected }
 // below every edit would leave another "MyNet", "MyNet 1", "MyNet 2", ... in
 // /etc/NetworkManager/system-connections, each holding the passphrase.
 //
-// "Already activated on this SSID" is the only state in which doing nothing is
-// certainly right, and it is the one observable without asking NM for secrets:
-// a wrong or changed passphrase cannot reach ACTIVATED, so it falls through to
-// the update-and-activate path.
+// "Already activated on this SSID with this passphrase" is the only state in
+// which doing nothing is right. Being ACTIVATED alone does not prove the
+// passphrase matches: the seed can carry a *new* PSK for the network the
+// device is still on (an owner pre-staging a router rotation), and the
+// content-hash gate in modules/core/configimport.nix records the import as
+// done either way — so a PSK silently dropped here would never be retried.
+// Hence the saved secret is compared, and any difference (or any doubt, e.g.
+// GetSecrets failing) falls through to update the saved profile — without
+// reactivating while the current link still works; see stagePskOnly below.
 func (nm *NetworkManager) Provision(ssid, psk string) (bool, error) {
 	if nm.wifiDevice() == "" {
 		return false, fmt.Errorf("no Wi-Fi device")
 	}
+	// True when the device is on this SSID right now but the seed carries a
+	// different passphrase. The saved profile is updated below, but *without*
+	// reactivating: the link that exists still works (the router has not
+	// rotated yet), and NM uses the stored secret on the next connect — which
+	// is exactly when the new passphrase becomes the right one.
+	stagePskOnly := false
 	if st := nm.NetInfo(); st.Connected && st.Type == "wifi" && st.Name == ssid {
-		return false, nil
+		if psk == "" || psk == nm.savedPsk(ssid) {
+			return false, nil
+		}
+		stagePskOnly = true
 	}
 	// Clear a soft rfkill first. A blocked radio parks the device in UNAVAILABLE
 	// and the owner watches "Connecting…" forever with nothing to act on — and
@@ -260,6 +274,10 @@ func (nm *NetworkManager) Provision(ssid, psk string) (bool, error) {
 			Call(nmSettingsCon+".Update", 0, settings).Err; err != nil {
 			return false, fmt.Errorf("update %s: %w", ssid, err)
 		}
+		if stagePskOnly {
+			log.Printf("wifi: new passphrase for %q saved; current link stays up and the new secret applies on the next connect", ssid)
+			return true, nil
+		}
 		var activePath dbus.ObjectPath
 		if err := obj.Call(nmIface+".ActivateConnection", 0,
 			existing, nm.wifiDevice(), dbus.ObjectPath("/")).Store(&activePath); err != nil {
@@ -296,6 +314,27 @@ func (nm *NetworkManager) wifiProfileFor(ssid string) (dbus.ObjectPath, string) 
 		return c, uuid
 	}
 	return "", ""
+}
+
+// savedPsk returns the WPA passphrase stored in the saved profile for ssid.
+// Empty when there is no profile, no secret, or NM refuses to hand it over —
+// callers treat "" as "unknown", which errs toward re-provisioning.
+func (nm *NetworkManager) savedPsk(ssid string) string {
+	path, _ := nm.wifiProfileFor(ssid)
+	if path == "" {
+		return ""
+	}
+	var secrets map[string]map[string]dbus.Variant
+	if err := nm.conn.Object(nmService, path).
+		Call(nmSettingsCon+".GetSecrets", 0, "802-11-wireless-security").Store(&secrets); err != nil {
+		return ""
+	}
+	sec, ok := secrets["802-11-wireless-security"]
+	if !ok {
+		return ""
+	}
+	psk, _ := sec["psk"].Value().(string)
+	return psk
 }
 
 // EnableWireless clears a soft rfkill so the radio can be used. Without it a
