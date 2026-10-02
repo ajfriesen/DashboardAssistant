@@ -262,8 +262,11 @@ jobs:
 
       - name: Build Pi image
         run: |
+          # The x86_64-linux bucket explicitly: these runners cross-build the
+          # aarch64 image under binfmt with an x86 builder VM. The
+          # aarch64-linux bucket carries the native-builder wiring instead.
           nix build --print-build-logs --accept-flake-config \
-            .#packages.aarch64-linux.${{ matrix.model }}-image \
+            .#packages.x86_64-linux.${{ matrix.model }}-image \
             --out-link result-${{ matrix.model }}
 
       # disko emits a single uncompressed .raw, unlike the old sd-image builder

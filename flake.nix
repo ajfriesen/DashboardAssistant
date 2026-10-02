@@ -96,21 +96,42 @@
           ++ extraModules;
         };
 
-      # The Pi 5 system, parameterised the same way, so its stable and dev
-      # flavours cannot drift apart. nixpkgs-unstable's lib.nixosSystem for the
-      # same reason the stable flavour uses it (see below).
-      mkRpi5System =
-        extraModules:
-        nixpkgs-unstable.lib.nixosSystem {
+      # The Pi systems, parameterised by extra modules (so the stable and dev
+      # flavours cannot drift apart) and by builderPkgs — the *build machine's*
+      # pkgs, used only to run disko's image-builder VM at native speed; see
+      # dashboardAssistant.diskImage.builderPkgs. Pass the build host's pkgs
+      # when cross-building from x86 (it must come from the same channel as
+      # the system, so the VM's kernel and qemu match the disko module
+      # instance), or null on a native aarch64 builder, which leaves the VM
+      # native and binfmt off. Hardcoding x86_64 here was exactly wrong on an
+      # ARM host: it put a foreign qemu and kernel inside the builder VM.
+      mkRpi4System =
+        builderPkgs: extraModules:
+        lib.nixosSystem {
           system = "aarch64-linux";
-          # pkgsBuild is the *build machine's* pkgs, used only to run disko's
-          # image-builder VM at native speed; see
-          # dashboardAssistant.diskImage.builderPkgs. It has to come from the
-          # same channel as the system (unstable here) so the VM's kernel and
-          # qemu match the disko module instance.
           specialArgs = {
             inherit impermanence version;
-            pkgsBuild = nixpkgs-unstable.legacyPackages.${system};
+            pkgsBuild = builderPkgs;
+          };
+          modules = [
+            disko.nixosModules.disko
+            nixos-hardware.nixosModules.raspberry-pi-4
+            ./modules/hardware/rpi4.nix
+            ./modules/core/default.nix
+          ]
+          ++ localModules
+          ++ extraModules;
+        };
+
+      # nixpkgs-unstable's lib.nixosSystem for the same reason the stable
+      # flavour uses it (see below).
+      mkRpi5System =
+        builderPkgs: extraModules:
+        nixpkgs-unstable.lib.nixosSystem {
+          system = "aarch64-linux";
+          specialArgs = {
+            inherit impermanence version;
+            pkgsBuild = builderPkgs;
           };
           modules = [
             disko.nixosModules.disko
@@ -136,29 +157,16 @@
         dashboard-assistant-x86-disk-dev = mkDiskSystem [ ./modules/dev.nix ];
 
         # Raspberry Pi 4 (aarch64) — SD-card image, for bring-up/testing on a Pi.
-        # Build the flashable image via `.#rpi4-image` (aarch64; this host builds
-        # it via binfmt emulation, fetching most from the binary cache).
-        dashboard-assistant-rpi4 = lib.nixosSystem {
-          system = "aarch64-linux";
-          specialArgs = {
-            inherit impermanence version;
-            pkgsBuild = pkgs;
-          };
-          modules = [
-            disko.nixosModules.disko
-            nixos-hardware.nixosModules.raspberry-pi-4
-            ./modules/hardware/rpi4.nix
-            ./modules/core/default.nix
-          ]
-          ++ localModules;
-        };
+        # Build the flashable image via `.#rpi4-image` (aarch64; an x86 host
+        # builds it via binfmt emulation, fetching most from the binary cache).
+        dashboard-assistant-rpi4 = mkRpi4System pkgs [ ];
 
         # Raspberry Pi 5 (aarch64) — SD-card image. Built from nixpkgs-unstable
         # (its lib.nixosSystem, so it is pinned to unstable regardless of any
         # `--override-input nixpkgs` on the other targets): the Pi 5 kernel and
         # the sd-image pi5 support are newer than the pinned 26.05. Build the
         # flashable image via `.#rpi5-image`.
-        dashboard-assistant-rpi5 = mkRpi5System [ ];
+        dashboard-assistant-rpi5 = mkRpi5System nixpkgs-unstable.legacyPackages.${system} [ ];
 
         # Dev flavour of the Pi 5 image — same base plus modules/dev.nix, which
         # declares the root SSH keys that turn sshd on (see modules/core/debug.nix;
@@ -171,7 +179,9 @@
         # No compression knob any more: disko emits a single uncompressed
         # .raw for every target, the same as the x86 images, and release
         # artifacts are compressed by the publishing workflow instead.
-        dashboard-assistant-rpi5-dev = mkRpi5System [ ./modules/dev.nix ];
+        dashboard-assistant-rpi5-dev = mkRpi5System nixpkgs-unstable.legacyPackages.${system} [
+          ./modules/dev.nix
+        ];
       };
 
       # Raw btrfs+zstd EFI disk image built by disko: `nix build .#disk-image`
@@ -191,27 +201,37 @@
         # source and exposed for standalone builds (`nix build .#sendspin-player`);
         # modules/core/sendspin.nix pulls it in via callPackage.
         sendspin-player = pkgs.callPackage ./packages/sendspin-go/sendspin-go.nix { };
+
+        # Raspberry Pi SD-card images, cross-built *from this x86 host*: the
+        # aarch64 system compiles under binfmt while disko's image-builder VM
+        # runs natively on x86 (see dashboardAssistant.diskImage.builderPkgs).
+        # This bucket is what an x86 workstation and CI build — `nix build
+        # .#rpi5-image` resolves here. The aarch64-linux bucket below carries
+        # the same images wired for a *native* aarch64 builder instead.
+        rpi4-image = self.nixosConfigurations.dashboard-assistant-rpi4.config.system.build.diskoImages;
+        rpi5-image = self.nixosConfigurations.dashboard-assistant-rpi5.config.system.build.diskoImages;
+        rpi5-image-dev =
+          self.nixosConfigurations.dashboard-assistant-rpi5-dev.config.system.build.diskoImages;
       };
 
-      # Raspberry Pi SD-card images, built by disko from the same
-      # modules/hardware/disk-layout.nix the x86 image uses — so all three
-      # targets emit a raw GPT image and are flashed identically:
+      # The same Pi images for a *native* aarch64 builder (an ARM runner or a
+      # developer's ARM machine): builderPkgs stays null, so disko's builder VM
+      # is aarch64 itself and no binfmt is involved. All targets emit a raw GPT
+      # image from the one layout in modules/hardware/disk-layout.nix and are
+      # flashed identically:
       #   sudo dd if=result-rpi5/dashboard-assistant-rpi5.raw of=/dev/sdX ...
       #
-      # These are aarch64 derivations built on an x86 host through binfmt, but
-      # the image-builder VM itself runs natively (see
-      # dashboardAssistant.diskImage.builderPkgs), so only nixos-install's
-      # chroot is emulated.
-      packages.aarch64-linux.rpi4-image =
-        self.nixosConfigurations.dashboard-assistant-rpi4.config.system.build.diskoImages;
-
-      packages.aarch64-linux.rpi5-image =
-        self.nixosConfigurations.dashboard-assistant-rpi5.config.system.build.diskoImages;
-
-      # Same image plus root SSH, for debugging on real hardware without
-      # reflashing between changes: `nix build .#rpi5-image-dev`.
-      packages.aarch64-linux.rpi5-image-dev =
-        self.nixosConfigurations.dashboard-assistant-rpi5-dev.config.system.build.diskoImages;
+      # Kept separate from the x86 bucket above because the right builder VM
+      # depends on the machine evaluating the build — these attrs used to be
+      # hard-wired to an x86_64 builder VM, which inverted the native-speed
+      # trick on exactly the hosts whose system the attr path names.
+      packages.aarch64-linux = {
+        rpi4-image = (mkRpi4System null [ ]).config.system.build.diskoImages;
+        rpi5-image = (mkRpi5System null [ ]).config.system.build.diskoImages;
+        # Same image plus root SSH, for debugging on real hardware without
+        # reflashing between changes: `nix build .#rpi5-image-dev`.
+        rpi5-image-dev = (mkRpi5System null [ ./modules/dev.nix ]).config.system.build.diskoImages;
+      };
 
       # VM tests. `nix flake check`, or `nix build .#checks.x86_64-linux.first-boot`
       # for one.
@@ -262,7 +282,7 @@
           # labgrid/README.md.
           pkgs.usbsdmux
           # Inspect a built sd-image's FAT partition without mounting it or
-          # needing root: `mdir`/`mtype`/`minfo -i "$img@@$((16384*512))"` reads
+          # needing root: `mdir`/`mtype`/`minfo -i "$img@@$((2048*512))"` reads
           # partition 1 straight out of the .img, `partx` finds its offset, and
           # `fsck.vfat` checks the extracted filesystem. That is how the README
           # and example seed file staged onto the firmware partition get verified

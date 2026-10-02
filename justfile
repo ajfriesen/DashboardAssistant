@@ -85,10 +85,12 @@ build-disk-image-unstable:
 # subdirectory. The image-builder VM runs natively (see
 # dashboardAssistant.diskImage.builderPkgs); only nixos-install's chroot is
 # emulated, which needs binfmt plus boot.binfmt.preferStaticEmulators on this
-# workstation.
+# workstation. The unqualified `.#rpi*-image` attrs resolve to this host's
+# packages bucket, which is what picks the right builder VM: cross/binfmt on
+# an x86 workstation, fully native on an aarch64 one.
 [doc('Build the Raspberry Pi 4 SD-card image (aarch64)')]
 build-rpi4:
-  nix build .#packages.aarch64-linux.rpi4-image --accept-flake-config --out-link result-rpi4
+  nix build .#rpi4-image --accept-flake-config --out-link result-rpi4
   @echo
   @echo "Image: $(readlink -f result-rpi4)/dashboard-assistant-rpi4.raw"
   @echo "Flash it (confirm the device first!):"
@@ -100,7 +102,7 @@ build-rpi4:
 # build-rpi4, and the same raw disko artifact.
 [doc('Build the Raspberry Pi 5 SD-card image (aarch64, unstable)')]
 build-rpi5:
-  nix build .#packages.aarch64-linux.rpi5-image --accept-flake-config --out-link result-rpi5
+  nix build .#rpi5-image --accept-flake-config --out-link result-rpi5
   @echo
   @echo "Image: $(readlink -f result-rpi5)/dashboard-assistant-rpi5.raw"
   @echo "Flash it (confirm the device first!):"
@@ -112,7 +114,7 @@ build-rpi5:
 # and reflashing for every change. Never ship it: a release image has no sshd.
 [doc('Build the Raspberry Pi 5 SD-card image with root SSH (dev/debugging)')]
 build-rpi5-dev:
-  nix build .#packages.aarch64-linux.rpi5-image-dev --accept-flake-config --out-link result-rpi5-dev
+  nix build .#rpi5-image-dev --accept-flake-config --out-link result-rpi5-dev
   @echo
   @echo "Image: $(readlink -f result-rpi5-dev)/dashboard-assistant-rpi5.raw"
   @echo "Flash it (confirm the device first!):"
