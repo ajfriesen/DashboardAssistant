@@ -102,7 +102,10 @@ in
           priority = 1;
           name = "ESP";
           start = "1M";
-          end = cfg.espSize;
+          # `size`, not `end`: disko turns size into sgdisk's `+N` relative
+          # end, so the partition really is espSize long. An absolute end here
+          # would silently shave the 1 MiB start offset off the option value.
+          size = cfg.espSize;
           type = "EF00";
           content = {
             type = "filesystem";
