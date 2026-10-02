@@ -79,18 +79,15 @@ file has changed, while a USB stick is applied each time you plug it in.
     computer can read — Windows, macOS and Linux all mount it. Copy
     `dashboard-assistant.yaml` to its root.
 
-    Which partition that is depends on what you flashed — your file manager
-    shows one of these:
+    It is the same partition on every image — x86 and both Raspberry Pis: the
+    EFI system partition, labelled **`ESP`** and mounted as `/boot` on the
+    device. Your file manager shows exactly one readable partition; the other
+    one is btrfs, which Windows and macOS cannot read.
 
-    | Image | Partition |
-    | --- | --- |
-    | x86 disk image | the EFI system partition, mounted as `/boot` on the device |
-    | Raspberry Pi 4 / 5 | the one labelled **`FIRMWARE`** — the same partition Raspberry Pi OS calls `bootfs`. (The other one is btrfs, which Windows and macOS cannot read.) |
-
-    On the Raspberry Pi images that partition is not empty: alongside the boot
-    files it carries a **`README.txt`** and a **`dashboard-assistant.yaml.example`**
-    that say all of this, so a card explains itself without this page. Copy the
-    example, drop the `.example`, and edit it.
+    That partition is not empty: alongside the boot files it carries a
+    **`README.txt`** and a **`dashboard-assistant.yaml.example`** that say all
+    of this, so a card explains itself without this page. Copy the example, drop
+    the `.example`, and edit it.
 
     !!! warning "Name the file exactly `dashboard-assistant.yaml`"
 

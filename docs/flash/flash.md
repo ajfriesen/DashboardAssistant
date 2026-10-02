@@ -27,13 +27,15 @@ zstd-compressed:
 | Board | Image |
 |---|---|
 | x86_64 (mini-PC, tablet, NUC) | `dashboard-assistant-x86_64-<version>.raw.zst` |
-| Raspberry Pi 4 | `dashboard-assistant-rpi4-<version>.img.zst` |
-| Raspberry Pi 5 | `dashboard-assistant-rpi5-<version>.img.zst` |
+| Raspberry Pi 4 | `dashboard-assistant-rpi4-<version>.raw.zst` |
+| Raspberry Pi 5 | `dashboard-assistant-rpi5-<version>.raw.zst` |
 
 The newest release is also always available directly at
-`https://download.dashboardassistant.org/release/<board>/latest.raw.zst`
-(x86_64) or `…/release/<board>/latest.img.zst` (Pi), with `x86_64`, `rpi4` or
-`rpi5` as the board.
+`https://download.dashboardassistant.org/release/<board>/latest.raw.zst`, with
+`x86_64`, `rpi4` or `rpi5` as the board.
+
+All three boards use the same image format and the same flashing steps — there
+is nothing Pi-specific to do any more.
 
 x86_64 targets need to boot **UEFI** — see the
 [x86_64 requirements](../hardware-support/x86.md).
@@ -100,6 +102,30 @@ place) and boot it. On Ethernet the device gets online by itself. For Wi-Fi, or 
 configure a device before it ever boots, write a [seed file](seed.md) — that is
 also how you set up several tablets or do a headless install.
 
-On a freshly flashed Raspberry Pi card, the small `FIRMWARE` partition your file
-manager shows carries a `README.txt` and an example seed file. That is where the
-seed file goes, and the README on the card repeats the instructions.
+On a freshly flashed card or disk, the small `ESP` partition your file manager
+shows carries a `README.txt` and an example seed file. That is where the seed
+file goes, and the README on the card repeats the instructions.
+
+## Raspberry Pi 4: check your bootloader EEPROM
+
+Pi 5 boards need nothing special. A **Raspberry Pi 4** does: these images use a
+GPT partition table, which the Pi 4's bootloader only understands from the
+September 2020 EEPROM onwards. Any board bought since late 2020, or that has
+ever run a recent Raspberry Pi OS, is already fine.
+
+If a Pi 4 shows no sign of life after flashing, check its bootloader from a
+Raspberry Pi OS card:
+
+```bash
+vcgencmd bootloader_version
+```
+
+and update it if the date is older than `2020/09/14`:
+
+```bash
+sudo rpi-eeprom-update -a && sudo reboot
+```
+
+This has to be done from a Raspberry Pi OS card, not from ours: the EEPROM
+recovery file is read by a part of the chip that predates GPT support entirely,
+so a Dashboard Assistant card cannot repair a board that cannot boot it.

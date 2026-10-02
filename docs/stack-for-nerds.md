@@ -30,11 +30,12 @@ Because every version is retained as a generation, you can always go back.
   from any machine on your network — useful if a configuration change
   misbehaves but the system still boots. The touchscreen itself is read-only,
   so nobody at the panel can roll the device back.
-- **Automatic rollback (not yet).** Booting into the previous generation
-  *automatically* after a failed boot relies on boot-counting support. The
-  images use **U-Boot**, which doesn't provide it, and the NixOS support is
-  still in testing — so today recovery is manual. This may change as the targets
-  mature.
+- **Automatic rollback (in progress).** Booting into the previous generation
+  *automatically* after a failed boot relies on boot-counting support, which
+  comes from **systemd-boot**. Every target boots through it now — on the
+  Raspberry Pi, U-Boot stays in the chain only to provide the UEFI environment
+  it runs in — so the mechanism is finally available; switching it on is
+  tracked separately. Until then recovery is manual.
 
 ## Home Assistant integration
 
