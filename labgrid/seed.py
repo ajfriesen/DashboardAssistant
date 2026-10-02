@@ -24,6 +24,7 @@ user-facing path, not a stand-in for it.
 import argparse
 import base64
 import hashlib
+import json
 import os
 import pathlib
 import shlex
@@ -52,15 +53,25 @@ def umount_fat(sh):
     """No-op: /boot stays mounted, and the importer reads it in place."""
 
 
+def yaml_str(value):
+    """Quote a string for YAML. JSON string syntax is a valid YAML
+    double-quoted scalar with the same escape rules, so json.dumps is a correct
+    YAML escaper. Bare f-string interpolation was not: a passphrase containing
+    a double quote broke the file, and one containing a backslash escape was
+    silently *reinterpreted* — the device joined with a different passphrase
+    than the one supplied."""
+    return json.dumps(value)
+
+
 def build_seed(args):
-    lines = [f'ha_url: "{args.ha_url}"']
+    lines = [f"ha_url: {yaml_str(args.ha_url)}"]
     if args.wifi_ssid:
         psk = args.wifi_psk or os.environ.get("DA_WIFI_PSK")
         if not psk:
             sys.exit("--wifi-ssid given but no passphrase: set $DA_WIFI_PSK")
-        lines += ["wifi:", f'  ssid: "{args.wifi_ssid}"', f'  psk: "{psk}"']
+        lines += ["wifi:", f"  ssid: {yaml_str(args.wifi_ssid)}", f"  psk: {yaml_str(psk)}"]
     if args.token:
-        lines.append(f'token: "{args.token}"')
+        lines.append(f"token: {yaml_str(args.token)}")
     return "\n".join(lines) + "\n"
 
 
