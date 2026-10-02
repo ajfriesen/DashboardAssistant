@@ -41,8 +41,13 @@ def pytest_configure(config):
 
     if config.option.lg_log is None:
         config.option.lg_log = bench.LOG_DIR
-
-    shutil.rmtree(config.option.lg_log, ignore_errors=True)
+        # Clear only the directory this file owns. Never rmtree a user-supplied
+        # --lg-log: labgrid declares the flag with nargs='?' and const='.', so
+        # the bare form points it at the *current directory* — deleting that
+        # would silently take the repo checkout with it. The cost of skipping
+        # the wipe for an explicit log dir is stale console logs from earlier
+        # runs; whoever picks their own directory manages its lifetime.
+        shutil.rmtree(bench.LOG_DIR, ignore_errors=True)
 
     # On real hardware the kiosk session actually runs, and greetd/sway/Chromium
     # crash-loop with no display attached — which makes a strict "nothing failed"
