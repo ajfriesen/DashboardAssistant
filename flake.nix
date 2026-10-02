@@ -234,9 +234,65 @@
       };
 
       # VM tests. `nix flake check`, or `nix build .#checks.x86_64-linux.first-boot`
-      # for one.
+      # for one. Adding a check here means adding its name to the matrix in
+      # .github/workflows/vm-tests.yml too, or it never runs on a PR.
       checks.${system} = {
         first-boot = import ./tests/first-boot.nix { inherit pkgs version; };
+
+        # Flash-wear flags on the browser command line. This is an eval-time
+        # check rather than an assertion in first-boot.nix because that test
+        # force-disables greetd (no GPU — Chromium crash-loops and buries the
+        # signals the test is about), so no VM test can ever see the Chromium
+        # command line. The flags would therefore be free to disappear, and the
+        # only symptom would be customers' SD cards wearing out months later.
+        kiosk-flash-flags =
+          pkgs.runCommand "kiosk-flash-flags"
+            {
+              launcher =
+                self.nixosConfigurations.dashboard-assistant-x86-disk.config.dashboardAssistant.kiosk.launcher;
+            }
+            ''
+              set -euo pipefail
+              # fail= accumulator so every sub-assertion reports before exiting,
+              # matching .github/workflows/cache-rpi.yml.
+              fail=0
+              grep -q 'XDG_CACHE_HOME=.*kiosk-cache' "$launcher" || {
+                echo "FAIL: the kiosk browser cache is back on flash — Chromium's HTTP and V8 code caches will write to the SD card continuously." >&2
+                fail=1
+              }
+              grep -q -- '--disk-cache-size=' "$launcher" || {
+                echo "FAIL: no --disk-cache-size — Chromium sizes its cache from free space, which on a tmpfs is most of RAM, so systemd-oomd will kill the kiosk session in a loop." >&2
+                fail=1
+              }
+              [ "$fail" = 0 ] || exit 1
+              touch "$out"
+            '';
+
+        # The screenshot handoff path has a writer in Nix (the in-session grim
+        # agent) and a reader in Go (the daemon), with nothing coupling them.
+        # If they drift, the HA image entity silently serves nothing — and on
+        # the old path it silently wore the card instead.
+        screenshot-path-agreement =
+          pkgs.runCommand "screenshot-path-agreement"
+            {
+              kiosk = ./modules/core/kiosk.nix;
+              daemonConfig = ./daemon/config.go;
+            }
+            ''
+              set -euo pipefail
+              fail=0
+              want=/run/dashboard-assistant/screenshot.jpg
+              grep -q "\"$want\"" "$kiosk" || {
+                echo "FAIL: the grim agent no longer writes $want — the Home Assistant screenshot entity will time out." >&2
+                fail=1
+              }
+              grep -q 'runtimeDir + "/screenshot.jpg"' "$daemonConfig" || {
+                echo "FAIL: the daemon no longer reads the screenshot from the tmpfs runtime dir — frames are back on flash, at a rate a Home Assistant automation controls." >&2
+                fail=1
+              }
+              [ "$fail" = 0 ] || exit 1
+              touch "$out"
+            '';
       };
 
       devShells.${system}.default = pkgs.mkShell {

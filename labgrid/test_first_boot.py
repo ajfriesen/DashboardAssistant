@@ -28,6 +28,16 @@ import pytest
 BOOT_MNT = "/boot"
 
 
+def kiosk_uid(shell):
+    """The kiosk user's uid, for the paths under its logind runtime dir.
+
+    Not hardcoded: the user is declared without an explicit uid
+    (modules/core/default.nix), so NixOS allocates it and the number is not
+    part of any contract.
+    """
+    return shell.run_check("id -u kiosk")[0]
+
+
 def mount_fat(shell):
     """Return the mounted FAT partition.
 
@@ -295,6 +305,112 @@ def test_root_has_subvolumes(shell):
     assert "@nix" in subvols, subvols
 
 
+def test_journal_is_in_ram(shell):
+    """The journal lives on tmpfs, not on the card.
+
+    Hardware matters here in a way it does not for most of this file: the VM
+    counterpart asserts the same thing, but a VM has no flash to wear and no
+    real card to lose. On a board this is the single biggest write source there
+    is — 2.87 GB in one boot, once (modules/core/sendspin.nix) — so the
+    assertion is cheap and the regression is expensive and invisible.
+    """
+    assert shell.run_check("findmnt -no FSTYPE -T /run/log/journal") == ["tmpfs"]
+    shell.run_check("grep -qx 'Storage=volatile' /etc/systemd/journald.conf")
+
+    # journald itself must not be writing to flash. The sync unit archives
+    # sealed files there, so the directory may well exist by now — what must
+    # never exist is a LIVE journal on the card, which is what Storage=persistent
+    # would give back.
+    mid = shell.run_check("cat /etc/machine-id")[0]
+    shell.run_check(f"test ! -e /var/log/journal/{mid}/system.journal")
+
+    # Both halves of the mechanism have to be armed, not merely installed.
+    shell.run_check("systemctl is-active dashboard-assistant-journal-sync.timer")
+    shell.run_check(
+        "systemctl is-active dashboard-assistant-journal-sync-shutdown.service"
+    )
+
+
+def test_nix_builds_outside_the_tmpfs(shell):
+    """A substituter miss during an on-device update must not build in RAM.
+
+    This is the one failure in the flash-wear work that bricks a board instead
+    of merely wearing it: /tmp on tmpfs, plus a 2 GB board, plus one
+    unsubstituted derivation equals ENOSPC in the middle of nixos-rebuild
+    switch, on something screwed to a wall. No VM test can see it — the VM has
+    as much RAM as we hand it and no binary cache to miss.
+    """
+    assert shell.run_check("findmnt -no FSTYPE /tmp") == ["tmpfs"]
+    assert shell.run_check("nix config show build-dir") == ["/var/tmp"]
+    # /var/tmp has to be on real storage, or the setting bought nothing.
+    assert shell.run_check("findmnt -no FSTYPE -T /var/tmp") == ["btrfs"]
+
+
+@pytest.mark.needs_display
+def test_browser_cache_is_in_ram(shell):
+    """Chromium's caches are on tmpfs, and nothing cache-shaped is left on flash.
+
+    Hardware only, and not incidentally: tests/first-boot.nix force-disables
+    greetd (without a GPU Chromium crash-loops and buries the signals that test
+    is about), so no VM test ever starts a browser. checks.kiosk-flash-flags
+    asserts the flags are *passed*; only a real session proves they took effect.
+    """
+    cache = f"/run/user/{kiosk_uid(shell)}/kiosk-cache"
+    assert shell.run_check(f"findmnt -no FSTYPE -T {cache}") == ["tmpfs"]
+    dirs = shell.run_check(f"find {cache} -maxdepth 4 -type d -name '*Cache*' || true")
+    assert any("Cache" in d for d in dirs), dirs
+
+    # The old on-flash location must not be filling up behind our back. A few
+    # stray KiB from an earlier build are fine; a real cache is not.
+    out = shell.run_check("du -sk /home/kiosk/.cache/chromium 2>/dev/null || echo 0")
+    assert int(out[0].split()[0]) < 1024, out
+
+
+@pytest.mark.needs_display
+def test_browser_cache_stays_within_its_cap(shell):
+    """--disk-cache-size has to actually bound the tmpfs footprint.
+
+    Those pages are only reclaimable because zram exists (memory.nix), and shmem
+    is charged to the cgroup that faults it in — so an uncapped cache in /tmp
+    becomes the memory pressure systemd-oomd then kills the kiosk session for,
+    in a loop, with the files surviving the kill. Only reproducible with a real
+    session rendering a real dashboard.
+    """
+    cache = f"/run/user/{kiosk_uid(shell)}/kiosk-cache"
+    out = shell.run_check(f"du -sm {cache} | cut -f1")
+    assert int(out[0]) < 96, f"browser cache is {out[0]} MiB, cap is 64 MiB"
+
+
+@pytest.mark.needs_display
+def test_screenshot_lands_on_tmpfs(shell):
+    """The grim handoff frame goes to /run, never to the state dir on flash.
+
+    Needs a Wayland session by construction: the writer is an in-session agent
+    running as `kiosk` and the reader is the daemon running as
+    dashboard-assistant, in two languages and two users. The VM test can assert
+    the directory exists; only hardware can assert the handoff happens.
+
+    Poked through the FIFO directly rather than over the HTTP API because the
+    HA screenshot endpoint is authenticated and the admin listener has no
+    screenshot route — this is the same poke the daemon makes.
+    """
+    shell.run("rm -f /run/dashboard-assistant/screenshot.jpg")
+    shell.run_check(
+        "printf 'shot\n' > /var/lib/dashboard-assistant/screenshot.fifo"
+    )
+    shell.run_check(
+        "sh -c 'for i in $(seq 50); do "
+        "test -s /run/dashboard-assistant/screenshot.jpg && exit 0; "
+        "sleep 0.2; done; exit 1'"
+    )
+    assert shell.run_check("findmnt -no FSTYPE -T /run/dashboard-assistant") == [
+        "tmpfs"
+    ]
+    # ...and the old path stays empty. A frame here means the Nix writer and the
+    # Go reader drifted apart and the card is taking a JPEG per HA poll again.
+    shell.run_check("test ! -e /var/lib/dashboard-assistant/screenshot.jpg")
+
+
 def test_seed_file_from_flashed_partition(shell):
     """Provisioning the way docs/flash/seed.md tells a user to do it.
 
@@ -487,3 +603,47 @@ def test_seed_file_reimported_after_edit(shell, _bench):
         fat = mount_fat(shell)
         shell.run(f"rm -f {fat}/dashboard-assistant.yaml")
         umount_fat(shell)
+
+
+def test_journal_archive_survives_a_reboot(shell, _bench):
+    """The journal is in RAM, and the previous boot is still readable afterwards.
+
+    This is the half of modules/core/flash-wear.nix with no upstream NixOS
+    module behind it, so it is the half that has to be exercised rather than
+    declared. The payoff being asserted is specifically that a *plain*
+    `journalctl -b -1` finds the archive — no -D, no --merge — because "send me
+    journalctl -b -1" is the entire remote-support story for a misbehaving
+    device, and Storage=volatile is exactly the setting that would quietly end
+    it.
+
+    Costs a real boot, so it goes after test_seed_file_reimported_after_edit
+    and invalidates the console transcript for anything following it.
+    """
+    mid = shell.run_check("cat /etc/machine-id")[0]
+    shell.run_check("systemctl start dashboard-assistant-journal-sync.service")
+
+    # Sealed files archived...
+    shell.run_check(f"ls /var/log/journal/{mid}/*@*.journal")
+    # ...the live one not (copying an mmap-written journal yields a torn file
+    # journalctl reports as corrupt, so the `@` in the glob is load-bearing)...
+    shell.run_check(f"test ! -e /var/log/journal/{mid}/system.journal")
+    # ...and no half-written temp file left behind, which is what the
+    # copy-to-temp-then-rename in the sync script buys.
+    leftovers = shell.run_check(
+        f"find /var/log/journal/{mid} -maxdepth 1 -name '.*.tmp'"
+    )
+    assert leftovers == [], leftovers
+
+    # On btrfs the archive directory must be NOCOW, or the journal becomes the
+    # worst case the filesystem has: many small appends, each a fresh extent.
+    # This is the trick that finally works -- journald never creates anything
+    # under /var/log/journal when Storage=volatile, so the sync script owns the
+    # directory and can set +C before the first file lands. See the three
+    # reverted attempts named in flash-wear.nix's header.
+    attrs = shell.run_check(f"lsattr -d /var/log/journal/{mid}")
+    assert "C" in attrs[0].split()[0], attrs
+
+    _bench.reboot()
+
+    out = shell.run_check("journalctl -b -1 --no-pager | wc -l")
+    assert int(out[0]) > 0, "previous boot's journal was lost across a reboot"

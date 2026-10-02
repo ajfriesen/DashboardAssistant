@@ -89,6 +89,23 @@ in
       ProtectHome = true;
       NoNewPrivileges = true;
       ReadWritePaths = [ "/var/lib/dashboard-assistant" ];
+
+      # /run/dashboard-assistant: tmpfs scratch for handoff buffers that are read
+      # once and have no value across a reboot — today just the screenshot frame
+      # the in-session grim agent drops for the daemon to pick up. Deliberately
+      # not in the state dir: the capture rate is set by a Home Assistant
+      # automation, not by us, so on flash it is unbounded wear (one grab per 30s
+      # is ~860 MB/day) for a file nothing persists. Path must match
+      # daemon/config.go's runtimeDir and the agent in kiosk.nix.
+      #
+      # 0775 because the writer is the grim agent running as `kiosk`, which is in
+      # the dashboard-assistant group (default.nix). ProtectSystem = "strict"
+      # needs no exception — RuntimeDirectory is made writable automatically.
+      # Preserve so a daemon restart cannot delete the directory out from under a
+      # capture already in flight.
+      RuntimeDirectory = "dashboard-assistant";
+      RuntimeDirectoryMode = "0775";
+      RuntimeDirectoryPreserve = "yes";
     };
 
     environment.DASHBOARD_ASSISTANT_ADDR = ":8080";

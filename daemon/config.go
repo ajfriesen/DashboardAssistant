@@ -19,6 +19,12 @@ import (
 // StateDirectory); handy for tests and relocating state.
 var stateDir = envOr("DASHBOARD_ASSISTANT_STATE_DIR", "/var/lib/dashboard-assistant")
 
+// Runtime directory, on tmpfs — systemd's RuntimeDirectory= for the daemon unit
+// (modules/core/daemon.nix). This is for handoff buffers that are read once and
+// have no value across a reboot; putting them in stateDir would wear the flash
+// for nothing. Overridable like stateDir, for tests and direct runs.
+var runtimeDir = envOr("DASHBOARD_ASSISTANT_RUNTIME_DIR", "/run/dashboard-assistant")
+
 var (
 	runtimeEnv   = stateDir + "/runtime.env"
 	markerFile   = stateDir + "/provisioned"
@@ -45,11 +51,17 @@ var (
 	rotationFifo   = stateDir + "/rotation.fifo"   // daemon writes "rotate <deg>"; in-session agent applies a Sway output transform
 	rotationFile   = stateDir + "/rotation"        // persisted display rotation (degrees), restored by the kiosk on launch
 	screenshotFifo = stateDir + "/screenshot.fifo" // daemon pokes it; the in-session grim agent grabs the whole screen
-	screenshotFile = stateDir + "/screenshot.jpg"  // latest whole-screen JPEG written by the grim agent, read back by the daemon
-	dmiFile        = stateDir + "/dmi.env"         // hardware serial, written by the daemon's root ExecStartPre (DMI is root-only)
-	sendspinFile   = stateDir + "/sendspin"        // persisted on/off for the Sendspin audio player, reapplied to its unit at daemon start
-	tlsCertFile    = stateDir + "/tls-cert.pem"    // self-signed cert for the LAN HA API; the integration pins its fingerprint
-	tlsKeyFile     = stateDir + "/tls-key.pem"     // its private key (0600 — nothing else on the device reads this)
+	// Latest whole-screen JPEG written by the grim agent, read back by the daemon.
+	// On tmpfs, NOT in stateDir: the daemon reads each frame once into memory (see
+	// ha.go) and never needs it again, while the capture rate is set by a Home
+	// Assistant automation rather than by us — one grab per 30s is ~860 MB/day, so
+	// on flash this is unbounded wear for a file nothing persists. Must match the
+	// path the in-session agent writes (modules/core/kiosk.nix).
+	screenshotFile = runtimeDir + "/screenshot.jpg"
+	dmiFile        = stateDir + "/dmi.env"      // hardware serial, written by the daemon's root ExecStartPre (DMI is root-only)
+	sendspinFile   = stateDir + "/sendspin"     // persisted on/off for the Sendspin audio player, reapplied to its unit at daemon start
+	tlsCertFile    = stateDir + "/tls-cert.pem" // self-signed cert for the LAN HA API; the integration pins its fingerprint
+	tlsKeyFile     = stateDir + "/tls-key.pem"  // its private key (0600 — nothing else on the device reads this)
 )
 
 const sessionUnit = "greetd.service" // the Sway kiosk session; restart relaunches it

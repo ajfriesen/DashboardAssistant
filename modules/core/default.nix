@@ -14,6 +14,7 @@
     ./debug.nix
     ./cleanup.nix
     ./memory.nix
+    ./flash-wear.nix
     ./binary-cache.nix
     ./btrfs-maintenance.nix
 

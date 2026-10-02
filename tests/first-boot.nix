@@ -58,6 +58,73 @@ pkgs.testers.runNixOSTest {
     machine.succeed("test \"$(stat -c %U /var/lib/dashboard-assistant)\" = dashboard-assistant")
     machine.succeed("test -p /var/lib/dashboard-assistant/display.fifo")
 
+    # ------------------------------------------------------------------
+    # Flash endurance (modules/core/flash-wear.nix). The journal is the
+    # biggest writer on this appliance -- 2.87 GB to an SD card in one boot,
+    # once -- so it lives in RAM and is copied to flash on a timer instead.
+    # ------------------------------------------------------------------
+
+    # The journal must be in RAM. /run is a tmpfs, so Storage=volatile is the
+    # whole mechanism; if this reverts to persistent, every logged line goes
+    # back to hitting the card and nothing else here would notice.
+    machine.succeed("grep -qx 'Storage=volatile' /etc/systemd/journald.conf")
+    assert machine.succeed("findmnt -no FSTYPE -T /run/log/journal").strip() == "tmpfs"
+
+    # The global burst, which is the knob that would actually have caught the
+    # sendspin flood (the stock 10000/30s did not).
+    machine.succeed("grep -qx 'RateLimitBurst=2000' /etc/systemd/journald.conf")
+    machine.succeed("grep -qx 'RuntimeMaxUse=64M' /etc/systemd/journald.conf")
+
+    # ...and journald must not be persisting on its own. Nothing has run the
+    # sync yet, so the persistent tree must not exist at all: if journald were
+    # still writing there, Storage=volatile would be a lie and the timer below
+    # would merely be duplicating writes we are trying to eliminate.
+    machine.fail("test -e /var/log/journal")
+
+    # /tmp must be the tmpfs, not a directory on flash that is also never
+    # cleaned. This doubles as proof that we went through boot.tmp.useTmpfs
+    # (which uses systemd.mounts) rather than declaring fileSystems ourselves:
+    # qemu-vm.nix mkVMOverrides fileSystems wholesale, so the latter would
+    # evaluate perfectly and simply not exist here.
+    assert machine.succeed("findmnt -no FSTYPE /tmp").strip() == "tmpfs"
+
+    # ...and Nix must not build inside it. One substituter miss during an
+    # on-device update would otherwise try to build in RAM on a 2 GB Pi and die
+    # with ENOSPC mid-switch — the one way this work could brick a device
+    # rather than just wear it.
+    machine.succeed("grep -qx 'build-dir = /var/tmp' /etc/nix/nix.conf")
+    assert machine.succeed("nix config show build-dir").strip() == "/var/tmp"
+
+    # Reclaim tuning for a box whose only swap is compressed RAM
+    # (modules/core/memory.nix). Not a flash saving in itself, but it is what
+    # makes the tmpfs above reclaimable rather than RAM pinned forever.
+    assert machine.succeed("sysctl -n vm.swappiness").strip() == "180"
+    assert machine.succeed("sysctl -n vm.page-cluster").strip() == "0"
+
+    # The screenshot handoff buffer's directory must be the daemon's tmpfs
+    # RuntimeDirectory, group-writable so the in-session grim agent (user
+    # `kiosk`) can drop a frame into it. The grim write itself needs a Wayland
+    # session, which this node has none of — labgrid/test_first_boot.py covers
+    # that end. What a VM can prove is the half that silently rots: the
+    # directory exists, is on tmpfs, and the daemon can be reached through it.
+    assert machine.succeed("findmnt -no FSTYPE -T /run/dashboard-assistant").strip() == "tmpfs"
+    assert (
+        machine.succeed("stat -c %U:%G:%a /run/dashboard-assistant").strip()
+        == "dashboard-assistant:dashboard-assistant:775"
+    )
+    # ...and nothing writes frames to the state dir any more. A leftover here
+    # would mean the Nix and Go halves of the path disagreed and the HA image
+    # entity was quietly serving a stale frame from flash.
+    machine.fail("test -e /var/lib/dashboard-assistant/screenshot.jpg")
+
+    # The sync is timer-driven, so the timer has to be armed -- an ExecStart
+    # nothing ever triggers would silently archive nothing until the device
+    # was cleanly shut down.
+    machine.succeed("systemctl is-active dashboard-assistant-journal-sync.timer")
+    # The shutdown flush is a RemainAfterExit unit whose only job is its
+    # ExecStop, so "active" is its working state, not a leftover.
+    machine.succeed("systemctl is-active dashboard-assistant-journal-sync-shutdown.service")
+
     # mDNS advertisement (how Home Assistant discovers the device).
     machine.wait_for_unit("avahi-daemon.service")
     machine.succeed(
@@ -191,5 +258,36 @@ pkgs.testers.runNixOSTest {
     reboot()
     machine.fail("journalctl -b -u dashboard-assistant-boot-import | grep -q importing")
     machine.succeed("grep -q 198.51.100.9 /var/lib/dashboard-assistant/runtime.env")
+
+    # ------------------------------------------------------------------
+    # The journal survives a reboot despite living in RAM. This is the half of
+    # flash-wear.nix with no upstream module behind it, so it is the half that
+    # has to be exercised rather than merely declared. Costs a real boot, so
+    # it goes last.
+    # ------------------------------------------------------------------
+
+    mid = machine.succeed("cat /etc/machine-id").strip()
+    machine.succeed("systemctl start dashboard-assistant-journal-sync.service")
+
+    # Sealed files got archived...
+    machine.succeed(f"ls /var/log/journal/{mid}/*@*.journal")
+    # ...and the live one did NOT. Copying a journal journald is still
+    # mmap-writing yields a torn file that journalctl reports as corrupt, so
+    # the `@` in the glob is load-bearing, not cosmetic.
+    machine.fail(f"test -e /var/log/journal/{mid}/system.journal")
+    # Nothing may be left behind half-written: the archive is built with
+    # copy-to-temp + rename precisely so a power cut cannot leave one of these.
+    machine.fail(f"ls /var/log/journal/{mid}/.*.tmp")
+    # The RAM copy is dropped once it is durable, which is what keeps the
+    # tmpfs from growing and the next sync from re-copying.
+    machine.fail(f"ls /run/log/journal/{mid}/*@*.journal")
+
+    reboot()
+
+    # The payoff, and the reason the archive goes to the standard persistent
+    # path rather than somewhere of our own: a plain `journalctl -b -1` reads
+    # it, with no -D and no --merge. If this breaks, the support story for a
+    # misbehaving device ("send me the previous boot") breaks with it.
+    assert int(machine.succeed("journalctl -b -1 --no-pager | wc -l").strip()) > 0
   '';
 }

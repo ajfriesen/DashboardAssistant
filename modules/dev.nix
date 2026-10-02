@@ -43,6 +43,23 @@
     mode = "0444";
   };
 
+  # Put the journal back to full fidelity on dev images. modules/core/flash-wear.nix
+  # sets this to "info" to spare the SD card on release devices, but the whole
+  # point of a bench board is to see everything — and a labgrid run that cannot
+  # show a debug line is a run that cannot explain the failure it just caught.
+  #
+  # Expressed as an option rather than by poking services.journald directly,
+  # because which journald option even exists depends on the channel (the Pi 5
+  # is on nixpkgs-unstable, where the old names were removed) and rpi5-dev is the
+  # image the bench actually flashes. flash-wear.nix owns that split; this just
+  # states the intent.
+  #
+  # Storage=volatile is deliberately NOT overridden here. The hourly sync and the
+  # shutdown flush are exactly the mechanism tests/first-boot.nix and
+  # labgrid/test_first_boot.py assert, so a dev image has to run the same one the
+  # shipped image does.
+  dashboardAssistant.flashWear.journalMaxLevelStore = "debug";
+
   # A plain, escape-free shell prompt, because the labgrid harness has to find it
   # with a regex. NixOS' default PS1 wraps the prompt in a colour code and an
   # xterm title escape, and readline brackets it with paste markers, so what
