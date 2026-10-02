@@ -27,7 +27,8 @@ let
   stateDir = "/var/lib/dashboard-assistant";
 
   # sha256 of the last seed file the boot importer applied successfully. This is
-  # what makes re-provisioning work: see bootImport.
+  # what makes re-provisioning work: see bootImport. Written here, consumed via
+  # the read-only option below — see its description for who else depends on it.
   seedHashFile = "${stateDir}/seed-hash";
 
   seedFileName = "dashboard-assistant.yaml";
@@ -210,6 +211,21 @@ in
       '';
     };
 
+    seedHashFile = lib.mkOption {
+      type = lib.types.str;
+      default = seedHashFile;
+      readOnly = true;
+      internal = true;
+      description = ''
+        Where the boot importer records the hash of the last seed file it
+        applied. Single source of truth for that path: the importer writes it,
+        and modules/core/daemon.nix passes it to the Go daemon (which deletes
+        it on factory reset, so a reset device re-imports the card it sits on)
+        via `DASHBOARD_ASSISTANT_SEED_HASH_FILE`. The bench helper
+        labgrid/seed.py deletes the same path to re-arm imports — update it if
+        this ever moves; nothing generates that file from here.
+      '';
+    };
   };
 
   config = lib.mkMerge [

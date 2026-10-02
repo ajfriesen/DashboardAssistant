@@ -28,23 +28,28 @@ var (
 	// Reverse channel: in-session agents write the *actual* power state here and
 	// the daemon publishes it, so HA stays in sync with out-of-band changes.
 	displayStateFifo = stateDir + "/display-state.fifo"
-	apiTokenFile     = stateDir + "/api-token"       // device HA API token, generated on first boot / written by config import
-	pairedMarker     = stateDir + "/paired"          // set the first time Home Assistant actually uses the device token; closes the pairing window
-	seedHashFile     = stateDir + "/seed-hash"       // sha256 of the last seed file the boot importer applied; re-import is gated on this changing (modules/core/configimport.nix)
-	urlsFile         = stateDir + "/urls.json"       // pushable page list (name+url), web UI / config import
-	navFifo          = stateDir + "/nav.fifo"        // daemon writes a URL; in-session agent navigates Chromium there
-	zoomFifo         = stateDir + "/zoom.fifo"       // daemon writes "zoom <pct>"; in-session agent applies CSS zoom over CDP
-	zoomFile         = stateDir + "/zoom"            // persisted browser zoom percent, restored by the kiosk on launch
-	themeFifo        = stateDir + "/theme.fifo"      // daemon writes "theme <dark|light>"; in-session agent flips HA's theme over CDP
-	themeFile        = stateDir + "/theme"           // persisted dark/light choice, restored by the kiosk on launch
-	rotationFifo     = stateDir + "/rotation.fifo"   // daemon writes "rotate <deg>"; in-session agent applies a Sway output transform
-	rotationFile     = stateDir + "/rotation"        // persisted display rotation (degrees), restored by the kiosk on launch
-	screenshotFifo   = stateDir + "/screenshot.fifo" // daemon pokes it; the in-session grim agent grabs the whole screen
-	screenshotFile   = stateDir + "/screenshot.jpg"  // latest whole-screen JPEG written by the grim agent, read back by the daemon
-	dmiFile          = stateDir + "/dmi.env"         // hardware serial, written by the daemon's root ExecStartPre (DMI is root-only)
-	sendspinFile     = stateDir + "/sendspin"        // persisted on/off for the Sendspin audio player, reapplied to its unit at daemon start
-	tlsCertFile      = stateDir + "/tls-cert.pem"    // self-signed cert for the LAN HA API; the integration pins its fingerprint
-	tlsKeyFile       = stateDir + "/tls-key.pem"     // its private key (0600 — nothing else on the device reads this)
+	apiTokenFile     = stateDir + "/api-token" // device HA API token, generated on first boot / written by config import
+	pairedMarker     = stateDir + "/paired"    // set the first time Home Assistant actually uses the device token; closes the pairing window
+	// sha256 of the last seed file the boot importer applied; re-import is gated
+	// on this changing. The path is owned by modules/core/configimport.nix and
+	// injected via daemon.nix, so the file the importer writes and the file
+	// factory reset deletes cannot drift apart; the fallback only covers tests
+	// and direct runs.
+	seedHashFile   = envOr("DASHBOARD_ASSISTANT_SEED_HASH_FILE", stateDir+"/seed-hash")
+	urlsFile       = stateDir + "/urls.json"       // pushable page list (name+url), web UI / config import
+	navFifo        = stateDir + "/nav.fifo"        // daemon writes a URL; in-session agent navigates Chromium there
+	zoomFifo       = stateDir + "/zoom.fifo"       // daemon writes "zoom <pct>"; in-session agent applies CSS zoom over CDP
+	zoomFile       = stateDir + "/zoom"            // persisted browser zoom percent, restored by the kiosk on launch
+	themeFifo      = stateDir + "/theme.fifo"      // daemon writes "theme <dark|light>"; in-session agent flips HA's theme over CDP
+	themeFile      = stateDir + "/theme"           // persisted dark/light choice, restored by the kiosk on launch
+	rotationFifo   = stateDir + "/rotation.fifo"   // daemon writes "rotate <deg>"; in-session agent applies a Sway output transform
+	rotationFile   = stateDir + "/rotation"        // persisted display rotation (degrees), restored by the kiosk on launch
+	screenshotFifo = stateDir + "/screenshot.fifo" // daemon pokes it; the in-session grim agent grabs the whole screen
+	screenshotFile = stateDir + "/screenshot.jpg"  // latest whole-screen JPEG written by the grim agent, read back by the daemon
+	dmiFile        = stateDir + "/dmi.env"         // hardware serial, written by the daemon's root ExecStartPre (DMI is root-only)
+	sendspinFile   = stateDir + "/sendspin"        // persisted on/off for the Sendspin audio player, reapplied to its unit at daemon start
+	tlsCertFile    = stateDir + "/tls-cert.pem"    // self-signed cert for the LAN HA API; the integration pins its fingerprint
+	tlsKeyFile     = stateDir + "/tls-key.pem"     // its private key (0600 — nothing else on the device reads this)
 )
 
 const sessionUnit = "greetd.service" // the Sway kiosk session; restart relaunches it

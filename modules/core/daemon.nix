@@ -91,8 +91,13 @@ in
       ReadWritePaths = [ "/var/lib/dashboard-assistant" ];
     };
 
-
     environment.DASHBOARD_ASSISTANT_ADDR = ":8080";
+    # The one path both sides of the Nix/Go boundary must agree on: the boot
+    # importer (configimport.nix) records the applied seed file's hash there,
+    # and the daemon deletes it on factory reset so a reset device re-imports
+    # the card it is sitting on. Passed explicitly so a rename in
+    # configimport.nix cannot silently leave the daemon deleting a stale path.
+    environment.DASHBOARD_ASSISTANT_SEED_HASH_FILE = config.dashboard.configImport.seedHashFile;
   };
 
   # Roll back to generation %i and reboot. Instantiated per generation by the
