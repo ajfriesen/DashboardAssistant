@@ -110,11 +110,13 @@ class DashboardAssistantStrategy(Strategy):
             # mux's block device.
             self.mux.set_mode("host")
             self.target.activate(self.storage)
-            # Whole-image dd, partition table included. The dev image is
-            # uncompressed on purpose (flake.nix forces sdImage.compressImage off
-            # for rpi5-image-dev) — write_image does not decompress, it would
-            # happily dd the .zst onto the card. USBStorageDriver waits for the
-            # medium to enumerate after the mode switch, so no sleep here.
+            # Whole-image dd, partition table included. disko emits a single
+            # uncompressed .raw, which is what write_image needs — it does not
+            # decompress, so it would happily dd a .zst onto the card verbatim.
+            # (The sd-image builder used to produce .img.zst and the dev image
+            # had to force that off; there is no such knob, or need, now.)
+            # USBStorageDriver waits for the medium to enumerate after the mode
+            # switch, so no sleep here.
             self.storage.write_image(self.image)
             self.target.deactivate(self.storage)
             # ...and hand the card back to the board.
@@ -123,7 +125,7 @@ class DashboardAssistantStrategy(Strategy):
         elif status == Status.booted:
             self.transition(Status.flashed)
             # Open the console *before* energising, so the whole boot is there to
-            # be read: GPU firmware, U-Boot, extlinux, kernel.
+            # be read: GPU firmware, U-Boot, systemd-boot, kernel.
             self.target.activate(self.console)
             self.target.activate(self.power)
             self.power.on()

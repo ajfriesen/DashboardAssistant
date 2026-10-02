@@ -3,9 +3,10 @@
 The hardware counterpart of tests/first-boot.nix. The assertions that a VM can
 make are deliberately the same ones, and for the same reasons — those comments are
 worth reading before changing anything here. What this file adds is everything a
-VM cannot reach: the Pi's boot chain (GPU firmware -> U-Boot -> extlinux ->
-Linux), first-boot growfs on a real SD card, the FAT firmware partition, and
-whether the board is drawing current at all.
+VM cannot reach: the Pi's boot chain (GPU firmware -> U-Boot's UEFI loader ->
+systemd-boot -> Linux), first-boot growfs on a real SD card, the ESP that
+carries both the Raspberry Pi firmware and the bootloader, and whether the board
+is drawing current at all.
 
     just hw-test                        flash, boot, assert
     pytest labgrid/ --lg-initial-state shell    skip the flash, board already up
@@ -18,28 +19,28 @@ import os
 import pytest
 
 
-#: Where the sd-image declares the FAT partition, mounted or not.
-FIRMWARE_MNT = "/boot/firmware"
+#: The FAT partition a user sees when they put the card in a laptop, and the
+#: only place they can drop a seed file before first boot. It is now the EFI
+#: system partition, mounted at /boot on every target — under the old sd-image
+#: layout it was a separate, never-mounted partition at /boot/firmware, which is
+#: why these helpers used to have to mount it by hand (and mkdir the mount point
+#: first, because nothing created it).
+BOOT_MNT = "/boot"
 
 
 def mount_fat(shell):
-    """Mount the flashed card's FAT partition read-write and return its path.
+    """Return the mounted FAT partition.
 
-    This is the partition a user sees when they put the card in a laptop, so it
-    is the only place they can drop a seed file before first boot.
-
-    Both steps are needed. nixpkgs' sd-image declares the filesystem
-    `nofail,noauto`, so it is never mounted, and nothing creates the mount point
-    either — `mount /boot/firmware` on an untouched device fails with "mount
-    point does not exist".
+    Kept as a function so the seed-file tests below read the same as they did
+    when this had real work to do. /boot is a normal fstab entry now, so the
+    only thing worth doing is failing loudly if it somehow is not mounted.
     """
-    shell.run_check(f"mkdir -p {FIRMWARE_MNT}")
-    shell.run_check(f"mountpoint -q {FIRMWARE_MNT} || mount {FIRMWARE_MNT}")
-    return FIRMWARE_MNT
+    shell.run_check(f"mountpoint -q {BOOT_MNT}")
+    return BOOT_MNT
 
 
 def umount_fat(shell):
-    shell.run(f"umount {FIRMWARE_MNT}")
+    """No-op: /boot stays mounted. Retained so callers need no restructuring."""
 
 
 # --------------------------------------------------------------------------- #
@@ -50,18 +51,66 @@ def umount_fat(shell):
 def test_uboot_ran(console_log):
     """The GPU firmware must chainload U-Boot.
 
-    The Pi's firmware cannot read extlinux.conf, so rpi5.nix sets
-    hardware.raspberry-pi.firmware.uboot.enable to stage u-boot.bin on the FAT
-    partition and point config.txt's kernel= at it. Without that there is no
-    kernel on the firmware partition and the board flashes the green LED seven
-    times against a black screen — a failure with no other symptom reachable from
-    software.
+    U-Boot is here to provide the UEFI environment systemd-boot runs in, so
+    rpi-disk-image.nix sets hardware.raspberry-pi.firmware.uboot.enable to stage
+    u-boot.bin onto the ESP and point config.txt's kernel= at it. Without that
+    there is no kernel on the FAT partition and the board flashes the green LED
+    seven times against a black screen — a failure with no other symptom
+    reachable from software.
     """
     assert "U-Boot 2" in console_log, "no U-Boot banner on the console"
 
 
-def test_no_kernel_panic(console_log):
-    assert "Kernel panic" not in console_log
+def test_uboot_handed_off_to_systemd_boot(console_log):
+    """U-Boot's EFI bootmanager must find \\EFI\\BOOT\\BOOTAA64.EFI.
+
+    This is the hinge of the whole boot chain and it is only visible here: if
+    `bootctl install` wrote the loader somewhere U-Boot does not scan, or the ESP
+    came out with the wrong partition type, U-Boot drops to its prompt instead
+    and the board never reaches Linux.
+    """
+    assert "efi_mgr" in console_log, "U-Boot did not boot a bootflow via efi_mgr"
+
+
+def test_kernel_got_the_firmware_device_tree(shell):
+    """The firmware-merged device tree has to survive the U-Boot -> EFI handoff.
+
+    start*.elf merges the config.txt dtoverlays (vc4-kms-v3d among them) into the
+    DTB and hands it to U-Boot, which passes it on through the EFI configuration
+    table. systemd-boot's installDeviceTree is deliberately off so that nothing
+    replaces it with a single flat DTB, which would silently drop every overlay.
+
+    Asserted against the running system rather than the console log on purpose.
+    The kernel does announce this ("efi: EFI v2.11 by Das U-Boot", "Machine
+    model: Raspberry Pi 5 Model B Rev 1.1") but both are KERN_INFO, so at the
+    default loglevel=4 neither reaches the console — and grepping dmesg for them
+    would make this test a hostage of how verbose the image happens to be.
+    /sys is the state itself.
+
+    The failure mode is quiet: the kernel boots on a generic device tree, the
+    machine model is wrong and v3d never probes, so the kiosk falls back to
+    software rendering with nothing logged as an error. See also
+    test_gpu_render_node below.
+    """
+    # Booted through UEFI (U-Boot's EFI loader), not via extlinux.
+    shell.run_check("test -d /sys/firmware/efi")
+
+    # ...and the device tree it was handed is the board's, not a generic one.
+    model = shell.run_check("tr -d '\\0' < /sys/firmware/devicetree/base/model")
+    assert model and model[0].startswith("Raspberry Pi"), model
+
+
+def test_gpu_render_node(shell):
+    """v3d must have probed, which only happens if the vc4-kms-v3d overlay from
+    config.txt made it into the device tree the kernel booted on.
+
+    This is the overlay that costs the most if it is silently lost: Chromium
+    falls back to software rendering and the panel just feels slow, with nothing
+    in the logs calling it an error.
+    """
+    shell.run_check("test -e /dev/dri/renderD128")
+    drivers = shell.run_check("cat /sys/class/drm/card*/device/uevent | grep ^DRIVER=")
+    assert any("v3d" in d or "vc4" in d for d in drivers), drivers
 
 
 # --------------------------------------------------------------------------- #
@@ -206,22 +255,44 @@ def test_root_filesystem_grew(shell, image):
     )
 
 
-def test_firmware_partition_present(shell):
-    """The card carries the FAT firmware partition, populated with config.txt and
-    u-boot.bin — the boot chain rpi5.nix sets up.
+def test_boot_partition_is_the_esp(shell):
+    """/boot is the vfat EFI system partition, carrying both halves of the boot
+    chain: the Raspberry Pi firmware (config.txt, u-boot.bin) and systemd-boot.
 
     No VM test can cover this: first-boot.nix has no disk layout at all and just
-    mkdir's a plain /boot.
+    mkdir's a plain /boot. And the partition *type* is load-bearing rather than
+    cosmetic — `bootctl` refuses to install into anything that is not an ESP
+    ("has wrong type for an EFI System Partition"), so a layout change that
+    quietly reverted partition 1 to Microsoft basic data would break the next
+    update rather than this boot.
     """
-    labels = shell.run_check("lsblk -no LABEL,FSTYPE")
-    assert any("FIRMWARE" in line and "vfat" in line for line in labels), labels
+    assert shell.run_check("findmnt -no FSTYPE /boot") == ["vfat"]
+    assert shell.run_check(
+        "lsblk -no PARTTYPENAME $(findmnt -no SOURCE /boot)"
+    ) == ["EFI System"]
 
     fat = mount_fat(shell)
-    try:
-        shell.run_check(f"test -f {fat}/config.txt")
-        shell.run_check(f"test -f {fat}/u-boot.bin")
-    finally:
-        umount_fat(shell)
+    # The Raspberry Pi half...
+    shell.run_check(f"test -f {fat}/config.txt")
+    shell.run_check(f"test -f {fat}/u-boot.bin")
+    shell.run_check(f"test -d {fat}/overlays")
+    # ...and the UEFI half, at the removable fallback path U-Boot scans for.
+    shell.run_check(f"test -f {fat}/EFI/BOOT/BOOTAA64.EFI")
+    shell.run_check(f"test -d {fat}/loader/entries")
+
+
+def test_root_has_subvolumes(shell):
+    """The root is btrfs with the same @ / @nix split as the x86 image.
+
+    Under the sd-image builder the Pi root was a flat btrfs — make-btrfs-fs
+    could not emit subvolumes — so this is the assertion that the Pi really is
+    on the shared disko layout now and not on something that merely resembles
+    it.
+    """
+    assert shell.run_check("findmnt -no FSTYPE /") == ["btrfs"]
+    subvols = shell.run_check("btrfs subvolume list / | awk '{print $NF}'")
+    assert "@" in subvols, subvols
+    assert "@nix" in subvols, subvols
 
 
 def test_seed_file_from_flashed_partition(shell):
@@ -285,9 +356,9 @@ def test_firmware_dropzone_files(shell):
     A user who opens this card sees 40-odd .dtb files, start.elf and u-boot.bin,
     and nothing saying a seed file belongs here — so the image stages a README
     and a commented example onto it (modules/core/configimport.nix). Hardware
-    only: the staging happens in sd-image's populateFirmwareCommands, and it
-    reaches the card through nixos-hardware's mkForce, which is fragile enough to
-    be worth asserting on the real artifact.
+    only: the staging rides on systemd-boot's extraFiles, i.e. on the bootloader
+    installer having run inside disko's image build, which is worth asserting on
+    the real artifact.
     """
     fat = mount_fat(shell)
     try:
@@ -305,12 +376,13 @@ def test_firmware_dropzone_files(shell):
         )
         assert out == ["0"], f"example has uncommented keys: {out}"
 
-        # The firmwareSize bump must not silently revert: 30 MiB left 4.49 MiB
-        # free, which is less than one raspberrypifw bump.
-        size = shell.run_check(
-            "lsblk -bno SIZE,LABEL | awk '$2 == \"FIRMWARE\" { print $1 }'"
-        )
-        assert int(size[0]) > 60 * 1024 * 1024, f"FIRMWARE is only {size[0]} B"
+        # The ESP must stay big enough for the firmware *plus* a kernel and
+        # initrd per retained generation (~70 MiB each, configurationLimit 3).
+        # dashboardAssistant.diskLayout.espSize is 512 MiB for that reason, and
+        # a silent revert to the old 64 MiB would not fail until the third
+        # update.
+        size = shell.run_check("lsblk -bno SIZE $(findmnt -no SOURCE /boot)")
+        assert int(size[0]) > 400 * 1024 * 1024, f"ESP is only {size[0]} B"
     finally:
         umount_fat(shell)
 

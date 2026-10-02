@@ -34,22 +34,22 @@ from labgrid import Environment
 
 import bench
 
-#: The sd-image declares this filesystem nofail,noauto and creates no mount
-#: point, so it has to be mounted by hand — same as labgrid/test_first_boot.py.
-FIRMWARE_MNT = "/boot/firmware"
-SEED_PATH = f"{FIRMWARE_MNT}/dashboard-assistant.yaml"
+#: The EFI system partition, mounted at /boot on every target — same as
+#: labgrid/test_first_boot.py. Under the old sd-image layout this was a
+#: separate partition at /boot/firmware, declared nofail,noauto with no mount
+#: point, so it had to be mounted and unmounted by hand around every edit.
+BOOT_MNT = "/boot"
+SEED_PATH = f"{BOOT_MNT}/dashboard-assistant.yaml"
 STATE = "/var/lib/dashboard-assistant"
 
 
 def mount_fat(sh):
-    sh.run_check(f"mkdir -p {FIRMWARE_MNT}")
-    sh.run_check(f"mountpoint -q {FIRMWARE_MNT} || mount {FIRMWARE_MNT}")
+    # /boot is a normal fstab entry now; just fail loudly if it is not there.
+    sh.run_check(f"mountpoint -q {BOOT_MNT}")
 
 
 def umount_fat(sh):
-    # Before triggering the importer, always: it mounts the partition read-only
-    # itself, and this is also what ejecting the card looks like.
-    sh.run(f"umount {FIRMWARE_MNT}")
+    """No-op: /boot stays mounted, and the importer reads it in place."""
 
 
 def build_seed(args):

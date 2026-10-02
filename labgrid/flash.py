@@ -30,9 +30,7 @@ def main():
 
     image = args.image or bench.find_image()
     if not image:
-        sys.exit(
-            "no image under result-rpi5-dev/sd-image/ — run `just build-rpi5-dev`"
-        )
+        sys.exit("no .raw image under result-rpi5-dev/ — run `just build-rpi5-dev`")
     image = os.path.abspath(image)
     if not os.path.isfile(image):
         sys.exit(f"{image}: no such file")

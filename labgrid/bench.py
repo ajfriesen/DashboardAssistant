@@ -17,7 +17,11 @@ POWER_SCRIPT = os.path.join(HERE, "bench-power.sh")
 
 # Where `just build-rpi5-dev` leaves the uncompressed image. The filename carries
 # the release version, so it cannot be written into bench.yaml.
-IMAGE_GLOB = os.path.join(REPO_ROOT, "result-rpi5-dev", "sd-image", "*.img")
+# The Pi images are built by disko now, like the x86 ones: a single raw GPT
+# image named after dashboardAssistant.diskLayout.imageName, directly in the
+# derivation output. The old path was result-rpi5-dev/sd-image/*.img, from
+# nixpkgs' sd-image builder.
+IMAGE_GLOB = os.path.join(REPO_ROOT, "result-rpi5-dev", "*.raw")
 
 
 def find_image():

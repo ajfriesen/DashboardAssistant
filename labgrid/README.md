@@ -244,6 +244,15 @@ and **nothing was logged**. `configimport.nix` now falls back to mounting
 `FIRMWARE` read-only, and `test_seed_file_from_flashed_partition` performs the
 literal user action through the SD-Mux.
 
+!!! note "Since fixed at the root"
+    The whole class of bug above came from the Pi and x86 images having
+    different layouts. They do not any more: both are built by disko from
+    `modules/hardware/disk-layout.nix`, `/boot` *is* the FAT EFI system
+    partition on every target, and `configimport.nix` has one code path with no
+    partition label to drift. The tests below are kept pointed at the real
+    artifact anyway — that is what caught this — but the label-mismatch and
+    never-mounted-partition failure modes no longer exist to catch.
+
 Neither VM test could have caught it. `tests/first-boot.nix` does `mkdir -p /boot`
 and says so outright — "what is under test is the import, not where the partition
 came from" — which is fair for a node with no disk layout, and is exactly the
@@ -255,10 +264,8 @@ longer a literal in `configimport.nix` — it comes from
 `dashboard.configImport.firmwarePartitionLabel`, so the image and the importer
 cannot drift apart again. The partition explains itself: the image stages a
 `README.txt` and a commented `dashboard-assistant.yaml.example` onto it, which
-`test_firmware_dropzone_files` asserts on the real artifact (it has to —
-the staging goes through nixos-hardware's `mkForce` on
-`populateFirmwareCommands`, which is the fragile part). And seeding is no longer
-one-shot: the importer records a sha256 of what it applied and re-imports
+`test_firmware_dropzone_files` asserts on the real artifact. And seeding is no
+longer one-shot: the importer records a sha256 of what it applied and re-imports
 whenever the file changes, so editing the YAML on the card and rebooting
 re-provisions a device in place. `test_seed_file_reimported_after_edit` proves
 that across a real reboot (hence `strategy.reboot()`), and
@@ -358,9 +365,10 @@ sudo sh -c 'echo 0 > /sys/bus/usb/devices/3-4/authorized; echo 1 > /sys/bus/usb/
   `pytest` wrapper, or `$LABGRID_PYTHON` for anything that needs to
   `import labgrid` directly. `python3 -c "import labgrid"` failing with
   `No module named labgrid.util` is this, not a broken install.
-- `write_image` does not decompress. The dev image is uncompressed on purpose
-  (`flake.nix` forces `sdImage.compressImage` off for `rpi5-image-dev`); pointing
-  `--image` at a `.img.zst` would dd the compressed bytes onto the card.
+- `write_image` does not decompress. disko emits a single uncompressed `.raw`,
+  which is what the harness wants; pointing `--image` at a compressed release
+  artifact (`.raw.zst`, as published to R2) would dd the compressed bytes onto
+  the card.
 - Run from the repo root. `bench.yaml` uses labgrid's `$BASE` for the power
   script, so that part is cwd-independent, but image discovery is relative to the
   repo.
