@@ -3,7 +3,7 @@
 For working on Dashboard Assistant OS. User-facing docs live in `docs/` and are published with Zensical.
 
 - **[`CONTEXT.md`](../CONTEXT.md)**: the project's vocabulary. Use these terms in code, commits and docs.
-- **[`adr/`](adr/)**: architecture decisions and why they were made. Read the relevant one before changing something it covers.
+- **[`docs/adr/`](../docs/adr/)**: architecture decisions and why they were made. Read the relevant one before changing something it covers.
 
 ## Layout
 
@@ -35,7 +35,7 @@ For working on Dashboard Assistant OS. User-facing docs live in `docs/` and are 
 
 ## Bumping nixpkgs
 
-Every board builds from a pinned `nixos-unstable` ([ADR 0008](adr/0008-every-board-builds-from-pinned-nixos-unstable.md)). Bump it about once a month, on purpose:
+Every board builds from a pinned `nixos-unstable` ([ADR 0008](../docs/adr/0008-every-board-builds-from-pinned-nixos-unstable.md)). Bump it about once a month, on purpose:
 
 1. On a branch: `nix flake update nixpkgs-unstable`
 2. VM tests green in CI, and `just hw-test` green on the bench
@@ -53,7 +53,7 @@ The commit type decides the version bump:
 - `fix:` / `docs:` / `chore:` / `refactor:` / … → patch
 - `feat!:` or a `BREAKING CHANGE:` footer → major
 
-**To cut a release:** release-please keeps one release PR open (e.g. `chore(main): release 1.1.0`). It bumps the version in `flake.nix` and updates `CHANGELOG.md`. Merging it tags the release, publishes the GitHub Release and uploads the x86_64 image to the R2 `release/` channel ([ADR 0007](adr/0007-releases-come-from-commits-and-images-live-in-r2.md), [ops/README.md](../ops/README.md)).
+**To cut a release:** release-please keeps one release PR open (e.g. `chore(main): release 1.1.0`). It bumps the version in `flake.nix` and updates `CHANGELOG.md`. Merging it tags the release, publishes the GitHub Release and uploads the x86_64 image to the R2 `release/` channel ([ADR 0007](../docs/adr/0007-releases-come-from-commits-and-images-live-in-r2.md), [ops/README.md](../ops/README.md)).
 
 **To cut a pre-release:**
 

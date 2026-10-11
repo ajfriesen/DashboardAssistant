@@ -10,7 +10,7 @@
 # the scoped polkit rule below when HA's Install button is pressed. The flake ref
 # and hardware attr are baked in; only the target tag is a runtime instance.
 # Safety net: recovery on the admin page lets a bad update be rolled back by hand.
-# Automatic rollback is not on yet (developer/adr/0009). A preflight in the update script
+# Automatic rollback is not on yet (docs/adr/0009). A preflight in the update script
 # additionally refuses any release whose declared root *or* /boot filesystem
 # differs from the one actually mounted — such a switch would activate cleanly
 # and then fail on the next reboot, and those devices must be reflashed

@@ -1,5 +1,5 @@
 # Seeding: apply dashboard config (HA URL, tokens, Wi-Fi) from the seed file, the
-# only way to configure a device (developer/adr/0001). Two triggers, both feeding
+# only way to configure a device (docs/adr/0001). Two triggers, both feeding
 # the daemon's loopback /api/import:
 #
 #   1. USB hot-insert: udev fires a per-device service that mounts an inserted
