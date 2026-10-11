@@ -427,7 +427,7 @@
 }
 
 /* Inline lucide icons in body copy — the sponsor list and the hardware status
-   tables. Sit them on the text baseline and give the two status glyphs the
+   tables. Sit them on the text baseline and give the status glyphs the
    brand's semantic rails, so a table column stays scannable without colour
    being the only signal (the word next to it says the same thing). */
 .md-typeset li > .twemoji,
@@ -438,6 +438,9 @@
 
 .md-typeset svg.lucide-circle-check { color: var(--da-sage); }
 .md-typeset svg.lucide-clock { color: var(--md-default-fg-color--light); }
+/* Best-effort / experimental. --da-amber-ink already flips for the dark scheme,
+   so one rule covers both. */
+.md-typeset svg.lucide-flask-conical { color: var(--da-amber-ink); }
 
 /* A list item that opens with an icon already has a marker — drop the bullet
    rather than show both, and pull the row back into the bullet's column. */
