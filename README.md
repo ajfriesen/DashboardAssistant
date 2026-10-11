@@ -1,10 +1,45 @@
+<h3 align="center"><img width="80" alt="Dashboard Assistant: the best Home Assistant Tablet Experience: at any time." src="docs/brand/mark-wide.svg"></h3>
+
+<h3 align="center">The Best Home Assistant Tablet Experience!</h3>
+
+<p align="center">
+    <br />
+    <a href="https://dashboardassistant.org">DashboardAssistant.org</a>
+    ·
+    <a href="https://my.home-assistant.io/redirect/integration/?domain=https%3A%2F%2Fgithub.com%2Fajfriesen%2Fdashboard-assistant-integration">Integration</a>
+    ·
+    <a href="https://dashboardassistant.org/getting-started/">Documentation</a>
+    ·
+    <a href="https://discord.gg/GzNR9TqAy8">Discord</a>
+    
+</p>
+
+![GitHub Discussions (all)](https://img.shields.io/github/discussions/all/ajfriesen/DashboardAssistant)
+
+
+
 # Dashboard Assistant
 
-**An unbreakable Home Assistant Kiosk OS built on NixOS.** Flash it to a mini-PC or tablet, point it at your Home Assistant, and get a self-contained dashboard that integrates *back* into HA through a native custom integration (installable via HACS).
-The screen itself becomes something you can see and
-control from your automations.
+**An unbreakable Home Assistant Kiosk OS.** Flash it to a mini-PC or Raspberry Pi, point it at your Home Assistant, and get a self-contained dashboard that integrates *back* into HA through a native custom integration.
+The screen itself becomes something you can see and control from your automations.
 
 
+## Installation
+
+1. Download the image
+2. Flash the image
+3. Install the custom integration (while you are waiting)
+4. Write your seed file
+5. Boot
+6. Done
+
+[![Open your Home Assistant instance and show an integration.](https://my.home-assistant.io/badges/integration.svg)](https://my.home-assistant.io/redirect/integration/?domain=https%3A%2F%2Fgithub.com%2Fajfriesen%2Fdashboard-assistant-integration)
+
+![GitHub pull request status](https://img.shields.io/github/status/s/pulls/hacs/default/11319)
+
+
+
+<!-- 
 <p align="center">
   <img src="docs/img/home-assistant-light.jpeg" width="49%" alt="Dashboard View (light)">
   <img src="docs/img/home-assistant-dark.jpeg" width="49%" alt="Dashboard View (dark)">
@@ -12,66 +47,11 @@ control from your automations.
   <img src="docs/img/recovery.jpeg" width="49%" alt="Recovery View">
   <img src="docs/img/home-assistant-vertical.jpeg" width="49%" alt="Vertical Dashboard View">
   <img src="docs/img/random-website.jpeg" width="49%" alt="Website View">
-</p>
-
-
-> [!WARNING]
-> This is in early development. Expect lots of changes.
-> Not recommended for daily use as of now.
-
-> [!IMPORTANT]
-> This is not affiliated to the Open Home Foundation or Home Assistant.
-> This is my personal project.
-
----
-
-- [Dashboard Assistant](#dashboard-assistant)
-  - [Why](#why)
-  - [Features](#features)
-  - [Credits](#credits)
-  - [License](#license)
-  - [Author](#author)
-
-## Why
-
-I was annoyed how much setup you needed in order to get a good dashboard experience.
-Install some Linux Distribution, add packages, do this and that, configure things.
-The motivation was born to make this easier, with no Linux knowledge needed.
-
-- **Flash and go.** No Linux knowledge needed. Write one image, drop a short YAML
-  file on the boot partition if you need Wi-Fi, and it pairs with Home Assistant
-  and logs itself in.
-- **Over-the-air updates.** Update the whole OS from Home Assistant.
-- **Unbreakable.** It's NixOS. A bad update never bricks the device — the
-  device keeps every previous generation, and its LAN-only admin page lets you
-  roll back to a known-good one from any machine on your network.
-- **Two-way Home Assistant integration.** Most kiosks *show* HA. This one also
-  *appears in* HA: the display, brightness, zoom, theme, power, current page and
-  device health are all entities you can automate, via a native integration
-  (installable through HACS) — no MQTT broker needed. Turn off your display after
-  some time and turn it on when motion has been detected.
-
-
-## Features
-
-Full-screen Chromium locked to your dashboard, multiple cyclable URLs, touch
-wake, an on-screen keyboard, token auto-login, rollback to any previous
-generation, atomic OTA updates, multi-room audio, and seed-file provisioning —
-all controllable from Home Assistant, which discovers the device over mDNS via
-the native integration (installable through HACS).
-
-See the [**Features**](https://dashboardassistant.org/about/features/)
-page for the full list and the complete Home Assistant entity reference
-(controls + sensors).
-
-
-## Credits
-
-Inspired by [TouchKio](https://github.com/leukipp/touchkio).
+</p> -->
 
 ## License
 
-DashboardAssistant is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE.md) (SPDX: `PolyForm-Noncommercial-1.0.0`) — free to use, modify, and redistribute for any noncommercial purpose.
+DashboardAssistant is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE.md) (SPDX: `PolyForm-Noncommercial-1.0.0`) - free to use, modify, and redistribute for any noncommercial purpose.
 
 See the [License FAQ](https://dashboardassistant.org/license-faq) for what that means in practice, or reach out at andrej@dashboardassistant.org.
 

@@ -5,9 +5,16 @@
 #
 # The other entries are cheap eval-time checks for wiring no VM test can reach:
 # first-boot disables greetd, so the Chromium command line is invisible to it,
-# and the screenshot path is split across a Nix writer and a Go reader. Every
-# name in the matrix must exist in flake.nix's checks.<system>, and every check
-# there must appear here or it never runs on a PR.
+# and the screenshot path is split across a Nix writer and a Go reader.
+#
+# x86-unstable-eval is the odd one out: it evaluates the nixos-unstable x86
+# config rather than the stable one. That makes it the only job here that can see
+# the unstable side of the channel conditionals in modules/core/ — notably
+# flash-wear.nix's journald spelling, whose comment points out that an all-stable
+# check set cannot catch a mistake in that branch.
+#
+# Every name in the matrix must exist in flake.nix's checks.<system>, and every
+# check there must appear here or it never runs on a PR.
 name: vm-tests
 
 on:
@@ -21,7 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        check: [first-boot, kiosk-flash-flags, screenshot-path-agreement]
+        check: [first-boot, kiosk-flash-flags, screenshot-path-agreement, x86-unstable-eval]
     steps:
       - uses: actions/checkout@v7
       - uses: cachix/install-nix-action@v31

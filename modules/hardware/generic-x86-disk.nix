@@ -20,8 +20,18 @@
 
   # In-place updates: build this config's toplevel from the release tag. The
   # boot-assessment auto-rollback below covers an update that won't come up.
+  #
+  # flakeAttr and the image basename are mkDefault because this module is also the
+  # base for the nixos-unstable flavour (./generic-x86-disk-unstable.nix), which
+  # has to name its own update target — otherwise an in-place update on an
+  # unstable device would rebuild the *stable* attr and silently move the device
+  # off the channel it was flashed with. imageName is spelled out here (rather
+  # than left at its default) so both flavours' artifact names read in one place;
+  # disk-layout.nix documents it as per-board precisely so two targets' images can
+  # sit side by side.
   dashboardAssistant.update.installable = true;
-  dashboardAssistant.update.flakeAttr = "dashboard-assistant-x86-disk";
+  dashboardAssistant.update.flakeAttr = lib.mkDefault "dashboard-assistant-x86-disk";
+  dashboardAssistant.diskLayout.imageName = lib.mkDefault "dashboard-assistant";
 
   # Grow the root partition to fill the actual disk in early boot. Paired with
   # x-systemd.growfs on / (disk-layout.nix), a small 4G image expands to use the
@@ -51,6 +61,12 @@
   # a broken update is therefore manual, via the recovery UI. Re-enable once the
   # option lands in the stable channel (or backport the tries mechanism):
   #   boot.loader.systemd-boot.bootCounting.enable = true;
+  #
+  # ./generic-x86-disk-unstable.nix is on a channel that *does* have the option and
+  # still leaves it off, for reasons that will apply here too once it lands: the
+  # bless condition below also requires greetd, and this target installs with
+  # --no-variables at the removable fallback path, which systemd-bless-boot has
+  # never been tested against. Read that file's comment before switching either on.
 
   # Gate "boot succeeded" on the dashboard actually being up: the boot is blessed
   # only once the daemon answers /healthz and the kiosk session is active. Kept in

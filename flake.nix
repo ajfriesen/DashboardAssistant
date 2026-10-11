@@ -18,10 +18,13 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
 
     # Second channel for targets that need newer bits than the pinned stable
-    # release. The Raspberry Pi 5 image is built from this (its kernel/firmware
-    # and the sd-image pi5 support only landed post-26.05). The x86 / Pi 4
-    # targets stay on nixpkgs (26.05) by default but can be flipped to unstable
-    # per build with `--override-input nixpkgs` — see the *-unstable just recipes.
+    # release. Two things are built from it, both because 26.05 is too old for the
+    # hardware: the Raspberry Pi 5 image (its kernel/firmware and the sd-image pi5
+    # support only landed post-26.05), and the x86 *-unstable flavour, which exists
+    # so a user whose machine the stable kernel cannot drive has something to try.
+    # The Pi 4 target stays on nixpkgs (26.05); any target can still be flipped for
+    # a one-off build with `--override-input nixpkgs`, but note that does NOT affect
+    # the targets pinned here — they use this input's own lib.nixosSystem.
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
 
     # Wired for the future on-disk install path (tmpfs root + ext4 /persist).
@@ -52,7 +55,10 @@
       # branch tip still does — no backports), while the docs workflow installs
       # the latest from PyPI, so `zensical serve` locally would render with a
       # much older generator than the one that builds dashboardassistant.org.
-      # Nothing in the images comes from here; see the devShell below.
+      # Nothing in the images comes from here; see the devShell below. The targets
+      # that *are* built from unstable (rpi5, x86 *-unstable) go through that
+      # input's own lib.nixosSystem instead, which brings its own pkgs — so adding
+      # one did not make this attribute image-facing.
       pkgsUnstable = nixpkgs-unstable.legacyPackages.${system};
       lib = nixpkgs.lib;
 
@@ -90,6 +96,36 @@
           modules = [
             disko.nixosModules.disko
             ./modules/hardware/generic-x86-disk.nix
+            ./modules/core/default.nix
+          ]
+          ++ localModules
+          ++ extraModules;
+        };
+
+      # The nixos-unstable flavour of the on-disk x86 system — best-effort, for
+      # hardware the pinned 26.05 kernel cannot bring up. Uses nixpkgs-unstable's
+      # *own* lib.nixosSystem, the same trick as mkRpi5System below: this target
+      # stays on unstable regardless of any `--override-input nixpkgs` aimed at the
+      # stable ones, and the result is pinned by flake.lock rather than resolving a
+      # channel at build time — which is exactly what the old
+      # `just build-disk-image-unstable` did, and why it could never back a release
+      # artifact or a CI check.
+      #
+      # The hardware leaf imports ./generic-x86-disk.nix itself, so the two x86
+      # flavours share everything structural and differ only in the channel, the
+      # kernel and their own update/artifact identity.
+      #
+      # disko.inputs.nixpkgs follows the *stable* nixpkgs, which is fine and
+      # already true for the Pi 5: disko.nixosModules.disko is a plain module and
+      # takes its pkgs from the evaluating system, not from its own input.
+      mkDiskUnstableSystem =
+        extraModules:
+        nixpkgs-unstable.lib.nixosSystem {
+          inherit system;
+          specialArgs = { inherit impermanence version; };
+          modules = [
+            disko.nixosModules.disko
+            ./modules/hardware/generic-x86-disk-unstable.nix
             ./modules/core/default.nix
           ]
           ++ localModules
@@ -156,6 +192,22 @@
         # (root SSH access). Build via `.#disk-image-dev`.
         dashboard-assistant-x86-disk-dev = mkDiskSystem [ ./modules/dev.nix ];
 
+        # The same on-disk x86 system built from nixos-unstable with a
+        # mainline-latest kernel (7.2 against 26.05's 6.18 at the current lock).
+        # This is the image to reach for when the supported one shows a black
+        # screen, no Wi-Fi or no touch on very recent silicon — including Surface
+        # models whose support is upstream. BEST-EFFORT: it tracks a moving input,
+        # no hardware bench covers x86, and dashboard-assistant-x86-disk remains
+        # the primary supported target. Build via `.#disk-image-unstable`.
+        dashboard-assistant-x86-disk-unstable = mkDiskUnstableSystem [ ];
+
+        # Dev flavour of the unstable image — same base plus modules/dev.nix (root
+        # SSH). Load-bearing rather than a nicety: a release image has no sshd at
+        # all, so without this there would be no artifact on which an
+        # unstable-kernel failure could be diagnosed, and the stable -dev image by
+        # construction cannot reproduce one. Never published by a release tag.
+        dashboard-assistant-x86-disk-unstable-dev = mkDiskUnstableSystem [ ./modules/dev.nix ];
+
         # Raspberry Pi 4 (aarch64) — SD-card image, for bring-up/testing on a Pi.
         # Build the flashable image via `.#rpi4-image` (aarch64; an x86 host
         # builds it via binfmt emulation, fetching most from the binary cache).
@@ -191,6 +243,15 @@
         disk-image = self.nixosConfigurations.dashboard-assistant-x86-disk.config.system.build.diskoImages;
         disk-image-dev =
           self.nixosConfigurations.dashboard-assistant-x86-disk-dev.config.system.build.diskoImages;
+
+        # The nixos-unstable x86 flavour (newer kernel). Published to R2 under the
+        # `x86_64-unstable` board token by release-image.yml.
+        disk-image-unstable =
+          self.nixosConfigurations.dashboard-assistant-x86-disk-unstable.config.system.build.diskoImages;
+        # Its dev flavour, for debugging a board the stable image cannot boot.
+        # Deliberately not published by any workflow.
+        disk-image-unstable-dev =
+          self.nixosConfigurations.dashboard-assistant-x86-disk-unstable-dev.config.system.build.diskoImages;
 
         # vboard (on-screen keyboard) is packaged from source — not in nixpkgs.
         # Exposed here so it can be built/tested standalone (`nix build .#vboard`);
@@ -264,6 +325,92 @@
                 echo "FAIL: no --disk-cache-size — Chromium sizes its cache from free space, which on a tmpfs is most of RAM, so systemd-oomd will kill the kiosk session in a loop." >&2
                 fail=1
               }
+              [ "$fail" = 0 ] || exit 1
+              touch "$out"
+            '';
+
+        # Evaluate the nixos-unstable x86 config and assert what must stay true
+        # about it. This is the first check in the tree that exercises the
+        # *unstable* side of anything: modules/core/flash-wear.nix picks its
+        # journald spelling with `if options.services.journald ? settings`, and its
+        # own comment notes that a wrong spelling there "would not be caught,
+        # because the checks are x86_64-only and therefore all-stable" — so until
+        # now that branch could only be found by building a Pi 5.
+        #
+        # unsafeDiscardStringContext is the load-bearing bit: forcing
+        # toplevel.drvPath instantiates the entire module tree (which is the
+        # coverage — it catches an option unstable renamed out from under us),
+        # while discarding the context stops runCommand from wanting to *realise*
+        # it. So this costs an eval, not a kernel build.
+        x86-unstable-eval =
+          let
+            unstable = self.nixosConfigurations.dashboard-assistant-x86-disk-unstable.config;
+            stable = self.nixosConfigurations.dashboard-assistant-x86-disk.config;
+          in
+          pkgs.runCommand "x86-unstable-eval"
+            {
+              toplevel = builtins.unsafeDiscardStringContext (toString unstable.system.build.toplevel.drvPath);
+              release = unstable.system.nixos.release;
+              stableRelease = stable.system.nixos.release;
+              kernel = unstable.boot.kernelPackages.kernel.version;
+              stableKernel = stable.boot.kernelPackages.kernel.version;
+              flakeAttr = unstable.dashboardAssistant.update.flakeAttr;
+              stableFlakeAttr = stable.dashboardAssistant.update.flakeAttr;
+              imageName = unstable.dashboardAssistant.diskLayout.imageName;
+              stableImageName = stable.dashboardAssistant.diskLayout.imageName;
+              journalStorage = unstable.services.journald.settings.Journal.Storage;
+            }
+            ''
+              set -euo pipefail
+              # fail= accumulator so every sub-assertion reports before exiting,
+              # matching kiosk-flash-flags above.
+              fail=0
+              echo "unstable: nixos $release, kernel $kernel"
+              echo "stable:   nixos $stableRelease, kernel $stableKernel"
+
+              # It really is the other channel. If somebody swaps
+              # mkDiskUnstableSystem back to the stable lib.nixosSystem, every
+              # other assertion here still passes while the flavour has quietly
+              # become a duplicate of the supported image.
+              [ "$release" != "$stableRelease" ] || {
+                echo "FAIL: the unstable x86 config is on the same nixpkgs release ($release) as the stable one — it is no longer built from nixpkgs-unstable." >&2
+                fail=1
+              }
+
+              # The whole reason the flavour exists. Both channels shipped the
+              # same default kernel when this landed, so the channel alone does
+              # NOT imply a newer kernel — boot.kernelPackages does, and if it
+              # ever goes away this image stops being worth offering.
+              [ "$kernel" != "$stableKernel" ] || {
+                echo "FAIL: the unstable x86 image is on the same kernel ($kernel) as the stable one — it has nothing to offer the hardware it exists for. See boot.kernelPackages in modules/hardware/generic-x86-disk-unstable.nix." >&2
+                fail=1
+              }
+
+              # A deployed unstable box must not rebuild the stable attr on its
+              # next OTA — that would silently move a device between channels.
+              [ "$flakeAttr" = dashboard-assistant-x86-disk-unstable ] || {
+                echo "FAIL: update.flakeAttr is '$flakeAttr' — an in-place update would switch this device to another flavour." >&2
+                fail=1
+              }
+              [ "$flakeAttr" != "$stableFlakeAttr" ] || {
+                echo "FAIL: both x86 flavours share an update flakeAttr." >&2
+                fail=1
+              }
+
+              # Distinct artifact names, or the two release .raw files collide.
+              [ "$imageName" != "$stableImageName" ] || {
+                echo "FAIL: both x86 flavours build <$imageName>.raw — the release artifacts would overwrite each other." >&2
+                fail=1
+              }
+
+              # The unstable arm of modules/core/flash-wear.nix. Reading the value
+              # out (not merely checking that it evaluates) is what proves the
+              # RFC42-style spelling still lands where journald looks for it.
+              [ "$journalStorage" = volatile ] || {
+                echo "FAIL: journald Storage is '$journalStorage', not volatile — the unstable branch of flash-wear.nix is putting the journal back on flash." >&2
+                fail=1
+              }
+
               [ "$fail" = 0 ] || exit 1
               touch "$out"
             '';

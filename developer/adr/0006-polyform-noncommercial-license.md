@@ -1,0 +1,3 @@
+# PolyForm Noncommercial license
+
+Dashboard Assistant is source-available under PolyForm Noncommercial 1.0.0, not under an open-source license. The aim is to be as permissive as possible for personal, creator and noncommercial-institution use, while reserving commercial use such as selling preflashed hardware or paid support (c91669c, 52b9cb7, `docs/about/license-faq.md`). Commercial use is available under a separate license on request. The intended path is hardware manufacturers selling devices with Dashboard Assistant preinstalled. Before this, the repo had no license file, so nobody had any rights.

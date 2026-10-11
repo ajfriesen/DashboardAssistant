@@ -387,8 +387,8 @@ func (nm *NetworkManager) connectionInfo(c dbus.ObjectPath) (string, map[string]
 	return id, settings
 }
 
-// JoinResult distinguishes the ways a join can end, so the portal and the tablet
-// splash can say something a person can act on.
+// JoinResult distinguishes the ways a join can end, so callers can report
+// something a person can act on.
 type JoinResult struct {
 	OK     bool
 	Reason string // human-readable, empty when OK

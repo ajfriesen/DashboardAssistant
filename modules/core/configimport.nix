@@ -1,6 +1,6 @@
-# Import dashboard config (HA URL, token, Wi-Fi) from a YAML file, so a device
-# can be provisioned without the on-screen wizard — handy for testing and field
-# deploys. Two triggers, both feeding the daemon's loopback /api/import:
+# Seeding: apply dashboard config (HA URL, tokens, Wi-Fi) from the seed file, the
+# only way to configure a device (developer/adr/0001). Two triggers, both feeding
+# the daemon's loopback /api/import:
 #
 #   1. USB hot-insert: udev fires a per-device service that mounts an inserted
 #      USB filesystem read-only and, if it holds dashboard-assistant.yaml, imports it.

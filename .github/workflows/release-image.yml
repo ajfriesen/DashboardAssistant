@@ -12,13 +12,20 @@ name: release image
 # tag-triggered), and the release notes' download links are written by
 # release-please.yml.
 #
-# R2 layout. The arch — x86_64, rpi4, rpi5 — is both the directory and part of the
-# filename, so an image stays identifiable once it is downloaded and out of its
-# folder:
+# R2 layout. The board token — x86_64, x86_64-unstable, rpi4, rpi5 — is both the
+# directory and part of the filename, so an image stays identifiable once it is
+# downloaded and out of its folder:
 #   release/x86_64/dashboard-assistant-x86_64-<version>.raw.zst (immutable, per release)
 #   release/x86_64/latest.raw.zst                               (newest full release)
 #   pre-release/x86_64/…                                        (same, for a hyphened SemVer tag)
 #   dev/x86_64/dashboard-assistant-x86_64-<commit>.raw.zst      (branch build)
+#
+# This workflow publishes two of those tokens, both x86_64 CPUs on different build
+# channels: `x86_64` (the supported image, pinned nixos-26.05) and
+# `x86_64-unstable` (best-effort, nixos-unstable with a mainline-latest kernel, for
+# hardware the supported image cannot bring up). They are separate board tokens
+# rather than a nested path because every consumer — release-please.yml's download
+# table, ops/README.md, docs/flash/flash.md — treats the token as one flat segment.
 #
 # The channel comes from the ref alone: a v* tag publishes a release (pre-release
 # for a hyphen, e.g. v0.1.0-rc.1), anything else is a dev build keyed by the short
@@ -41,16 +48,32 @@ on:
 permissions:
   contents: read # checkout only; the release notes are written by release-please.yml
 
-env:
-  # The board token shared by the object directory and the filename. Kept in one
-  # place because release-please.yml builds the same paths to link to.
-  ARCH: x86_64
-
 jobs:
   image:
-    name: Build x86_64 disk image and publish to R2
+    name: Build ${{ matrix.board }} disk image and publish to R2
     runs-on: ubuntu-latest
+    strategy:
+      # The supported image must publish even when the unstable one is broken —
+      # that is the whole point of a best-effort flavour. fail-fast would cancel a
+      # succeeding x86_64 leg because an unstable kernel bump failed to build.
+      fail-fast: false
+      matrix:
+        include:
+          - board: x86_64
+            attr: dashboard-assistant-x86-disk
+            package: disk-image
+            raw: dashboard-assistant.raw
+          - board: x86_64-unstable
+            attr: dashboard-assistant-x86-disk-unstable
+            package: disk-image-unstable
+            raw: dashboard-assistant-x86_64-unstable.raw
+    # A broken best-effort image must not mark the release run failed — the
+    # release itself is defined by the supported artifact.
+    continue-on-error: ${{ matrix.board == 'x86_64-unstable' }}
     env:
+      # The board token shared by the object directory and the filename. Kept in
+      # one place because release-please.yml builds the same paths to link to.
+      ARCH: ${{ matrix.board }}
       R2_ENDPOINT: https://${{ vars.R2_ACCOUNT_ID }}.eu.r2.cloudflarestorage.com
     steps:
       - uses: actions/checkout@v4 # checks out the tagged commit by default
@@ -96,7 +119,7 @@ jobs:
         run: |
           set -euo pipefail
           baked=$(nix eval --raw \
-            '.#nixosConfigurations.dashboard-assistant-x86-disk.config.environment.etc."dashboard-assistant/version".text')
+            '.#nixosConfigurations.${{ matrix.attr }}.config.environment.etc."dashboard-assistant/version".text')
           echo "baked version = $baked, tag version = $VERSION"
           if [ "$baked" != "$VERSION" ]; then
             echo "::error::flake.nix version ($baked) != release version ($VERSION)"
@@ -105,15 +128,15 @@ jobs:
 
       # Build first so a failure aborts before we touch R2. This is the flashable
       # on-disk system (disko btrfs+zstd raw image).
-      - name: Build x86_64 disk image
-        run: nix build .#disk-image
+      - name: Build ${{ matrix.board }} disk image
+        run: nix build .#${{ matrix.package }} --accept-flake-config --out-link result-${{ matrix.board }}
 
       - name: Compress disk image
         env:
           ASSET: ${{ steps.v.outputs.asset }}
         run: |
           set -euo pipefail
-          zstd -19 -T0 -c "$(readlink -f result)/dashboard-assistant.raw" > "$ASSET"
+          zstd -19 -T0 -c "$(readlink -f result-${{ matrix.board }})/${{ matrix.raw }}" > "$ASSET"
 
       # Publish the immutable per-build object, and for a release also overwrite
       # the channel's `latest` pointer (the single flashable artifact for that
@@ -133,9 +156,9 @@ jobs:
         run: |
           set -euo pipefail
           bucket="${{ vars.R2_BUCKET }}"
-          nixos=$(nix eval --raw '.#nixosConfigurations.dashboard-assistant-x86-disk.config.system.nixos.version')
+          nixos=$(nix eval --raw '.#nixosConfigurations.${{ matrix.attr }}.config.system.nixos.version')
           baked=$(nix eval --raw \
-            '.#nixosConfigurations.dashboard-assistant-x86-disk.config.environment.etc."dashboard-assistant/version".text')
+            '.#nixosConfigurations.${{ matrix.attr }}.config.environment.etc."dashboard-assistant/version".text')
           sha=$(sha256sum "$ASSET" | cut -d' ' -f1)
           built=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           # `ref` is the tag on a release build and the branch on a dev one, so it
