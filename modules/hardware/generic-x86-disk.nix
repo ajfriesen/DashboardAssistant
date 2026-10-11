@@ -2,7 +2,7 @@
 #
 # A persistent system with a real bootloader: it boots from a fixed SATA disk, survives reboots (token/state persist), and can
 # be updated in place with `nixos-rebuild switch`.
-{ lib, pkgs, ... }:
+{ pkgs, ... }:
 {
   imports = [
     # btrfs+zstd GPT layout (disko). Provides fileSystems."/" and "/boot".
@@ -20,18 +20,16 @@
 
   # In-place updates: build this config's toplevel from the release tag. The
   # boot-assessment auto-rollback below covers an update that won't come up.
-  #
-  # flakeAttr and the image basename are mkDefault because this module is also the
-  # base for the nixos-unstable flavour (./generic-x86-disk-unstable.nix), which
-  # has to name its own update target — otherwise an in-place update on an
-  # unstable device would rebuild the *stable* attr and silently move the device
-  # off the channel it was flashed with. imageName is spelled out here (rather
-  # than left at its default) so both flavours' artifact names read in one place;
-  # disk-layout.nix documents it as per-board precisely so two targets' images can
-  # sit side by side.
   dashboardAssistant.update.installable = true;
-  dashboardAssistant.update.flakeAttr = lib.mkDefault "dashboard-assistant-x86-disk";
-  dashboardAssistant.diskLayout.imageName = lib.mkDefault "dashboard-assistant";
+  dashboardAssistant.update.flakeAttr = "dashboard-assistant-x86-disk";
+
+  # Mainline-latest rather than the channel's conservative default kernel (7.2
+  # against 6.18 when this landed). One x86 image has to boot everything from an
+  # ODROID H2 to a 2026 laptop, and on very recent silicon an older kernel shows
+  # up as a black screen after the bootloader, no Wi-Fi, no touch or no backlight
+  # control. Mainline only: no linux-surface patch set, so Surface devices get
+  # whatever upstream has landed and no more.
+  boot.kernelPackages = pkgs.linuxPackages_latest;
 
   # Grow the root partition to fill the actual disk in early boot. Paired with
   # x-systemd.growfs on / (disk-layout.nix), a small 4G image expands to use the
@@ -55,18 +53,21 @@
 
   # Automatic Boot Assessment (a new generation boots with a counter and is only
   # marked good once it reaches boot-complete.target, otherwise systemd-boot
-  # reverts to the previous generation) is NOT enabled here: the
-  # `boot.loader.systemd-boot.bootCounting` option only exists on nixpkgs-unstable
-  # and was not backported to the nixos-26.05 branch this flake pins. Recovery from
-  # a broken update is therefore manual, via the recovery UI. Re-enable once the
-  # option lands in the stable channel (or backport the tries mechanism):
-  #   boot.loader.systemd-boot.bootCounting.enable = true;
+  # reverts to the previous generation) is NOT enabled yet, although the
+  # `boot.loader.systemd-boot.bootCounting` option now exists on the nixpkgs this
+  # flake pins (docs/adr/0008). Recovery from a broken update is therefore manual,
+  # via the recovery UI. It stays off until it can be tested on a real board:
   #
-  # ./generic-x86-disk-unstable.nix is on a channel that *does* have the option and
-  # still leaves it off, for reasons that will apply here too once it lands: the
-  # bless condition below also requires greetd, and this target installs with
-  # --no-variables at the removable fallback path, which systemd-bless-boot has
-  # never been tested against. Read that file's comment before switching either on.
+  #   - systemd-bless-boot reads LoaderBootCountPath, a volatile EFI variable
+  #     systemd-boot sets at runtime, and this target installs with
+  #     --no-variables at the removable fallback path. That combination is
+  #     untested.
+  #   - The bless condition below requires greetd, so a board whose GPU the
+  #     kernel cannot drive would be marked bad on every boot.
+  #
+  # `bootctl status` must report boot-loader-set ESP information and
+  # systemd-bless-boot must succeed rather than skip before switching it on:
+  #   boot.loader.systemd-boot.bootCounting.enable = true;
 
   # Gate "boot succeeded" on the dashboard actually being up: the boot is blessed
   # only once the daemon answers /healthz and the kiosk session is active. Kept in
