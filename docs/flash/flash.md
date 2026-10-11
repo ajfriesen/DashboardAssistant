@@ -29,19 +29,13 @@ zstd-compressed:
 | x86_64 (mini-PC, tablet, NUC) | `dashboard-assistant-x86_64-<version>.raw.zst` |
 | Raspberry Pi 4 | `dashboard-assistant-rpi4-<version>.raw.zst` |
 | Raspberry Pi 5 | `dashboard-assistant-rpi5-<version>.raw.zst` |
-| x86_64 — unstable (best-effort) | `dashboard-assistant-x86_64-unstable-<version>.raw.zst` |
 
 The newest release is also always available directly at
 `https://download.dashboardassistant.org/release/<board>/latest.raw.zst`, with
-`x86_64`, `rpi4`, `rpi5` or `x86_64-unstable` as the board.
+`x86_64`, `rpi4` or `rpi5` as the board.
 
-Every image uses the same format and the same flashing steps — there is nothing
-Pi-specific to do any more.
-
-The last row is not a fourth board: it is the same x86_64 system built on a newer
-mainline kernel, for machines the supported x86_64 image cannot bring up. Use the
-plain `x86_64` image unless that one fails to come up — see
-[hardware too new for the supported image](../hardware-support/x86.md#hardware-too-new-for-the-supported-image).
+All three boards use the same image format and the same flashing steps — there
+is nothing Pi-specific to do any more.
 
 x86_64 targets need to boot **UEFI** — see the
 [x86_64 requirements](../hardware-support/x86.md).

@@ -27,11 +27,8 @@ let
   #    is x86_64 (bzImage) or aarch64 (Image). Drop this once disko upstream
   #    tracks the vmTools change.
   #
-  #    Two lookups because the attribute moved between the channels this flake
-  #    pins: `stdenv.hostPlatform.linux-kernel` exists on 26.05 (x86 and Pi 4)
-  #    and was removed by 26.11, which instead exposes the image name as a
-  #    passthru on the kernel derivation (Pi 5). Neither is present in both, so
-  #    hardcoding either one breaks half the targets.
+  #    Read from the kernel derivation's passthru: nixpkgs removed
+  #    `stdenv.hostPlatform.linux-kernel` by 26.11.
   withKernelTarget =
     p:
     p.extend (
@@ -40,7 +37,7 @@ let
           modules:
           (prev.aggregateModules modules).overrideAttrs (old: {
             passthru = (old.passthru or { }) // {
-              target = p.stdenv.hostPlatform.linux-kernel.target or p.linuxPackages.kernel.target;
+              target = p.linuxPackages.kernel.target;
             };
           });
       }

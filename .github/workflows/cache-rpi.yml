@@ -9,10 +9,8 @@ name: cache-rpi
 # it. The consuming side is wired up in flake.nix (nixConfig) and
 # modules/core/binary-cache.nix.
 #
-# Both boards run as a matrix. The Pi 4 builds from the pinned nixpkgs (26.05);
-# the Pi 5 is pinned to nixpkgs-unstable in flake.nix (its kernel is newer than
-# 26.05) — nothing board-specific is needed here, the flake attrs already carry
-# that.
+# Both boards run as a matrix; nothing board-specific is needed here, the flake
+# attrs already carry it.
 #
 # Native arm64 (ubuntu-24.04-arm) is free for public repos and builds the kernel
 # in real time instead of emulating it, so this workflow is the fast path even
@@ -114,9 +112,9 @@ jobs:
       # a later local build (or an OTA update) a cache hit. This runs on every push
       # so the cache stays warm for local `just build-rpi*` and SSH-based updates.
       # --accept-flake-config honours the flake's Attic substituter (same as the
-      # justfile recipes), so an already-cached toplevel — e.g. the Pi 4 closure a
-      # previous run pushed — is substituted instead of recompiled. Only a
-      # not-yet-cached board (a fresh Pi 5, or after a nixpkgs bump) compiles.
+      # justfile recipes), so an already-cached toplevel a previous run pushed is
+      # substituted instead of recompiled. Only a not-yet-cached closure (after a
+      # nixpkgs bump, say) compiles.
       - name: Build Pi system (populate the cache)
         run: |
           nix build --print-build-logs --accept-flake-config \

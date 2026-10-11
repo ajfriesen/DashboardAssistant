@@ -6,18 +6,15 @@ workflows publish to; see `.github/workflows/release-image.yml` and
 
 ## Bucket layout
 
-Every image the workflows publish is keyed by channel and board token, with the
-token — `x86_64`, `x86_64-unstable`, `rpi4`, `rpi5` — repeated in the filename so a
-downloaded file is still identifiable once it's out of its folder.
-`x86_64-unstable` is the same CPU architecture as `x86_64` on a different *build
-channel*: nixos-unstable with a mainline-latest kernel, published best-effort for
-hardware the supported image cannot bring up.
+Every image the workflows publish is keyed by channel and board, with the board —
+`x86_64`, `rpi4`, `rpi5` — repeated in the filename so a downloaded file is still
+identifiable once it's out of its folder:
 
 ```
-release/<arch>/dashboard-assistant-<arch>-<version>.{raw,img}.zst
-release/<arch>/latest.{raw,img}.zst          # newest full release
-pre-release/<arch>/…                         # hyphened SemVer tag, e.g. v0.2.0-rc.1
-dev/<arch>/dashboard-assistant-<arch>-<commit>.{raw,img}.zst
+release/<board>/dashboard-assistant-<board>-<version>.{raw,img}.zst
+release/<board>/latest.{raw,img}.zst          # newest full release
+pre-release/<board>/…                         # hyphened SemVer tag, e.g. v0.2.0-rc.1
+dev/<board>/dashboard-assistant-<board>-<commit>.{raw,img}.zst
 ```
 
 `dev/` holds branch builds (`.raw.zst` on x86_64, `.img.zst` on the Pis), keyed by
@@ -41,14 +38,6 @@ Current rules:
 | `expire-pre-releases` | `pre-release/` | Delete after 90 days — prereleases are transient. |
 
 `release/**` has **no** rule: released images are immutable and kept indefinitely.
-
-!!! careful with `x86_64` prefixes
-
-`release/x86_64` is a literal prefix of `release/x86_64-unstable/`, so a lifecycle
-rule meant for only one of them must end in a slash. A rule filtered on
-`release/x86_64` would match the unstable board's objects too — and a rule aimed at
-the unstable images that forgot the slash would expire the supported board's
-immutable releases. Always write `release/x86_64/` or `release/x86_64-unstable/`.
 
 ## Applying it
 

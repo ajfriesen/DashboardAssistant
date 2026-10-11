@@ -41,32 +41,18 @@
 #    (nixos/modules/system/boot/tmp.nix) for the same reason, which is why the
 #    /tmp half of this module is testable at all.
 #
-# 3. The journald options below are spelled TWO ways on purpose. This flake
-#    straddles two nixpkgs channels (flake.nix): x86 and the Pi 4 are on
-#    nixos-26.05, the Pi 5 needs nixpkgs-unstable. Unstable removed
-#    services.journald.{storage,rateLimitBurst,extraConfig} in favour of
-#    services.journald.settings.Journal and made the old names throw; 26.05 has
-#    only the old names and no `settings` at all. Writing either one alone breaks
-#    exactly one target, and `nix flake check` will NOT catch it because the
-#    checks are x86_64-only and therefore all-stable. Verify a change here with
-#    all five configurations:
-#      for h in x86-disk x86-disk-dev rpi4 rpi5 rpi5-dev; do \
-#        nix eval --raw ".#nixosConfigurations.dashboard-assistant-$h.config.system.build.toplevel.drvPath"; done
-#    Relatedly: a module that reads the `options` argument must put its output
-#    under an explicit `config = ...`. A bare module doing so is infinite
-#    recursion, which is why the dev override is an option here rather than a
-#    services.journald poke in modules/dev.nix.
+# 3. Write journald settings under services.journald.settings.Journal only. The
+#    old services.journald.{storage,rateLimitBurst,extraConfig} names throw on
+#    the nixpkgs this flake pins.
 {
   config,
-  options,
   lib,
   pkgs,
   ...
 }:
 let
-  # journald.conf directives, named the way systemd names them so the value is
-  # identical whichever NixOS option set the channel gives us (see the branch
-  # below). Overridden for dev images in modules/dev.nix.
+  # journald.conf directives, named the way systemd names them.
+  # MaxLevelStore is overridden for dev images in modules/dev.nix.
   journalSettings = {
     Storage = "volatile";
     # Global burst, down from the stock 10000 per 30s (~333 msg/s per unit). The
@@ -185,42 +171,12 @@ in
       far.
 
       Raised to `debug` by {file}`modules/dev.nix` so bench boards and `-dev`
-      images keep full fidelity. An option rather than a direct
-      {option}`services.journald` override because the two nixpkgs channels this
-      flake straddles spell that option differently.
+      images keep full fidelity.
     '';
   };
 
   config = lib.mkMerge [
-    # Which option set to use is decided by the channel, not by us. This flake
-    # straddles two: x86 and the Pi 4 are on nixos-26.05, while the Pi 5 needs
-    # nixpkgs-unstable (see flake.nix). Unstable has replaced
-    # services.journald.{storage,rateLimitBurst,extraConfig} with the RFC42-style
-    # services.journald.settings.Journal and made the old names throw, while
-    # 26.05 has only the old names and no `settings` at all. So there is no
-    # single spelling that evaluates on both, and picking the wrong one breaks
-    # exactly one target — which `nix flake check` would not catch, because the
-    # checks are x86_64-only and therefore all-stable.
-    #
-    # Branch on the option's existence rather than on a channel flag we would
-    # have to thread through: when 26.05's successor grows `settings`, the else
-    # branch simply stops being taken and this can be deleted.
-    (
-      if options.services.journald ? settings then
-        { services.journald.settings.Journal = journalSettings; }
-      else
-        {
-          services.journald.storage = journalSettings.Storage;
-          services.journald.rateLimitBurst = journalSettings.RateLimitBurst;
-          # The two with no typed option on 26.05. extraConfig is that module's
-          # own documented escape hatch (its `example` is literally
-          # "Storage=volatile"), so this is not a deviation from mainline.
-          services.journald.extraConfig = ''
-            RuntimeMaxUse=${journalSettings.RuntimeMaxUse}
-            MaxLevelStore=${journalSettings.MaxLevelStore}
-          '';
-        }
-    )
+    { services.journald.settings.Journal = journalSettings; }
 
     {
       # ------------------------------------------------------------------------- #

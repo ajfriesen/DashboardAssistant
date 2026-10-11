@@ -48,10 +48,8 @@
   # point of a bench board is to see everything — and a labgrid run that cannot
   # show a debug line is a run that cannot explain the failure it just caught.
   #
-  # Expressed as an option rather than by poking services.journald directly,
-  # because which journald option even exists depends on the channel (the Pi 5
-  # is on nixpkgs-unstable, where the old names were removed) and rpi5-dev is the
-  # image the bench actually flashes. flash-wear.nix owns that split; this just
+  # Expressed as an option rather than by poking services.journald directly, so
+  # flash-wear.nix stays the one place that writes journald.conf; this just
   # states the intent.
   #
   # Storage=volatile is deliberately NOT overridden here. The hourly sync and the

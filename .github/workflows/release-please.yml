@@ -68,16 +68,14 @@ jobs:
           version="${TAG#v}"
           case "$TAG" in *-*) channel=pre-release ;; *) channel=release ;; esac
           base="$R2_PUBLIC_URL/$channel"
-          # <board>/dashboard-assistant-<board>-<version>.<ext>: the board token is
-          # both the folder and part of the filename, so a downloaded image is still
+          # <board>/dashboard-assistant-<board>-<version>.<ext>: the board is both the
+          # folder and part of the filename, so a downloaded image is still
           # identifiable once it's out of its folder. Kept in step with the layout
           # the image workflows publish (see release-image.yml).
           x86_name="dashboard-assistant-x86_64-$version.raw.zst"
-          x86u_name="dashboard-assistant-x86_64-unstable-$version.raw.zst"
           rpi4_name="dashboard-assistant-rpi4-$version.raw.zst"
           rpi5_name="dashboard-assistant-rpi5-$version.raw.zst"
           x86="$base/x86_64/$x86_name"
-          x86u="$base/x86_64-unstable/$x86u_name"
           pi5="$base/rpi5/$rpi5_name"
           body=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body -q .body)
           notes=$(mktemp)
@@ -93,14 +91,5 @@ jobs:
             echo "| x86_64 | [\`$x86_name\`]($x86) |"
             echo "| Raspberry Pi 4 | [\`$rpi4_name\`]($base/rpi4/$rpi4_name) |"
             echo "| Raspberry Pi 5 | [\`$rpi5_name\`]($pi5) |"
-            # Last, and captioned, so nobody grabs it by accident: it is the same
-            # system on a newer mainline kernel, published untested.
-            echo "| x86_64 — unstable | [\`$x86u_name\`]($x86u) |"
-            echo
-            echo "> The **x86_64 — unstable** image is built from nixos-unstable with a"
-            echo "> mainline-latest kernel, for hardware the supported x86_64 image cannot"
-            echo "> bring up (black screen, no Wi-Fi, no touch on very recent silicon)."
-            echo "> It is best-effort and not tested on hardware before release — flash the"
-            echo "> plain x86_64 image unless that one does not come up."
           } > "$notes"
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$notes"

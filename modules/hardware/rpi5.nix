@@ -1,9 +1,7 @@
 # Raspberry Pi 5 (aarch64) hardware profile — SD-card image target.
 #
-# Built from nixpkgs-unstable (see flake.nix): the Pi 5 kernel/firmware bits are
-# newer than the pinned 26.05. Board specifics (linux-rpi kernel, RP1
-# southbridge, PCIe/NVMe, v3d GPU) come from the nixos-hardware raspberry-pi-5
-# module wired in via flake.nix.
+# Board specifics (linux-rpi kernel, RP1 southbridge, PCIe/NVMe, v3d GPU) come
+# from the nixos-hardware raspberry-pi-5 module wired in via flake.nix.
 #
 # Layout and boot chain are shared with the Pi 4 and, as far as the partition
 # table goes, with x86 — see modules/hardware/rpi-disk-image.nix and
