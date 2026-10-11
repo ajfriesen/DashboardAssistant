@@ -5,7 +5,8 @@ help:
   @echo "Build images:"
   @echo "  build-disk-image             Build the stable raw disk image (btrfs+zstd)"
   @echo "  build-disk-image-dev         Build the dev raw disk image (SSH + debugging)"
-  @echo "  build-disk-image-unstable    Build the raw disk image against nixos-unstable"
+  @echo "  build-disk-image-unstable    Build the raw disk image from nixos-unstable (newer kernel)"
+  @echo "  build-disk-image-unstable-dev  Build the nixos-unstable dev image (SSH + newer kernel)"
   @echo "  build-rpi4             Build the Raspberry Pi 4 SD-card image (aarch64)"
   @echo "  build-rpi5             Build the Raspberry Pi 5 SD-card image (aarch64, unstable)"
   @echo "  build-rpi5-dev         Build the Pi 5 SD-card image with root SSH (dev)"
@@ -59,17 +60,45 @@ build-disk-image-dev:
   @echo "Flash it (confirm the device first!):"
   @echo "  sudo dd if=$(readlink -f result)/dashboard-assistant.raw of=/dev/disk/by-id/ata-WDC_WDS100T2B0A-00SM50_195206A003DE bs=4M oflag=sync conv=fsync status=progress"
 
-# Build the stable raw disk image against nixos-unstable instead of the pinned
-# 26.05. --override-input swaps the flake's nixpkgs (disko follows it, so its
-# closure moves too); nothing is written to flake.lock. The same trick flips any
-# other recipe: append `--override-input nixpkgs github:NixOS/nixpkgs/nixos-unstable`.
-[doc('Build the stable raw disk image against nixos-unstable')]
+# Build the nixos-unstable flavour of the raw disk image: a mainline-latest kernel
+# (7.2 against 26.05's 6.18 at the current lock) plus unstable's newer mesa, for
+# hardware the supported image cannot bring up. Best-effort — see
+# docs/hardware-support/x86.md and modules/hardware/generic-x86-disk-unstable.nix.
+#
+# This used to be `nix build .#disk-image --override-input nixpkgs
+# github:NixOS/nixpkgs/nixos-unstable`, which resolved the channel at build time:
+# unpinned, unreproducible, and nothing a release artifact or a CI check could be
+# built from. It is now a real target pinned by flake.lock, evaluated by
+# nixpkgs-unstable's own lib.nixosSystem the way the Pi 5 is, so two people on the
+# same commit get the same image. Move it with `nix flake update nixpkgs-unstable`
+# — which also moves the Pi 5.
+#
+# The --override-input trick still works for a one-off on any *other* recipe, but
+# note it does NOT affect this target or the Pi 5: they are pinned to the
+# nixpkgs-unstable input, not to nixpkgs.
+#
+# Separate --out-link so it cannot clobber `result` from build-disk-image; note
+# `just qemu-run` boots `result`.
+[doc('Build the raw disk image from nixos-unstable (best-effort, newer kernel)')]
 build-disk-image-unstable:
-  nix build .#disk-image --override-input nixpkgs github:NixOS/nixpkgs/nixos-unstable
+  nix build .#disk-image-unstable --accept-flake-config --out-link result-unstable
   @echo
-  @echo "Image: $(readlink -f result)/dashboard-assistant.raw"
+  @echo "Image: $(readlink -f result-unstable)/dashboard-assistant-x86_64-unstable.raw"
   @echo "Flash it (confirm the device first!):"
-  @echo "  sudo dd if=$(readlink -f result)/dashboard-assistant.raw of=/dev/disk/by-id/ata-WDC_WDS100T2B0A-00SM50_195206A003DE bs=4M oflag=sync conv=fsync status=progress"
+  @echo "  sudo dd if=$(readlink -f result-unstable)/dashboard-assistant-x86_64-unstable.raw of=/dev/disk/by-id/ata-WDC_WDS100T2B0A-00SM50_195206A003DE bs=4M oflag=sync conv=fsync status=progress"
+
+# Dev flavour of the unstable image — root SSH on top of the newer kernel. This is
+# the one to reach for when a board the supported image cannot boot needs
+# diagnosing: a release image has no sshd at all, and the stable *-dev image by
+# construction cannot reproduce an unstable-kernel failure. Never flash this onto a
+# released device.
+[doc('Build the nixos-unstable dev raw disk image (SSH + newer kernel)')]
+build-disk-image-unstable-dev:
+  nix build .#disk-image-unstable-dev --accept-flake-config --out-link result-unstable-dev
+  @echo
+  @echo "Image: $(readlink -f result-unstable-dev)/dashboard-assistant-x86_64-unstable.raw"
+  @echo "Flash it (confirm the device first!):"
+  @echo "  sudo dd if=$(readlink -f result-unstable-dev)/dashboard-assistant-x86_64-unstable.raw of=/dev/disk/by-id/ata-WDC_WDS100T2B0A-00SM50_195206A003DE bs=4M oflag=sync conv=fsync status=progress"
 
 # Build the Raspberry Pi 4 (aarch64) SD-card image. On an x86 host the aarch64
 # closure builds via binfmt emulation — but once CI has populated the public
