@@ -6,3 +6,17 @@ Dashboard Assistant OS: a NixOS image that turns a mini-PC or Raspberry Pi into 
 - **Decisions**: before changing anything an ADR in [`docs/adr/`](docs/adr/) covers, read it. Don't "fix" deliberate choices. An ADR with `status: proposed` describes intended behaviour that isn't implemented yet; the code is the current truth.
 - **Commits**: Conventional Commits, because release-please derives versions and the changelog from them (`feat:`, `fix:`, `docs:`, … with a scope such as `fix(core):`).
 - **Docs**: `docs/` is the user-facing site (Zensical, explicit `nav` in `zensical.toml`). ADRs live in `docs/adr/` and are published but not in the nav; other developer docs stay in `developer/` as plain Markdown.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues on ajfriesen/DashboardAssistant, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default roles: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` at the root, ADRs in `docs/adr/`. See `docs/agents/domain.md`.
