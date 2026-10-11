@@ -99,7 +99,7 @@ file has changed, while a USB stick is applied each time you plug it in.
     **It is re-read when you change it.** The device records a checksum of
     the file it last imported, so:
 
-    - **first boot** — the file is applied, and the setup wizard is skipped
+    - **first boot** — the file is applied
     - **you edit it and reboot** — the new values are applied. This is how you
       re-provision a device in place: no reflash, no factory reset
     - **you leave it alone** — nothing is applied, on this or any later boot.
@@ -135,8 +135,8 @@ file has changed, while a USB stick is applied each time you plug it in.
     Unlike the boot partition, this applies **every time you plug the stick in**,
     changed or not. There is no checksum involved.
 
-Once imported, the setup wizard is skipped and the dashboard goes straight to
-your Home Assistant instance.
+Once the file is applied, the device goes straight to your Home Assistant
+dashboard.
 
 ## Pairing still works
 
