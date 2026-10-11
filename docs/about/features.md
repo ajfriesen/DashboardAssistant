@@ -28,8 +28,8 @@ icon: lucide/sparkles
 - Atomic OS updates surfaced as a Home Assistant `update` entity.
 - Recovery built in: if an update misbehaves, roll back to a previous
   generation from the [admin page](../usage/admin.md) — LAN-only, off the
-  touchscreen. (Automatic rollback on a failed boot isn't available yet — it
-  needs boot-counting support that U-Boot doesn't provide.)
+  touchscreen. (Automatic rollback on a failed boot isn't switched on yet,
+  though every image now boots through systemd-boot, which provides it.)
 
 **Hands-off provisioning**
 

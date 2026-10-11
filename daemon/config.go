@@ -19,6 +19,12 @@ import (
 // StateDirectory); handy for tests and relocating state.
 var stateDir = envOr("DASHBOARD_ASSISTANT_STATE_DIR", "/var/lib/dashboard-assistant")
 
+// Runtime directory, on tmpfs — systemd's RuntimeDirectory= for the daemon unit
+// (modules/core/daemon.nix). This is for handoff buffers that are read once and
+// have no value across a reboot; putting them in stateDir would wear the flash
+// for nothing. Overridable like stateDir, for tests and direct runs.
+var runtimeDir = envOr("DASHBOARD_ASSISTANT_RUNTIME_DIR", "/run/dashboard-assistant")
+
 var (
 	runtimeEnv   = stateDir + "/runtime.env"
 	markerFile   = stateDir + "/provisioned"
@@ -28,22 +34,34 @@ var (
 	// Reverse channel: in-session agents write the *actual* power state here and
 	// the daemon publishes it, so HA stays in sync with out-of-band changes.
 	displayStateFifo = stateDir + "/display-state.fifo"
-	apiTokenFile     = stateDir + "/api-token"       // device HA API token, generated on first boot / written by config import
-	pairedMarker     = stateDir + "/paired"          // set the first time Home Assistant actually uses the device token; closes the pairing window
-	urlsFile         = stateDir + "/urls.json"       // pushable page list (name+url), web UI / config import
-	navFifo          = stateDir + "/nav.fifo"        // daemon writes a URL; in-session agent navigates Chromium there
-	zoomFifo         = stateDir + "/zoom.fifo"       // daemon writes "zoom <pct>"; in-session agent applies CSS zoom over CDP
-	zoomFile         = stateDir + "/zoom"            // persisted browser zoom percent, restored by the kiosk on launch
-	themeFifo        = stateDir + "/theme.fifo"      // daemon writes "theme <dark|light>"; in-session agent flips HA's theme over CDP
-	themeFile        = stateDir + "/theme"           // persisted dark/light choice, restored by the kiosk on launch
-	rotationFifo     = stateDir + "/rotation.fifo"   // daemon writes "rotate <deg>"; in-session agent applies a Sway output transform
-	rotationFile     = stateDir + "/rotation"        // persisted display rotation (degrees), restored by the kiosk on launch
-	screenshotFifo   = stateDir + "/screenshot.fifo" // daemon pokes it; the in-session grim agent grabs the whole screen
-	screenshotFile   = stateDir + "/screenshot.jpg"  // latest whole-screen JPEG written by the grim agent, read back by the daemon
-	dmiFile          = stateDir + "/dmi.env"         // hardware serial, written by the daemon's root ExecStartPre (DMI is root-only)
-	sendspinFile     = stateDir + "/sendspin"        // persisted on/off for the Sendspin audio player, reapplied to its unit at daemon start
-	tlsCertFile      = stateDir + "/tls-cert.pem"    // self-signed cert for the LAN HA API; the integration pins its fingerprint
-	tlsKeyFile       = stateDir + "/tls-key.pem"     // its private key (0600 — nothing else on the device reads this)
+	apiTokenFile     = stateDir + "/api-token" // device HA API token, generated on first boot / written by config import
+	pairedMarker     = stateDir + "/paired"    // set the first time Home Assistant actually uses the device token; closes the pairing window
+	// sha256 of the last seed file the boot importer applied; re-import is gated
+	// on this changing. The path is owned by modules/core/configimport.nix and
+	// injected via daemon.nix, so the file the importer writes and the file
+	// factory reset deletes cannot drift apart; the fallback only covers tests
+	// and direct runs.
+	seedHashFile   = envOr("DASHBOARD_ASSISTANT_SEED_HASH_FILE", stateDir+"/seed-hash")
+	urlsFile       = stateDir + "/urls.json"       // pushable page list (name+url), web UI / config import
+	navFifo        = stateDir + "/nav.fifo"        // daemon writes a URL; in-session agent navigates Chromium there
+	zoomFifo       = stateDir + "/zoom.fifo"       // daemon writes "zoom <pct>"; in-session agent applies CSS zoom over CDP
+	zoomFile       = stateDir + "/zoom"            // persisted browser zoom percent, restored by the kiosk on launch
+	themeFifo      = stateDir + "/theme.fifo"      // daemon writes "theme <dark|light>"; in-session agent flips HA's theme over CDP
+	themeFile      = stateDir + "/theme"           // persisted dark/light choice, restored by the kiosk on launch
+	rotationFifo   = stateDir + "/rotation.fifo"   // daemon writes "rotate <deg>"; in-session agent applies a Sway output transform
+	rotationFile   = stateDir + "/rotation"        // persisted display rotation (degrees), restored by the kiosk on launch
+	screenshotFifo = stateDir + "/screenshot.fifo" // daemon pokes it; the in-session grim agent grabs the whole screen
+	// Latest whole-screen JPEG written by the grim agent, read back by the daemon.
+	// On tmpfs, NOT in stateDir: the daemon reads each frame once into memory (see
+	// ha.go) and never needs it again, while the capture rate is set by a Home
+	// Assistant automation rather than by us — one grab per 30s is ~860 MB/day, so
+	// on flash this is unbounded wear for a file nothing persists. Must match the
+	// path the in-session agent writes (modules/core/kiosk.nix).
+	screenshotFile = runtimeDir + "/screenshot.jpg"
+	dmiFile        = stateDir + "/dmi.env"      // hardware serial, written by the daemon's root ExecStartPre (DMI is root-only)
+	sendspinFile   = stateDir + "/sendspin"     // persisted on/off for the Sendspin audio player, reapplied to its unit at daemon start
+	tlsCertFile    = stateDir + "/tls-cert.pem" // self-signed cert for the LAN HA API; the integration pins its fingerprint
+	tlsKeyFile     = stateDir + "/tls-key.pem"  // its private key (0600 — nothing else on the device reads this)
 )
 
 const sessionUnit = "greetd.service" // the Sway kiosk session; restart relaunches it
@@ -194,6 +212,11 @@ func provisioningStatePaths() []string {
 	return []string{
 		markerFile, runtimeEnv, tokenFile, apiTokenFile, pairedMarker,
 		onlineMarker, urlsFile, zoomFile, themeFile, rotationFile,
+		// The recorded seed-file hash goes too, so a reset device re-imports
+		// the card it is sitting on instead of ignoring it. Without this a
+		// factory reset would appear to work and then come back unprovisioned
+		// with no way to re-seed short of editing the YAML on the card.
+		seedHashFile,
 		// The TLS keypair goes too, for the same reason as the API token: the
 		// entry in Home Assistant stops working either way, and a reset device
 		// should come back with a fresh identity rather than one an old pin

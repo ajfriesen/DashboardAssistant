@@ -47,6 +47,19 @@ let
   # rotation is a compositor-level Sway output transform. See rotationAgent below.
   rotationFifo = "/var/lib/dashboard-assistant/rotation.fifo";
   rotationFile = "/var/lib/dashboard-assistant/rotation";
+  # Screenshot: the daemon pokes the FIFO (it has no Wayland access of its own)
+  # and the in-session grim agent answers with a frame at screenshotFile.
+  #
+  # The FIFO stays in the state dir — it is a tmpfiles-created pipe, so it costs
+  # no writes. The FRAME does not: it is on tmpfs, because the daemon reads each
+  # one once into memory (daemon/ha.go) and never needs it again, while the
+  # capture rate belongs to a Home Assistant automation rather than to us. One
+  # grab per 30s is ~860 MB/day, which would make the OS the biggest writer on
+  # the device for a file a factory reset does not even bother deleting.
+  # screenshotFile must match daemon/config.go's runtimeDir; the directory is
+  # created by the daemon's RuntimeDirectory= (modules/core/daemon.nix).
+  screenshotFifo = "/var/lib/dashboard-assistant/screenshot.fifo";
+  screenshotFile = "/run/dashboard-assistant/screenshot.jpg";
   reportDisplayState = pkgs.writeShellScript "ha-report-display-state" ''
     ${pkgs.coreutils}/bin/printf '%s\n' "$*" \
       | ${pkgs.coreutils}/bin/timeout 1 ${pkgs.coreutils}/bin/tee ${displayStateFifo} >/dev/null 2>&1 || true
@@ -98,12 +111,58 @@ let
     chromeProfile="''${XDG_CONFIG_HOME:-$HOME/.config}/chromium"
     rm -f "$chromeProfile/SingletonLock" "$chromeProfile/SingletonCookie" "$chromeProfile/SingletonSocket" 2>/dev/null || true
 
+    # Browser cache in RAM. Chromium's HTTP cache and V8 code cache are the
+    # heaviest repeat writers on this device after the journal: the HA frontend
+    # revalidates its bundle continuously, and the code cache is rewritten
+    # wholesale on every Chromium or Home Assistant version change. None of it is
+    # worth keeping across a reboot — it re-fetches from a LAN Home Assistant in
+    # under a second.
+    #
+    # XDG_CACHE_HOME rather than --disk-cache-dir: the flag relocates the HTTP
+    # cache only, while this moves everything Chromium puts under ~/.cache in one
+    # line, and it is scoped to this script's children so nothing else on the
+    # system is affected.
+    #
+    # Under XDG_RUNTIME_DIR (/run/user/<uid>) rather than /tmp: it is tmpfs
+    # either way, but the runtime dir is 0700 and owned by the session, whereas
+    # /tmp is sticky and world-writable — a predictable path there is a
+    # pre-created-by-someone-else problem waiting to happen. logind also tears
+    # the runtime dir down with the session, so a cache cannot outlive the
+    # browser that owns it. The :-/tmp fallback matches waybarStart below and
+    # only ever fires outside a logind session; /tmp is still tmpfs thanks to
+    # modules/core/flash-wear.nix, so even the fallback stays off the card.
+    #
+    # The PROFILE deliberately stays on disk (~/.config/chromium). It holds the
+    # HA session: localStorage hassTokens, the frontend's service-worker
+    # registration, CacheStorage and IndexedDB. tokenInjector below can rebuild
+    # the token when autoLogin is on, but it cannot when autoLogin is off or no
+    # token was ever staged — and re-registering the PWA every boot is a visible
+    # first-paint regression on a Pi regardless. profile-sync-daemon is not the
+    # answer either: it rsyncs the profile back to flash on a timer and at
+    # shutdown, re-introducing exactly the writes this removes, and the shutdown
+    # sync is the one that does not run on a dashboard somebody unplugs.
+    #
+    # --disk-cache-size below is the hard bound, and it is load-bearing: left
+    # unset, Chromium sizes its cache from free space on the cache volume, which
+    # on a tmpfs is most of RAM — i.e. the kiosk session's own cache becomes the
+    # memory pressure that systemd-oomd (modules/core/memory.nix) then kills the
+    # session for, in a loop. 64 MiB is many times the HA frontend bundle.
+    #
+    # Accepted trade: mesa_shader_cache moves to RAM too, so the v3d shader cache
+    # is cold after every boot (~1s of extra compilation on first paint on a Pi).
+    # A shader cache is write-once-read-many, the one workload flash is fine
+    # with, but one env var beats a second knob. If first paint regresses
+    # measurably, pin it back with MESA_SHADER_CACHE_DIR=$HOME/.cache/mesa.
+    export XDG_CACHE_HOME="''${XDG_RUNTIME_DIR:-/tmp}/kiosk-cache"
+    ${pkgs.coreutils}/bin/mkdir -p "$XDG_CACHE_HOME"
+
     exec ${lib.getExe pkgs.chromium} \
       --app="$URL" \
       --no-first-run \
       --disable-infobars \
       --disable-pinch \
       --disable-session-crashed-bubble \
+      --disk-cache-size=67108864 \
       --overscroll-history-navigation=0 \
       --touch-events=enabled \
       --ozone-platform=wayland \
@@ -414,13 +473,13 @@ let
     for pid in $(${pkgs.procps}/bin/pgrep -f ha-screenshot-agent); do
       [ "$pid" = "$$" ] || kill "$pid" 2>/dev/null || true
     done
-    exec 3<> /var/lib/dashboard-assistant/screenshot.fifo
+    exec 3<> ${screenshotFifo}
     while IFS= read -r _ <&3; do
       if ${pkgs.grim}/bin/grim -t jpeg -q 70 \
-          /var/lib/dashboard-assistant/screenshot.jpg.tmp >/dev/null 2>&1; then
+          ${screenshotFile}.tmp >/dev/null 2>&1; then
         ${pkgs.coreutils}/bin/mv -f \
-          /var/lib/dashboard-assistant/screenshot.jpg.tmp \
-          /var/lib/dashboard-assistant/screenshot.jpg 2>/dev/null || true
+          ${screenshotFile}.tmp \
+          ${screenshotFile} 2>/dev/null || true
       fi
     done
   '';
@@ -1114,6 +1173,20 @@ in
     '';
   };
 
+  # Exposed so a flake check can assert on the flags the browser is launched
+  # with. tests/first-boot.nix force-disables greetd (no GPU — it crash-loops and
+  # buries the signals that test is about), so no VM test can ever exercise the
+  # Chromium command line, and kioskLauncher is a let-bound derivation that is
+  # otherwise invisible from `config`. Losing the cache flags would therefore be
+  # undetectable until a customer's SD card wore out. internal + readOnly: this
+  # is an assertion surface, not a knob.
+  options.dashboardAssistant.kiosk.launcher = lib.mkOption {
+    type = lib.types.package;
+    internal = true;
+    readOnly = true;
+    description = "The Chromium kiosk launcher script, for checks to inspect.";
+  };
+
   options.dashboardAssistant.kiosk.brightness.method = lib.mkOption {
     type = lib.types.enum [
       "auto"
@@ -1133,6 +1206,8 @@ in
   };
 
   config = {
+    dashboardAssistant.kiosk.launcher = kioskLauncher;
+
     programs.sway.enable = true;
 
     # Chromium lockdown, enforced by managed policy rather than command-line flags.
@@ -1270,9 +1345,10 @@ in
       # agent reads it and applies a Sway output transform.
       "p /var/lib/dashboard-assistant/rotation.fifo 0660 dashboard-assistant dashboard-assistant - -"
       # Screenshot FIFO: the daemon pokes it; the in-session grim agent grabs the
-      # whole screen. The agent writes screenshot.jpg (0644, world-readable) into
-      # the group-writable state dir, which the daemon reads back.
-      "p /var/lib/dashboard-assistant/screenshot.fifo 0660 dashboard-assistant dashboard-assistant - -"
+      # whole screen. The frame itself does NOT land here — it goes to
+      # /run/dashboard-assistant/screenshot.jpg (tmpfs), created by the daemon's
+      # RuntimeDirectory=, because an HA automation sets how often it is taken.
+      "p ${screenshotFifo} 0660 dashboard-assistant dashboard-assistant - -"
     ];
 
     hardware.graphics.enable = true;

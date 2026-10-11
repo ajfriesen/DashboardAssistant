@@ -54,6 +54,7 @@ walking past it can roll the device back or reset it.
 
 !!! note "Automatic rollback isn't available yet"
     Booting into the previous generation *automatically* after a failed boot
-    relies on boot-counting support. The images use **U-Boot**, which doesn't
-    provide it, and the NixOS support is still in testing — so today recovery is
-    manual, using the admin page. This may change as the targets mature.
+    relies on boot-counting support, which comes from **systemd-boot**. Every
+    image boots through it now, so the mechanism is available — switching it on
+    is tracked separately. Until then recovery is manual, using the admin
+    page.

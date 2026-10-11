@@ -73,8 +73,8 @@ jobs:
           # identifiable once it's out of its folder. Kept in step with the layout
           # the image workflows publish (see release-image.yml).
           x86_name="dashboard-assistant-x86_64-$version.raw.zst"
-          rpi4_name="dashboard-assistant-rpi4-$version.img.zst"
-          rpi5_name="dashboard-assistant-rpi5-$version.img.zst"
+          rpi4_name="dashboard-assistant-rpi4-$version.raw.zst"
+          rpi5_name="dashboard-assistant-rpi5-$version.raw.zst"
           x86="$base/x86_64/$x86_name"
           pi5="$base/rpi5/$rpi5_name"
           body=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body -q .body)

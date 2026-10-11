@@ -17,6 +17,36 @@
     memoryPercent = 50;
   };
 
+  # Reclaim tuning for a system whose only swap is compressed RAM. NixOS'
+  # zramSwap module writes zram-generator.conf and nothing else; Fedora ships
+  # these two sysctls separately (zram-generator-defaults), so this fills a gap
+  # upstream fills elsewhere rather than deviating from it.
+  #
+  # HONEST ACCOUNTING, because this sits next to a flash-wear module and is not
+  # one: this writes nothing to flash and saves nothing directly — zram never
+  # touches the card. The flash benefit is second-order and small (tilting
+  # reclaim away from page-cache eviction means fewer re-READS later). The real
+  # reasons to take it are responsiveness under pressure on a 2 GB Pi 4 and
+  # fewer oomd kills of the kiosk session. On a 4 GB Pi 5 or an x86 box, where
+  # swap essentially never activates, it buys nothing measurable.
+  #
+  # Deliberately NOT here: vm.dirty_writeback_centisecs / vm.dirty_expire_centisecs.
+  # They are the VM-layer analogue of Armbian's ext4 `commit=600` and look like
+  # an obvious win, but on a btrfs root they are a no-op — btrfs forces a
+  # transaction commit every 30s regardless of writeback settings.
+  boot.kernel.sysctl = {
+    # The stock 60 is balanced for a disk swap ~1000x slower than RAM. With zstd
+    # zram the cost of swapping an anon page is one compression, so reclaim
+    # should tilt hard toward swapping anon pages instead of evicting page
+    # cache. 180 is Fedora's value for exactly this configuration (the ceiling
+    # was raised from 100 to 200 in 5.8 to allow it).
+    "vm.swappiness" = 180;
+    # Swap readahead exists to amortise disk seeks; zram has none, so every
+    # extra page read is a wasted decompression. The kernel's zram
+    # documentation recommends 0 and ChromeOS has shipped it for years.
+    "vm.page-cluster" = 0;
+  };
+
   # Proactive OOM handling: when memory pressure spikes, kill the offending
   # cgroup instead of letting the box thrash. For a single-app kiosk the offender
   # is Chromium, and killing its session makes greetd relaunch a fresh dashboard

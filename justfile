@@ -20,6 +20,14 @@ help:
   @echo "  inject-token TOKEN     Log the kiosk into HA by injecting a long-lived token via CDP"
   @echo "  cdp-eval EXPR          Evaluate arbitrary JS in the kiosk page over CDP"
   @echo
+  @echo "Hardware bench (labgrid — see labgrid/README.md):"
+  @echo "  hw-status              Report the state of every link in the bench chain"
+  @echo "  hw-seed --ha-url URL   Provision the bench board from a real seed file"
+  @echo "  hw-test                Flash the Pi 5 dev image to the bench board and assert first boot"
+  @echo "  hw-flash               Flash the bench board and stop there"
+  @echo "  hw-console             Watch the bench board's serial console"
+  @echo "  hw-power ACTION        on | off | cycle | state | draw on the bench plug"
+  @echo
   @echo "Introspect:"
   @echo "  options                List the dashboardAssistant.* NixOS config options"
   @echo
@@ -71,39 +79,46 @@ build-disk-image-unstable:
 # if the cache is cold or unreachable. Then flash the image to an SD card.
 # Note: the flake substituter is only honoured if you're a trusted Nix user
 # (nix.settings.trusted-users on this workstation).
+#
+# Built by disko from the same layout as the x86 image, so the artifact is a
+# single raw GPT image and is flashed exactly like one — no .zst, no sd-image
+# subdirectory. The image-builder VM runs natively (see
+# dashboardAssistant.diskImage.builderPkgs); only nixos-install's chroot is
+# emulated, which needs binfmt plus boot.binfmt.preferStaticEmulators on this
+# workstation. The unqualified `.#rpi*-image` attrs resolve to this host's
+# packages bucket, which is what picks the right builder VM: cross/binfmt on
+# an x86 workstation, fully native on an aarch64 one.
 [doc('Build the Raspberry Pi 4 SD-card image (aarch64)')]
 build-rpi4:
-  nix build .#packages.aarch64-linux.rpi4-image --accept-flake-config --out-link result-rpi4
+  nix build .#rpi4-image --accept-flake-config --out-link result-rpi4
   @echo
-  @echo "Image: $(readlink -f result-rpi4)/sd-image/"*.img.zst
+  @echo "Image: $(readlink -f result-rpi4)/dashboard-assistant-rpi4.raw"
   @echo "Flash it (confirm the device first!):"
-  @echo "  zstdcat result-rpi4/sd-image/*.img.zst | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync"
+  @echo "  sudo dd if=result-rpi4/dashboard-assistant-rpi4.raw of=/dev/sdX bs=4M status=progress conv=fsync"
 
 # Build the Raspberry Pi 5 (aarch64) SD-card image. Always built from
-# nixos-unstable (pinned in flake.nix, not via override): the Pi 5 kernel and
-# the sd-image pi5 support are newer than the pinned 26.05. Same emulated-build /
-# binary-cache story as build-rpi4. Then flash the image to an SD card.
+# nixos-unstable (pinned in flake.nix, not via override): the Pi 5 kernel is
+# newer than the pinned 26.05. Same emulated-build / binary-cache story as
+# build-rpi4, and the same raw disko artifact.
 [doc('Build the Raspberry Pi 5 SD-card image (aarch64, unstable)')]
 build-rpi5:
-  nix build .#packages.aarch64-linux.rpi5-image --accept-flake-config --out-link result-rpi5
+  nix build .#rpi5-image --accept-flake-config --out-link result-rpi5
   @echo
-  @echo "Image: $(readlink -f result-rpi5)/sd-image/"*.img.zst
+  @echo "Image: $(readlink -f result-rpi5)/dashboard-assistant-rpi5.raw"
   @echo "Flash it (confirm the device first!):"
-  @echo "  zstdcat result-rpi5/sd-image/*.img.zst | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync"
+  @echo "  sudo dd if=result-rpi5/dashboard-assistant-rpi5.raw of=/dev/sdX bs=4M status=progress conv=fsync"
 
 # Build the dev flavour of the Pi 5 image: same system plus root SSH (the keys in
 # modules/dev.nix). Flash this one when a Pi needs debugging — with sshd up you
 # reconfigure it in place with `just deploy-rpi5-dev` instead of pulling the card
 # and reflashing for every change. Never ship it: a release image has no sshd.
-# Unlike the release image this one is uncompressed (raw .img): the .zst pass
-# runs under emulation and costs ~2 minutes per build for no local benefit.
 [doc('Build the Raspberry Pi 5 SD-card image with root SSH (dev/debugging)')]
 build-rpi5-dev:
-  nix build .#packages.aarch64-linux.rpi5-image-dev --accept-flake-config --out-link result-rpi5-dev
+  nix build .#rpi5-image-dev --accept-flake-config --out-link result-rpi5-dev
   @echo
-  @echo "Image: $(readlink -f result-rpi5-dev)/sd-image/"*.img
+  @echo "Image: $(readlink -f result-rpi5-dev)/dashboard-assistant-rpi5.raw"
   @echo "Flash it (confirm the device first!):"
-  @echo "  sudo dd if=result-rpi5-dev/sd-image/*.img of=/dev/sdX bs=4M status=progress conv=fsync"
+  @echo "  sudo dd if=result-rpi5-dev/dashboard-assistant-rpi5.raw of=/dev/sdX bs=4M status=progress conv=fsync"
   @echo
   @echo "Then, for every change after that (no reflash):"
   @echo "  just deploy-rpi5-dev root@dashboard-assistant-<mac6>.local"
@@ -214,6 +229,76 @@ cdp-eval expr:
   jq -cn --arg e '{{expr}}' \
     '{id:1,method:"Runtime.evaluate",params:{expression:$e,returnByValue:true}}' \
     | timeout 5 websocat "$ws" || true
+
+# Report the state of the whole bench chain: sg module, mux control and block
+# nodes and whether they are writable, mux mode, card size, plug state and draw,
+# serial port, and whether a built image is around. Read-only and safe at any
+# time — this is the first thing to run when a hardware test fails, because
+# "resource unavailable" has four unrelated causes and this says which one.
+[doc('Report the state of every link in the bench chain')]
+hw-status:
+  "${LABGRID_PYTHON:?not set — enter the dev shell with 'nix develop' or 'direnv allow'}" \
+    labgrid/status.py
+
+# Provision the bench board for real: write a seed file with an actual Home
+# Assistant URL (and optionally Wi-Fi) onto the running board, trigger the
+# first-boot importer, and report what the device did with it. Unlike the test,
+# which uses a documentation-range URL and asserts, this is for seeing the result
+# in Home Assistant.
+#
+# Keep the Wi-Fi passphrase out of shell history and out of this repo — pass it in
+# the environment, ideally via secretspec:
+#   DA_WIFI_PSK=... just hw-seed --ha-url http://192.168.178.73:8123 --wifi-ssid MyNet
+[doc('Provision the bench board from a real seed file')]
+hw-seed *ARGS:
+  "${LABGRID_PYTHON:?not set — enter the dev shell with 'nix develop' or 'direnv allow'}" \
+    labgrid/seed.py {{ARGS}}
+
+# Flash the Pi 5 dev image onto the bench board and run the hardware first-boot
+# tests against it: labgrid switches the USB-SD-Mux to this host, dd's the image
+# onto the card, hands it back to the board, cycles the ESPHome plug and logs in
+# over the Debug Probe's UART. Roughly 4 GiB of dd plus a first boot that resizes
+# the filesystem, so budget several minutes.
+#
+# Builds first because the tests flash whatever is currently in result-rpi5-dev/ —
+# forgetting to rebuild is how you spend ten minutes testing the previous commit.
+# The image must be the *dev* flavour: the release image has no console password
+# and cannot be driven (see labgrid/README.md).
+#
+# While iterating on assertions, skip the reflash entirely:
+#   pytest labgrid/ --lg-initial-state shell
+[doc('Flash the Pi 5 dev image to the bench board and assert first boot')]
+hw-test *ARGS: build-rpi5-dev
+  pytest labgrid/ -v {{ARGS}}
+
+# Flash the bench board and stop, leaving the card in the board's hands and the
+# power off. For bringing a board up by hand, or bisecting a boot failure where
+# the assertions are not the interesting part. Same image discovery as hw-test.
+# No test wants the `flashed` state on its own, so this drives the strategy
+# directly rather than inventing a test that asserts nothing. LABGRID_PYTHON, not
+# python3: the dev shell has more than one interpreter on PATH and only that one
+# has labgrid (see flake.nix).
+[doc('Flash the bench board and stop there')]
+hw-flash *ARGS: build-rpi5-dev
+  "${LABGRID_PYTHON:?not set — enter the dev shell with 'nix develop' or 'direnv allow'}" \
+    labgrid/flash.py {{ARGS}}
+
+# Watch the bench board's serial console. This is the tool for the questions the
+# harness cannot answer for you: which tty the console actually lands on, what the
+# shell prompt looks like, and what U-Boot printed before it gave up. Ctrl-A
+# Ctrl-X to quit picocom.
+#
+# Nothing else may hold the port — stop a running labgrid exporter or test first.
+[doc("Watch the bench board's serial console")]
+hw-console:
+  picocom -b 115200 \
+    /dev/serial/by-id/usb-Raspberry_Pi_Debug_Probe__CMSIS-DAP__E665B8388780722E-if01
+
+# Drive the bench plug by hand: on, off, cycle, state, or draw (active power in
+# watts — a quick way to tell a board that is running from one that is not).
+[doc('on | off | cycle | state | draw on the bench plug')]
+hw-power ACTION:
+  ./labgrid/bench-power.sh {{ACTION}}
 
 # Apply the R2 bucket lifecycle policy from ops/r2-lifecycle.json (R2 speaks the
 # S3 PutBucketLifecycleConfiguration API). Needs R2_ACCOUNT_ID + R2 S3 credentials

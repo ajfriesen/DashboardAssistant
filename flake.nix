@@ -64,6 +64,18 @@
       # edit it by hand.
       version = "1.0.0-rc.1"; # x-release-please-version
 
+      # Interpreter for the hardware bench (labgrid/). labgrid and pytest have to
+      # share one env: labgrid ships its fixtures as a pytest11 entry point, so a
+      # pytest from any other Python simply does not see them and --lg-env becomes
+      # an unknown option. Bound here rather than inline in the devShell so the
+      # interpreter itself can be exported as LABGRID_PYTHON — other packages in
+      # the shell (zensical) drag their own python3 onto PATH, and which one wins
+      # is an accident of ordering.
+      labgridPython = pkgs.python314.withPackages (ps: [
+        ps.labgrid
+        ps.pytest
+      ]);
+
       # Optional per-build overrides (e.g. a seeded HA URL / debug flags). See
       # modules/local.example.nix. Must be git-tracked to be picked up.
       localModules = lib.optional (builtins.pathExists ./modules/local.nix) ./modules/local.nix;
@@ -84,15 +96,45 @@
           ++ extraModules;
         };
 
-      # The Pi 5 system, parameterised the same way, so its stable and dev
-      # flavours cannot drift apart. nixpkgs-unstable's lib.nixosSystem for the
-      # same reason the stable flavour uses it (see below).
+      # The Pi systems, parameterised by extra modules (so the stable and dev
+      # flavours cannot drift apart) and by builderPkgs — the *build machine's*
+      # pkgs, used only to run disko's image-builder VM at native speed; see
+      # dashboardAssistant.diskImage.builderPkgs. Pass the build host's pkgs
+      # when cross-building from x86 (it must come from the same channel as
+      # the system, so the VM's kernel and qemu match the disko module
+      # instance), or null on a native aarch64 builder, which leaves the VM
+      # native and binfmt off. Hardcoding x86_64 here was exactly wrong on an
+      # ARM host: it put a foreign qemu and kernel inside the builder VM.
+      mkRpi4System =
+        builderPkgs: extraModules:
+        lib.nixosSystem {
+          system = "aarch64-linux";
+          specialArgs = {
+            inherit impermanence version;
+            pkgsBuild = builderPkgs;
+          };
+          modules = [
+            disko.nixosModules.disko
+            nixos-hardware.nixosModules.raspberry-pi-4
+            ./modules/hardware/rpi4.nix
+            ./modules/core/default.nix
+          ]
+          ++ localModules
+          ++ extraModules;
+        };
+
+      # nixpkgs-unstable's lib.nixosSystem for the same reason the stable
+      # flavour uses it (see below).
       mkRpi5System =
-        extraModules:
+        builderPkgs: extraModules:
         nixpkgs-unstable.lib.nixosSystem {
           system = "aarch64-linux";
-          specialArgs = { inherit impermanence version; };
+          specialArgs = {
+            inherit impermanence version;
+            pkgsBuild = builderPkgs;
+          };
           modules = [
+            disko.nixosModules.disko
             nixos-hardware.nixosModules.raspberry-pi-5
             ./modules/hardware/rpi5.nix
             ./modules/core/default.nix
@@ -115,25 +157,16 @@
         dashboard-assistant-x86-disk-dev = mkDiskSystem [ ./modules/dev.nix ];
 
         # Raspberry Pi 4 (aarch64) — SD-card image, for bring-up/testing on a Pi.
-        # Build the flashable image via `.#rpi4-image` (aarch64; this host builds
-        # it via binfmt emulation, fetching most from the binary cache).
-        dashboard-assistant-rpi4 = lib.nixosSystem {
-          system = "aarch64-linux";
-          specialArgs = { inherit impermanence version; };
-          modules = [
-            nixos-hardware.nixosModules.raspberry-pi-4
-            ./modules/hardware/rpi4.nix
-            ./modules/core/default.nix
-          ]
-          ++ localModules;
-        };
+        # Build the flashable image via `.#rpi4-image` (aarch64; an x86 host
+        # builds it via binfmt emulation, fetching most from the binary cache).
+        dashboard-assistant-rpi4 = mkRpi4System pkgs [ ];
 
         # Raspberry Pi 5 (aarch64) — SD-card image. Built from nixpkgs-unstable
         # (its lib.nixosSystem, so it is pinned to unstable regardless of any
         # `--override-input nixpkgs` on the other targets): the Pi 5 kernel and
         # the sd-image pi5 support are newer than the pinned 26.05. Build the
         # flashable image via `.#rpi5-image`.
-        dashboard-assistant-rpi5 = mkRpi5System [ ];
+        dashboard-assistant-rpi5 = mkRpi5System nixpkgs-unstable.legacyPackages.${system} [ ];
 
         # Dev flavour of the Pi 5 image — same base plus modules/dev.nix, which
         # declares the root SSH keys that turn sshd on (see modules/core/debug.nix;
@@ -142,17 +175,12 @@
         # `nixos-rebuild switch --flake .#dashboard-assistant-rpi5-dev --target-host`,
         # so iterating no longer means pulling the card and reflashing. Build via
         # `.#rpi5-image-dev` or `just build-rpi5-dev`.
-        dashboard-assistant-rpi5-dev = mkRpi5System [
+        # Dev flavour of the Pi 5 image — same base plus modules/dev.nix.
+        # No compression knob any more: disko emits a single uncompressed
+        # .raw for every target, the same as the x86 images, and release
+        # artifacts are compressed by the publishing workflow instead.
+        dashboard-assistant-rpi5-dev = mkRpi5System nixpkgs-unstable.legacyPackages.${system} [
           ./modules/dev.nix
-          # Skip the .img.zst artifact compression for the local-only dev
-          # image: under binfmt emulation the compress/decompress/compress
-          # dance costs ~2 minutes per build and buys nothing locally — dd
-          # writes the same bytes to the card either way, and the outer pass
-          # only manages ~1.7x because the filesystem inside is already
-          # zstd-compressed. Release images keep it: 2.25 vs 3.86 GiB is what
-          # people download. Inline (not in dev.nix) because the x86 dev
-          # variants share dev.nix and have no sdImage options.
-          { sdImage.compressImage = lib.mkForce false; }
         ];
       };
 
@@ -173,27 +201,98 @@
         # source and exposed for standalone builds (`nix build .#sendspin-player`);
         # modules/core/sendspin.nix pulls it in via callPackage.
         sendspin-player = pkgs.callPackage ./packages/sendspin-go/sendspin-go.nix { };
+
+        # Raspberry Pi SD-card images, cross-built *from this x86 host*: the
+        # aarch64 system compiles under binfmt while disko's image-builder VM
+        # runs natively on x86 (see dashboardAssistant.diskImage.builderPkgs).
+        # This bucket is what an x86 workstation and CI build — `nix build
+        # .#rpi5-image` resolves here. The aarch64-linux bucket below carries
+        # the same images wired for a *native* aarch64 builder instead.
+        rpi4-image = self.nixosConfigurations.dashboard-assistant-rpi4.config.system.build.diskoImages;
+        rpi5-image = self.nixosConfigurations.dashboard-assistant-rpi5.config.system.build.diskoImages;
+        rpi5-image-dev =
+          self.nixosConfigurations.dashboard-assistant-rpi5-dev.config.system.build.diskoImages;
       };
 
-      # Raspberry Pi 4 SD-card image: `nix build .#rpi4-image`, then flash
-      # result/sd-image/*.img.zst to the card (zstdcat | dd, or unzstd first).
-      packages.aarch64-linux.rpi4-image =
-        self.nixosConfigurations.dashboard-assistant-rpi4.config.system.build.sdImage;
-
-      # Raspberry Pi 5 SD-card image (built from unstable): `nix build .#rpi5-image`,
-      # then flash result/sd-image/*.img.zst to the card (same as the Pi 4).
-      packages.aarch64-linux.rpi5-image =
-        self.nixosConfigurations.dashboard-assistant-rpi5.config.system.build.sdImage;
-
-      # Same image plus root SSH, for debugging on real hardware without
-      # reflashing between changes: `nix build .#rpi5-image-dev`.
-      packages.aarch64-linux.rpi5-image-dev =
-        self.nixosConfigurations.dashboard-assistant-rpi5-dev.config.system.build.sdImage;
+      # The same Pi images for a *native* aarch64 builder (an ARM runner or a
+      # developer's ARM machine): builderPkgs stays null, so disko's builder VM
+      # is aarch64 itself and no binfmt is involved. All targets emit a raw GPT
+      # image from the one layout in modules/hardware/disk-layout.nix and are
+      # flashed identically:
+      #   sudo dd if=result-rpi5/dashboard-assistant-rpi5.raw of=/dev/sdX ...
+      #
+      # Kept separate from the x86 bucket above because the right builder VM
+      # depends on the machine evaluating the build — these attrs used to be
+      # hard-wired to an x86_64 builder VM, which inverted the native-speed
+      # trick on exactly the hosts whose system the attr path names.
+      packages.aarch64-linux = {
+        rpi4-image = (mkRpi4System null [ ]).config.system.build.diskoImages;
+        rpi5-image = (mkRpi5System null [ ]).config.system.build.diskoImages;
+        # Same image plus root SSH, for debugging on real hardware without
+        # reflashing between changes: `nix build .#rpi5-image-dev`.
+        rpi5-image-dev = (mkRpi5System null [ ./modules/dev.nix ]).config.system.build.diskoImages;
+      };
 
       # VM tests. `nix flake check`, or `nix build .#checks.x86_64-linux.first-boot`
-      # for one.
+      # for one. Adding a check here means adding its name to the matrix in
+      # .github/workflows/vm-tests.yml too, or it never runs on a PR.
       checks.${system} = {
         first-boot = import ./tests/first-boot.nix { inherit pkgs version; };
+
+        # Flash-wear flags on the browser command line. This is an eval-time
+        # check rather than an assertion in first-boot.nix because that test
+        # force-disables greetd (no GPU — Chromium crash-loops and buries the
+        # signals the test is about), so no VM test can ever see the Chromium
+        # command line. The flags would therefore be free to disappear, and the
+        # only symptom would be customers' SD cards wearing out months later.
+        kiosk-flash-flags =
+          pkgs.runCommand "kiosk-flash-flags"
+            {
+              launcher =
+                self.nixosConfigurations.dashboard-assistant-x86-disk.config.dashboardAssistant.kiosk.launcher;
+            }
+            ''
+              set -euo pipefail
+              # fail= accumulator so every sub-assertion reports before exiting,
+              # matching .github/workflows/cache-rpi.yml.
+              fail=0
+              grep -q 'XDG_CACHE_HOME=.*kiosk-cache' "$launcher" || {
+                echo "FAIL: the kiosk browser cache is back on flash — Chromium's HTTP and V8 code caches will write to the SD card continuously." >&2
+                fail=1
+              }
+              grep -q -- '--disk-cache-size=' "$launcher" || {
+                echo "FAIL: no --disk-cache-size — Chromium sizes its cache from free space, which on a tmpfs is most of RAM, so systemd-oomd will kill the kiosk session in a loop." >&2
+                fail=1
+              }
+              [ "$fail" = 0 ] || exit 1
+              touch "$out"
+            '';
+
+        # The screenshot handoff path has a writer in Nix (the in-session grim
+        # agent) and a reader in Go (the daemon), with nothing coupling them.
+        # If they drift, the HA image entity silently serves nothing — and on
+        # the old path it silently wore the card instead.
+        screenshot-path-agreement =
+          pkgs.runCommand "screenshot-path-agreement"
+            {
+              kiosk = ./modules/core/kiosk.nix;
+              daemonConfig = ./daemon/config.go;
+            }
+            ''
+              set -euo pipefail
+              fail=0
+              want=/run/dashboard-assistant/screenshot.jpg
+              grep -q "\"$want\"" "$kiosk" || {
+                echo "FAIL: the grim agent no longer writes $want — the Home Assistant screenshot entity will time out." >&2
+                fail=1
+              }
+              grep -q 'runtimeDir + "/screenshot.jpg"' "$daemonConfig" || {
+                echo "FAIL: the daemon no longer reads the screenshot from the tmpfs runtime dir — frames are back on flash, at a rate a Home Assistant automation controls." >&2
+                fail=1
+              }
+              [ "$fail" = 0 ] || exit 1
+              touch "$out"
+            '';
       };
 
       devShells.${system}.default = pkgs.mkShell {
@@ -228,9 +327,36 @@
           # Drive real boards from the host: power, serial console, USB storage.
           # The VM tests cover what a VM can (see tests/), which leaves the
           # hardware-specific failures — U-Boot, firmware, the touchscreen — only
-          # reproducible on a Pi or an x86 box sitting on the bench.
-          pkgs.python314Packages.labgrid
+          # reproducible on a Pi or an x86 box sitting on the bench. See labgrid/
+          # for the bench wiring and `just hw-test`.
+          #
+          # Puts pytest, labgrid-client, labgrid-exporter and labgrid-coordinator
+          # on PATH. See the labgridPython binding above for why it is one env.
+          labgridPython
+          # labgrid's USBSDMuxDriver does not talk to the mux itself, it execs
+          # this. Needs the host side too (sg module + udev rules) — see
+          # labgrid/README.md.
+          pkgs.usbsdmux
+          # Inspect a built sd-image's FAT partition without mounting it or
+          # needing root: `mdir`/`mtype`/`minfo -i "$img@@$((2048*512))"` reads
+          # partition 1 straight out of the .img, `partx` finds its offset, and
+          # `fsck.vfat` checks the extracted filesystem. That is how the README
+          # and example seed file staged onto the firmware partition get verified
+          # (modules/core/configimport.nix), and labgrid/README.md has documented
+          # an mcopy invocation this shell could not run until now.
+          pkgs.mtools
+          pkgs.dosfstools
+          pkgs.util-linux
+          # `just hw-console`: watch the board's UART by hand, which is how you
+          # confirm the console lands where the harness expects.
+          pkgs.picocom
         ];
+
+        # Unambiguous path to the interpreter that has labgrid, for scripts that
+        # need to `import labgrid` rather than run pytest (`just hw-flash`). Bare
+        # `python3` in this shell is whichever python landed on PATH first, which
+        # is usually not this one.
+        LABGRID_PYTHON = "${labgridPython}/bin/python3";
 
         # OVMF firmware for `just qemu-run`. Exported here rather than looked up
         # in the recipe so the VM boots the same firmware the pinned nixpkgs

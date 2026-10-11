@@ -1,0 +1,66 @@
+# labgrid environment for the hardware bench: one Raspberry Pi 5 whose SD card is
+# held by a USB-SD-Mux, watched over a Raspberry Pi Debug Probe and powered
+# through an ESPHome smart plug.
+#
+# Resources are declared directly (udev matches) rather than acquired from the
+# coordinator. Everything here runs on one machine, and labgrid's remote path
+# would turn that into a liability: NetworkResource.command_prefix always routes
+# through ssh (so dd and usbsdmux would run over ssh-to-self) and
+# ManagedFile.sync_to_resource rsyncs the image into ~/.cache on the "remote"
+# host — a 4 GiB copy per flash, to and from the same disk. labgrid-config.yaml
+# next to this file keeps the exporter definition for the day a second board or a
+# CI runner shows up.
+#
+# Host prerequisites (sg module, usbsdmux, device permissions) are in README.md.
+targets:
+  main:
+    resources:
+      # The mux exposes two children: a scsi_generic node (control) and a block
+      # device (the card itself). labgrid discovers both by walking the USB
+      # device, and only reports the resource as available once it has found each
+      # — so a missing /dev/sg* shows up as "resource unavailable", not as a
+      # permissions error. Matched on the mux's own serial, printed on its label.
+      - USBSDMuxDevice:
+          match:
+            ID_SERIAL_SHORT: '00048.01623'
+      # The Debug Probe presents two USB interfaces: if00 is CMSIS-DAP (SWD),
+      # if01 is the UART. Addressed by by-id path rather than /dev/ttyACM0, which
+      # moves whenever something else with a CDC-ACM interface is plugged in.
+      - RawSerialPort:
+          port: /dev/serial/by-id/usb-Raspberry_Pi_Debug_Probe__CMSIS-DAP__E665B8388780722E-if01
+          speed: 115200
+
+    drivers:
+      # $BASE is labgrid's own substitution for the directory holding this file,
+      # so power works regardless of the cwd pytest was started from.
+      - ExternalPowerDriver:
+          cmd_on: !template $BASE/bench-power.sh on
+          cmd_off: !template $BASE/bench-power.sh off
+          # Seconds between off and on when the driver cycles. A Pi 5 needs a
+          # moment with the rail actually down; too short and it never resets.
+          delay: 5.0
+      # Both of these bind to the USBSDMuxDevice above: one switches the card
+      # between host and DUT, the other dd's an image onto it while the host
+      # holds it.
+      - USBSDMuxDriver: {}
+      - USBStorageDriver: {}
+      - SerialDriver: {}
+      - ShellDriver:
+          # Matches the plain PS1 that modules/dev.nix sets on the *-dev images
+          # ("root@dashboard-assistant-a1b2c3:~# "). Read the comment there before
+          # touching either side: NixOS' stock prompt carries colour, xterm-title
+          # and bracketed-paste escapes, and ShellDriver's `{marker}\s+{prompt}`
+          # patterns cannot match across them at all.
+          prompt: 'root@[^\s]+:[^\s]*# '
+          login_prompt: 'login: '
+          username: root
+          # Set by modules/dev.nix on the *-dev images only; release images have
+          # no password and cannot be driven this way on purpose.
+          password: dashboard
+          # First boot grows the filesystem and generates a TLS keypair before it
+          # ever reaches a login prompt, on an SD card. Be patient.
+          login_timeout: 420
+      - DashboardAssistantStrategy: {}
+
+imports:
+  - strategy.py

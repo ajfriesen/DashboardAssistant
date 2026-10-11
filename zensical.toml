@@ -77,6 +77,7 @@ nav = [
      ]},
   ]},
   { "In Action" = "in-action.md" },
+  { "Stack for Nerds" = "stack-for-nerds.md" },
   {"Hardware Support" = [
      "hardware-support/index.md",
      "hardware-support/x86.md",
