@@ -221,8 +221,14 @@ def board(env):
     Here for the `image` fixture, which picks which image to look for. The
     *skipping* of other boards' tests does not go through this: it happens at
     collection time, before any fixture exists. See _skip_other_boards.
+
+    Read from the file rather than through `env.config.get_option`, which
+    re-raises KeyError whenever the default is None (labgrid/config.py) — so the
+    obvious spelling would throw for any environment that declares no board
+    instead of returning one. It also keeps this and the collection-time check
+    reading the same thing the same way.
     """
-    return env.config.get_option("board", None)
+    return bench.declared_board(env.config_file)
 
 
 @pytest.fixture(scope="session")

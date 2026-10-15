@@ -74,10 +74,12 @@ jobs:
             echo "\`modules/core/update.nix\` polls, and its notes carry no download"
             echo "links. Run the release gate on the bench, then promote it."
             echo
-            echo "Until promotion is automated, by hand:"
+            echo "Until the gate has a single entry point, by hand:"
             echo
             echo '```sh'
-            echo "just release-check    # the gate, on the bench"
+            echo "just hw-preflight     # is the bench healthy?"
+            echo "just hw-test          # the Pi 5 bench"
+            echo "just qemu-test        # the x86_64 image under QEMU"
             echo "gh release edit $TAG --draft=false --prerelease=false --latest"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

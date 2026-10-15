@@ -294,6 +294,22 @@ def gather(target, measure_serial=False):
     # Route the card here to measure it, then hand it back whatever happens: a
     # preflight that leaves the card pointed at the wrong end has broken the
     # thing it was checking.
+    #
+    # Power down first, for the same reason the strategy's `flashed` transition
+    # does: the card is about to be pulled out from under whatever is running on
+    # the board. That is not hypothetical here — the documented
+    # iterate-on-assertions workflow (`just hw-acquire` plus
+    # `--lg-initial-state shell`) leaves a board booted off this card, and this
+    # is advertised as the first thing to run when a run looks wrong. Yanking a
+    # live btrfs root is a poor way to start diagnosing anything.
+    #
+    # The board is left de-energised afterwards. Switching the mux cannot be
+    # done safely any other way, so a preflight is not quite read-only, and
+    # saying so is better than a surprise.
+    rail = target.get_driver("PowerProtocol")
+    target.activate(rail)
+    rail.off()
+
     driver = target.get_driver("USBSDMuxDriver")
     target.activate(driver)
     try:
@@ -318,6 +334,8 @@ def gather(target, measure_serial=False):
     try:
         watts = bench.plug_draw(power.host)
         state = bench.plug_state(power.host)
+        # Reads 0 W with the rail cut above, which is a working meter
+        # reporting an off board — the check is that it answers at all.
         checks.append(Check("plug meters", "ok", f"relay {state}, {watts} W"))
     except Exception as err:  # noqa: BLE001 - an ESP on Wi-Fi fails many ways
         checks.append(
@@ -325,7 +343,15 @@ def gather(target, measure_serial=False):
         )
 
     if measure_serial:
+        from strategy import Status
+
         strategy = target.get_driver("Strategy")
+        # Enter at `flashed` rather than asking for `shell` outright. The
+        # strategy reaches `shell` through `flashed`, which dd's an image onto
+        # the card — and this check has no image, nor any business writing one:
+        # the point is to measure the console against whatever is already there.
+        # Claiming the state is what `force` does for the same reason.
+        strategy.status = Status.flashed
         strategy.transition("shell")
         checks.append(
             serial_verdict(measure_serial_loss(strategy.shell), SERIAL_LINES)

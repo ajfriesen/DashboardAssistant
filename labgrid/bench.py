@@ -93,7 +93,7 @@ def find_image():
     return max(matches, key=os.path.getmtime)
 
 
-# Where `just build-x86-dev` leaves the uncompressed x86_64 image. Same disko
+# Where `just build-disk-image-dev` leaves the uncompressed x86_64 image. Same disko
 # single-raw layout as the Pi images; a separate out-link so the dev image never
 # clobbers the release one.
 X86_IMAGE_GLOB = os.path.join(REPO_ROOT, "result-x86-dev", "*.raw")

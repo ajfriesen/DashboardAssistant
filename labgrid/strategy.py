@@ -324,7 +324,7 @@ class QEMUStrategy(Strategy):
         elif status == Status.flashed:
             if not self.image:
                 raise StrategyError(
-                    "no image set — pass --image, or run `just build-x86-dev` so "
+                    "no image set — pass --image, or run `just build-disk-image-dev` so "
                     "conftest.py can find one under result-x86-dev/"
                 )
             self.transition(Status.off)
