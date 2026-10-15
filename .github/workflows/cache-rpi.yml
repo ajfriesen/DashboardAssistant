@@ -33,13 +33,14 @@ name: cache-rpi
 # to move an image this size. The layout mirrors release-image.yml, with the
 # board as both the directory and part of the filename:
 #   release/<board>/dashboard-assistant-<board>-<version>.raw.zst
-#   release/<board>/latest.raw.zst                    (newest full release)
 #   pre-release/<board>/…               (same, for a hyphened SemVer tag)
 #   dev/<board>/dashboard-assistant-<board>-<commit>.raw.zst
 # A v* tag publishes a release; a manual run publishes a dev build keyed by the
-# short commit, so a branch can be tested without ever touching the `latest`
-# pointer people flash. dev/ objects are swept after 7 days by the bucket
-# lifecycle policy (ops/r2-lifecycle.json). A plain push to main builds no image
+# short commit. There is no `latest` object: a release is held back as a
+# candidate until the bench has booted its images, and promotion moves GitHub's
+# /releases/latest — the pointer devices actually poll. See
+# docs/adr/0011-a-release-is-promoted-after-the-release-gate.md. dev/ objects are
+# swept after 7 days by the bucket lifecycle policy (ops/r2-lifecycle.json). A plain push to main builds no image
 # at all — it only warms the Attic cache above, which is what local
 # `just build-rpi*` and SSH-based updates substitute from.
 #
@@ -280,9 +281,9 @@ jobs:
 
       # Publish to R2 (mirrors release-image.yml): a v* tag goes to
       # release/<board>/ — or pre-release/<board>/ for a hyphened prerelease tag
-      # — as an immutable versioned object plus a `latest` pointer; a manual run
-      # goes to dev/<board>/ keyed by the short commit, with no pointer, so a
-      # test build can never become the image people flash.
+      # — as an immutable versioned object; a manual run goes to dev/<board>/
+      # keyed by the short commit. Nothing points at any of them until the
+      # release is promoted.
       - name: Publish image to R2
         if: ${{ vars.R2_BUCKET != '' }}
         env:
@@ -314,14 +315,10 @@ jobs:
           # Metadata (x-amz-meta-*) attached to every object; see release-image.yml.
           # `ref` is the tag on a release build and the branch on a dev one.
           meta="board=$model,arch=aarch64,channel=$channel,version=$version,ref=$GITHUB_REF_NAME,commit=$GITHUB_SHA,nixos-version=$nixos,built=$built,sha256=$sha,run-url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          keys=("$dir/$name")
-          [ "$channel" = dev ] || keys+=("$dir/latest.raw.zst")
-          for key in "${keys[@]}"; do
-            aws s3 cp "$img" "s3://$bucket/$key" \
-              --endpoint-url "$R2_ENDPOINT" \
-              --content-type application/zstd \
-              --metadata "$meta"
-          done
+          aws s3 cp "$img" "s3://$bucket/$dir/$name" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --content-type application/zstd \
+            --metadata "$meta"
           size=$(du -h "$img" | cut -f1)
           {
             echo "### 📦 $model image published to $dir/"

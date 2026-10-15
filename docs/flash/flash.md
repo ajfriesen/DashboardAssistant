@@ -30,10 +30,6 @@ zstd-compressed:
 | Raspberry Pi 4 | `dashboard-assistant-rpi4-<version>.raw.zst` |
 | Raspberry Pi 5 | `dashboard-assistant-rpi5-<version>.raw.zst` |
 
-The newest release is also always available directly at
-`https://download.dashboardassistant.org/release/<board>/latest.raw.zst`, with
-`x86_64`, `rpi4` or `rpi5` as the board.
-
 All three boards use the same image format and the same flashing steps — there
 is nothing Pi-specific to do any more.
 
