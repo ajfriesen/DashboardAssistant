@@ -92,6 +92,30 @@ in
     };
   };
 
+  # growpart keeps its scratch files in $TMPDIR, and its unit is ordered
+  # `After=-.mount` with DefaultDependencies=false — so it runs while / is the
+  # only thing mounted and has no ordering relationship to tmp.mount at all.
+  # With boot.tmp.useTmpfs (modules/core/flash-wear.nix) that is a race it
+  # loses about half the time: `mktemp -d` lands on the root filesystem, the
+  # tmpfs is mounted over /tmp a second later, and growpart's own directory
+  # becomes unreachable mid-run:
+  #
+  #   .growpart-wrapped: line 714: /tmp/.growpart-wrapped.XXX/pt_update.err:
+  #       No such file or directory
+  #   FAILED: pt_resize failed            (exit 2; the unit allows only 0 and 1)
+  #
+  # The unit then fails, systemd-growfs-root.service is ordered after it and
+  # does not finish the job, and the device ships with a 3.5 GB root on a 16 GB
+  # card — degraded until the next boot, where growpart exits 1 for NOCHANGE,
+  # which *is* allowed, and the whole thing goes green and hides.
+  #
+  # /run is a tmpfs mounted in the initrd and never mounted over, so pointing
+  # TMPDIR at it removes the race without touching the boot ordering. Caught on
+  # the bench by test_growpart_succeeded; measured timings are in
+  # labgrid/README.md. An upstream fix belongs in nixpkgs' grow-partition.nix,
+  # which should either order itself before tmp.mount or stop using /tmp.
+  config.systemd.services.growpart.environment.TMPDIR = "/run";
+
   config.disko.devices.disk.main = {
     type = "disk";
     inherit (cfg) device imageName imageSize;

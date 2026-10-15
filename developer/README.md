@@ -31,7 +31,7 @@ For working on Dashboard Assistant OS. User-facing docs live in `docs/` and are 
 ## Testing
 
 - **VM tests** run in CI (`.github/workflows/vm-tests.yml`); locally with `nix build .#checks.x86_64-linux.<name>`.
-- **Bench**: `just hw-test` flashes the Pi 5 dev image to the bench board and asserts first boot. `just hw-status` shows what's connected. There is no x86 hardware on the bench yet.
+- **Bench**: `just hw-test` flashes the Pi 5 dev image to the bench board and asserts first boot. The hardware hangs off the bench host and is reached through a labgrid coordinator ([ADR 0010](../docs/adr/0010-the-bench-is-driven-through-a-labgrid-coordinator.md)), so this needs non-interactive ssh to it; `just hw-status` shows the place and who holds it. There is no x86 hardware on the bench yet.
 
 ## Bumping nixpkgs
 

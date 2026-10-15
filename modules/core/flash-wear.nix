@@ -179,6 +179,16 @@ in
     { services.journald.settings.Journal = journalSettings; }
 
     {
+      # The sync script above calls chattr by store path, so e2fsprogs is in the
+      # closure either way; this only puts lsattr and chattr on PATH. They are
+      # the only way to see whether the NOCOW that makes the journal survivable
+      # on flash is actually set — on a device screwed to a wall, over a serial
+      # console, that is worth the couple of megabytes. The hardware test
+      # asserts on `lsattr -d` for the same reason.
+      environment.systemPackages = [ pkgs.e2fsprogs ];
+    }
+
+    {
       # ------------------------------------------------------------------------- #
       # /tmp in RAM, and Nix's build directory deliberately NOT in it
       # ------------------------------------------------------------------------- #

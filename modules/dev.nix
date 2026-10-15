@@ -5,8 +5,30 @@
 # a released device ships with no sshd listening and no password on any account.
 # (The Chromium CDP port is always open on loopback now — see
 # modules/core/kiosk.nix — so it is no longer a dev-only toggle.)
-{ ... }:
+{ lib, config, ... }:
 {
+  # A serial console on x86, so the labgrid harness can drive an x86 dev image
+  # the same way it drives a Pi. The Pi gets this from its hardware module
+  # unconditionally (modules/hardware/rpi5.nix sets console=ttyAMA10, the debug
+  # connector's UART); x86 sets no `console=` at all, which means a QEMU or a
+  # mini-PC serial port receives nothing — no kernel log, no login prompt, and
+  # nothing for a harness to talk to. systemd starts serial-getty@ttyS0 by
+  # itself once the kernel has a console on it, so the cmdline is the whole fix.
+  #
+  # DEV IMAGES ONLY, like everything else in this file. A release image gains
+  # nothing from it: the console is only useful to someone who also has the root
+  # password above, and that is exactly what a release image does not ship.
+  #
+  # The trade is that kernel messages no longer reach an x86 dev image's screen,
+  # since this is the only console= it has. On a bench board that is the right way
+  # round — the transcript is the evidence, and nobody is looking at the panel.
+  #
+  # Guarded on the platform rather than set everywhere, because an aarch64 board
+  # has no ttyS0 and an unsatisfiable console= is how you lose the one you have:
+  # the *last* console= on the cmdline wins, so appending this on a Pi would
+  # silence the UART that works. rpi5.nix uses mkBefore for the same reason.
+  boot.kernelParams = lib.optional (config.nixpkgs.hostPlatform.isx86) "console=ttyS0,115200n8";
+
   dashboardAssistant.debug.rootAuthorizedKeys = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINY2u6VzTMl9DchTo/PojqTibpE3LRxUouwlZ4RSiYjp andrej@gridscale.io"
     "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIE5Wfy20Rsolvzooa4qJ/5uRcZ6cganO7TfCIEiGlbUcAAAABHNzaDo= nixos-desktop-2026-07-11-yubikey3"

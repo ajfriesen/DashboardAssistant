@@ -243,3 +243,174 @@ class DashboardAssistantStrategy(Strategy):
             raise StrategyError(f"no setup found for {status}")
 
         self.status = status
+
+
+@target_factory.reg_driver
+@attr.s(eq=False)
+class QEMUStrategy(Strategy):
+    """The same four states, for an x86_64 image booted under QEMU.
+
+    Not a convenience: it is the only way the x86_64 image gets tested against
+    anything resembling hardware. The bench has one Raspberry Pi 5 in it, and a
+    second board is a purchase; a UEFI firmware, a GPT partition table, a real
+    ESP, a btrfs root and first-boot growth are not. Everything in
+    test_first_boot.py that is not specifically about the Pi's boot chain holds
+    here too, and the tests say which is which with the `board` marker.
+
+    The states mean what they do on the bench, with the hardware swapped out:
+
+        off      no QEMU process
+        flashed  a writable disk prepared from the image — the dd equivalent
+        booted   QEMU started, the whole boot read off the emulated serial port
+        shell    logged in over that serial port
+
+    `flashed` is where the two differ most. There is no card and no mux, so
+    "flash" means copying the image to a scratch disk and growing it — see
+    bench.prepare_qemu_disk for why a copy is not optional and why it is grown.
+    """
+
+    bindings = {
+        "qemu": "QEMUDriver",
+        "shell": "ShellDriver",
+    }
+
+    # Path to the .raw to boot. Resolved by conftest.py, exactly as for the
+    # bench strategy; the image's filename carries the release version.
+    image = attr.ib(
+        default=None,
+        validator=attr.validators.optional(attr.validators.instance_of(str)),
+    )
+
+    # Shorter than the bench's 420 s — there is no SD card to be slow about —
+    # but not as short as it first looks like it could be. First boot still
+    # grows the filesystem and generates a TLS keypair, and both print nothing
+    # at all while they work, so a quiet time of 5 s let `settle()` call the
+    # boot finished while growpart was still running. The ShellDriver then
+    # started pressing Enter at a console that was not at a login prompt yet,
+    # and `never_retry` marked the strategy broken when the login timed out —
+    # which skips every shell-dependent test and reports as a harness fault
+    # rather than a slow boot. Same lesson as the bench: be patient through the
+    # quiet stretches.
+    boot_timeout = attr.ib(default=300.0, validator=attr.validators.instance_of(float))
+    boot_quiet_time = attr.ib(default=10.0, validator=attr.validators.instance_of(float))
+
+    status = attr.ib(default=Status.unknown)
+
+    @never_retry
+    @step(args=["status"])
+    def transition(self, status, *, step):  # pylint: disable=redefined-outer-name
+        if not isinstance(status, Status):
+            status = Status[status]
+
+        if status == Status.unknown:
+            raise StrategyError(f"can not transition to {status}")
+
+        if status == self.status:
+            step.skip("nothing to do")
+            return
+
+        # Same reason as the bench strategy: asking for the transcript after
+        # something has taken a shell must not be an error.
+        if status == Status.booted and self.status == Status.shell:
+            step.skip("already booted")
+            return
+
+        if status == Status.off:
+            self.target.deactivate(self.shell)
+            # Deactivating the driver kills the process and takes the machine
+            # with it, so there is no separate power-off to do.
+            self.target.deactivate(self.qemu)
+
+        elif status == Status.flashed:
+            if not self.image:
+                raise StrategyError(
+                    "no image set — pass --image, or run `just build-x86-dev` so "
+                    "conftest.py can find one under result-x86-dev/"
+                )
+            self.transition(Status.off)
+            # The disk has to exist before the driver is activated: QEMUDriver
+            # resolves it from the environment's `images:` when it builds its
+            # command line.
+            import bench
+
+            bench.prepare_qemu_disk(self.image)
+
+        elif status == Status.booted:
+            self.transition(Status.flashed)
+            self.target.activate(self.qemu)
+            self.qemu.on()
+            if not self.qemu.settle(self.boot_quiet_time, timeout=self.boot_timeout):
+                self.logger.warning(
+                    "console still busy after %ss — transcript may be partial",
+                    self.boot_timeout,
+                )
+
+        elif status == Status.shell:
+            self.transition(Status.booted)
+            self.target.activate(self.shell)
+            self.shell.run("systemctl is-system-running --wait", timeout=600)
+
+        else:
+            raise StrategyError(f"no transition found from {self.status} to {status}")
+
+        self.status = status
+
+    @step()
+    def reboot(self, *, step):  # pylint: disable=unused-argument
+        """Warm-reboot the machine in place and come back to a logged-in shell.
+
+        The counterpart of the bench strategy's reboot, and it has to be a real
+        reset rather than a restart of QEMU: the scratch disk is rebuilt from
+        the image on every `flashed`, so restarting the process would throw away
+        the state the across-a-boot assertions exist to check.
+        """
+        if self.status != Status.shell:
+            raise StrategyError(f"reboot needs a shell, not {self.status}")
+
+        try:
+            self.shell.run("systemctl reboot", timeout=5)
+        except Exception:  # noqa: BLE001 - the command cannot complete by design
+            pass
+
+        self.target.deactivate(self.shell)
+        self.status = Status.booted
+
+        if not self.qemu.settle(self.boot_quiet_time, timeout=self.boot_timeout):
+            self.logger.warning(
+                "console still busy after %ss — transcript may be partial",
+                self.boot_timeout,
+            )
+
+        self.target.activate(self.shell)
+        self.shell.run("systemctl is-system-running --wait", timeout=600)
+        self.status = Status.shell
+
+    @never_retry
+    @step(args=["status"])
+    def force(self, status, *, step):  # pylint: disable=redefined-outer-name
+        """Claim a state without doing the work — `pytest --lg-initial-state shell`.
+
+        Less useful here than on the bench, where it exists to skip a reflash
+        that costs minutes. A QEMU machine does not survive the end of the
+        pytest process that started it, so there is rarely one already running
+        to attach to. Kept for symmetry.
+        """
+        if not isinstance(status, Status):
+            status = Status[status]
+
+        if status == Status.unknown:
+            raise StrategyError(f"can not force state {status}")
+
+        if status == Status.off:
+            self.target.deactivate(self.shell)
+        elif status == Status.flashed:
+            pass
+        elif status == Status.booted:
+            self.target.activate(self.qemu)
+        elif status == Status.shell:
+            self.target.activate(self.qemu)
+            self.target.activate(self.shell)
+        else:
+            raise StrategyError(f"no setup found for {status}")
+
+        self.status = status

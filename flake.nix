@@ -365,11 +365,12 @@
           #
           # Puts pytest, labgrid-client, labgrid-exporter and labgrid-coordinator
           # on PATH. See the labgridPython binding above for why it is one env.
+          #
+          # Nothing hardware-side is needed here: the bench hangs off the bench
+          # host, which exports it through a coordinator, so usbsdmux runs there
+          # over ssh and the console comes back over ser2net (`labgrid-client
+          # console`, Ctrl-\ to quit).
           labgridPython
-          # labgrid's USBSDMuxDriver does not talk to the mux itself, it execs
-          # this. Needs the host side too (sg module + udev rules) — see
-          # labgrid/README.md.
-          pkgs.usbsdmux
           # Inspect a built sd-image's FAT partition without mounting it or
           # needing root: `mdir`/`mtype`/`minfo -i "$img@@$((2048*512))"` reads
           # partition 1 straight out of the .img, `partx` finds its offset, and
@@ -380,9 +381,15 @@
           pkgs.mtools
           pkgs.dosfstools
           pkgs.util-linux
-          # `just hw-console`: watch the board's UART by hand, which is how you
-          # confirm the console lands where the harness expects.
-          pkgs.picocom
+
+          # Repair the GPT of the scratch disk `just qemu-test` boots. That disk
+          # is the image grown to leave first-boot growth something to grow
+          # into, and growing a GPT disk leaves its backup header stranded in
+          # the middle: Linux then rejects the table outright and the boot dies
+          # in the initrd waiting for a root partition that it can no longer
+          # see. `sgdisk --move-second-header` is the fix. See
+          # labgrid/bench.py's prepare_qemu_disk.
+          pkgs.gptfdisk
         ];
 
         # Unambiguous path to the interpreter that has labgrid, for scripts that

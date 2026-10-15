@@ -20,12 +20,15 @@ help:
   @echo "  cdp-eval EXPR          Evaluate arbitrary JS in the kiosk page over CDP"
   @echo
   @echo "Hardware bench (labgrid — see labgrid/README.md):"
-  @echo "  hw-status              Report the state of every link in the bench chain"
+  @echo "  hw-status              Show the place, its resources and who holds it"
   @echo "  hw-seed --ha-url URL   Provision the bench board from a real seed file"
+  @echo "  hw-preflight           Check the bench is healthy before trusting a run"
+  @echo "  qemu-test              Run the suite against the x86_64 image under QEMU"
   @echo "  hw-test                Flash the Pi 5 dev image to the bench board and assert first boot"
   @echo "  hw-flash               Flash the bench board and stop there"
   @echo "  hw-console             Watch the bench board's serial console"
-  @echo "  hw-power ACTION        on | off | cycle | state | draw on the bench plug"
+  @echo "  hw-power ACTION        on | off | cycle | get on the bench plug"
+  @echo "  hw-acquire/hw-release  Hold the bench across several runs"
   @echo
   @echo "Introspect:"
   @echo "  options                List the dashboardAssistant.* NixOS config options"
@@ -35,6 +38,14 @@ help:
   @echo "  r2-lifecycle-show      Print the bucket's current lifecycle policy"
   @echo
   @echo "Run 'just --list' for the raw recipe list."
+
+# The bench is not attached to this machine: it hangs off the bench host, which
+# exports it through a labgrid coordinator (see docs/adr/0010). Both of these are
+# taken from the environment first, so a second bench needs no edit here — and
+# this is the only place the defaults live, which is why labgrid/conftest.py
+# refuses to invent its own.
+export LG_COORDINATOR := env_var_or_default("LG_COORDINATOR", "bench:20408")
+export LG_PLACE := env_var_or_default("LG_PLACE", "raspberrypi5")
 
 # Build the release installable raw disk image (btrfs+zstd, built by disko). No
 # SSH daemon; reconfigure a deployed device only via the USB seed file. dd
@@ -48,15 +59,20 @@ build-disk-image:
   @echo "  sudo dd if=$(readlink -f result)/dashboard-assistant.raw of=/dev/disk/by-id/ata-WDC_WDS100T2B0A-00SM50_195206A003DE bs=4M oflag=sync conv=fsync status=progress"
 
 # Build the dev raw disk image — same as build-disk-image plus modules/dev.nix
-# (root SSH access). For bench/field debugging only; never flash this onto a
-# released device.
+# (root SSH access and a serial console). For bench/field debugging only; never
+# flash this onto a released device.
+#
+# Its own out-link, so it cannot overwrite the release image's `result` — and so
+# `just qemu-test` can find it by path the way the bench finds result-rpi5-dev.
+# Two images with the same link is how you spend an afternoon testing the one
+# you did not build.
 [doc('Build the dev raw disk image (SSH + debugging)')]
 build-disk-image-dev:
-  nix build .#disk-image-dev
+  nix build .#disk-image-dev --out-link result-x86-dev
   @echo
-  @echo "Image: $(readlink -f result)/dashboard-assistant.raw"
+  @echo "Image: $(readlink -f result-x86-dev)/dashboard-assistant.raw"
   @echo "Flash it (confirm the device first!):"
-  @echo "  sudo dd if=$(readlink -f result)/dashboard-assistant.raw of=/dev/disk/by-id/ata-WDC_WDS100T2B0A-00SM50_195206A003DE bs=4M oflag=sync conv=fsync status=progress"
+  @echo "  sudo dd if=$(readlink -f result-x86-dev)/dashboard-assistant.raw of=/dev/disk/by-id/ata-WDC_WDS100T2B0A-00SM50_195206A003DE bs=4M oflag=sync conv=fsync status=progress"
 
 # Build the Raspberry Pi 4 (aarch64) SD-card image. On an x86 host the aarch64
 # closure builds via binfmt emulation — but once CI has populated the public
@@ -215,15 +231,57 @@ cdp-eval expr:
     '{id:1,method:"Runtime.evaluate",params:{expression:$e,returnByValue:true}}' \
     | timeout 5 websocat "$ws" || true
 
-# Report the state of the whole bench chain: sg module, mux control and block
-# nodes and whether they are writable, mux mode, card size, plug state and draw,
-# serial port, and whether a built image is around. Read-only and safe at any
-# time — this is the first thing to run when a hardware test fails, because
-# "resource unavailable" has four unrelated causes and this says which one.
-[doc('Report the state of every link in the bench chain')]
+# Show the place: every exported resource, whether each is available, and who
+# holds it. Read-only, needs no acquire, and safe at any time — the first thing
+# to run when a hardware test fails, because it separates "someone else has the
+# bench" from "the exporter cannot see the mux" from "the coordinator is down".
+#
+# It stops short of the card, which nothing on the network can see: an absent
+# card is indistinguishable from a card routed to the board. For that, and for
+# the plug, go one level down (both need the place held — `just hw-acquire`):
+#
+#   labgrid-client -p $LG_PLACE sd-mux get     dut | host
+#   labgrid-client -p $LG_PLACE power get      is the rail on
+#
+# and if `sd-mux host` still leaves the mux's block device at size 0 on the bench
+# host, the slot is empty.
+[doc('Show the place, its resources and who holds it')]
 hw-status:
-  "${LABGRID_PYTHON:?not set — enter the dev shell with 'nix develop' or 'direnv allow'}" \
-    labgrid/status.py
+  labgrid-client -p "$LG_PLACE" show
+
+# Run the hardware suite against the x86_64 image under QEMU — the only testing
+# that image gets on anything resembling hardware. Same assertions as the bench,
+# minus the four that are about the Pi's own boot chain, which skip themselves.
+#
+# No place to acquire and no coordinator: there is no shared hardware here, so
+# this runs anywhere the dev shell does, including alongside a bench run.
+#
+# What it cannot do is discovery and pairing: user-mode networking carries no
+# mDNS, and Home Assistant opens connections *to* a device. Those stay on the
+# bench until this target grows a tap interface.
+[doc('Run the suite against the x86_64 image under QEMU')]
+qemu-test *ARGS: build-disk-image-dev
+  pytest labgrid/ --lg-env labgrid/qemu-x86.yaml -v {{ARGS}}
+
+# Prove the bench is healthy before anything blames the image. Read-only apart
+# from routing the card to the bench host and back, and the first thing to run
+# when a hardware run looks wrong — it checks every resource the exporter
+# publishes, that the card is actually in the mux, that the probe and the mux are
+# not on one USB controller, and that the plug still meters.
+#
+# Exits 2 on a bench fault, which no pytest assertion failure produces: a red
+# gate has to mean the image, and this is what makes that true. A lossy console
+# once reported itself as "3 passed, 13 skipped, 1 error" and cost a morning in
+# the wrong half of the system (see labgrid/README.md).
+#
+# `--serial` additionally boots whatever is on the card and measures how much of
+# the console arrives intact, which is the check that settles a lossy probe. It
+# needs a bootable card, so it is opt-in rather than part of the default run.
+[doc('Check the bench is healthy before trusting a run')]
+hw-preflight *ARGS:
+  ./labgrid/with-place.sh \
+    "${LABGRID_PYTHON:?not set — enter the dev shell with 'nix develop' or 'direnv allow'}" \
+    labgrid/preflight.py {{ARGS}}
 
 # Provision the bench board for real: write a seed file with an actual Home
 # Assistant URL (and optionally Wi-Fi) onto the running board, trigger the
@@ -236,25 +294,27 @@ hw-status:
 #   DA_WIFI_PSK=... just hw-seed --ha-url http://192.168.178.73:8123 --wifi-ssid MyNet
 [doc('Provision the bench board from a real seed file')]
 hw-seed *ARGS:
-  "${LABGRID_PYTHON:?not set — enter the dev shell with 'nix develop' or 'direnv allow'}" \
+  ./labgrid/with-place.sh \
+    "${LABGRID_PYTHON:?not set — enter the dev shell with 'nix develop' or 'direnv allow'}" \
     labgrid/seed.py {{ARGS}}
 
 # Flash the Pi 5 dev image onto the bench board and run the hardware first-boot
-# tests against it: labgrid switches the USB-SD-Mux to this host, dd's the image
-# onto the card, hands it back to the board, cycles the ESPHome plug and logs in
-# over the Debug Probe's UART. Roughly 4 GiB of dd plus a first boot that resizes
-# the filesystem, so budget several minutes.
+# tests against it: labgrid acquires the place, switches the USB-SD-Mux to the
+# bench host, rsyncs the image there and dd's it onto the card, hands the card
+# back to the board, cycles the plug and logs in over the Debug Probe's UART.
+# Roughly 4 GiB of dd plus a first boot that resizes the filesystem, so budget
+# several minutes. The image only crosses the network when it changes.
 #
 # Builds first because the tests flash whatever is currently in result-rpi5-dev/ —
 # forgetting to rebuild is how you spend ten minutes testing the previous commit.
 # The image must be the *dev* flavour: the release image has no console password
 # and cannot be driven (see labgrid/README.md).
 #
-# While iterating on assertions, skip the reflash entirely:
-#   pytest labgrid/ --lg-initial-state shell
+# While iterating on assertions, hold the place and skip the reflash entirely:
+#   just hw-acquire && pytest labgrid/ --lg-initial-state shell
 [doc('Flash the Pi 5 dev image to the bench board and assert first boot')]
 hw-test *ARGS: build-rpi5-dev
-  pytest labgrid/ -v {{ARGS}}
+  ./labgrid/with-place.sh pytest labgrid/ -v {{ARGS}}
 
 # Flash the bench board and stop, leaving the card in the board's hands and the
 # power off. For bringing a board up by hand, or bisecting a boot failure where
@@ -265,25 +325,44 @@ hw-test *ARGS: build-rpi5-dev
 # has labgrid (see flake.nix).
 [doc('Flash the bench board and stop there')]
 hw-flash *ARGS: build-rpi5-dev
-  "${LABGRID_PYTHON:?not set — enter the dev shell with 'nix develop' or 'direnv allow'}" \
+  ./labgrid/with-place.sh \
+    "${LABGRID_PYTHON:?not set — enter the dev shell with 'nix develop' or 'direnv allow'}" \
     labgrid/flash.py {{ARGS}}
 
 # Watch the bench board's serial console. This is the tool for the questions the
 # harness cannot answer for you: which tty the console actually lands on, what the
-# shell prompt looks like, and what U-Boot printed before it gave up. Ctrl-A
-# Ctrl-X to quit picocom.
+# shell prompt looks like, and what U-Boot printed before it gave up. Ctrl-\ to
+# get microcom's prompt, then q to quit.
 #
-# Nothing else may hold the port — stop a running labgrid exporter or test first.
+# Goes through the coordinator rather than the probe's device node, which does not
+# exist on this machine — the exporter runs ser2net on the bench host and the
+# console arrives over rfc2217. It allows several connections, so this does not
+# fight a running test for the port.
 [doc("Watch the bench board's serial console")]
 hw-console:
-  picocom -b 115200 \
-    /dev/serial/by-id/usb-Raspberry_Pi_Debug_Probe__CMSIS-DAP__E665B8388780722E-if01
+  ./labgrid/with-place.sh labgrid-client -p "$LG_PLACE" console
 
-# Drive the bench plug by hand: on, off, cycle, state, or draw (active power in
-# watts — a quick way to tell a board that is running from one that is not).
-[doc('on | off | cycle | state | draw on the bench plug')]
+# Drive the bench plug by hand: on, off, cycle or get.
+#
+# `get` reports the relay, which is what the plug was *told* to do. For what the
+# board is actually drawing — the way to tell a running board from a dead one —
+# the plug's own meter is at $plug/meter/0, and test_board_draws_power asserts on
+# it (see labgrid/bench.py).
+[doc('on | off | cycle | get on the bench plug')]
 hw-power ACTION:
-  ./labgrid/bench-power.sh {{ACTION}}
+  ./labgrid/with-place.sh labgrid-client -p "$LG_PLACE" power {{ACTION}}
+
+# Hold the bench across several runs, which is the companion to
+# `pytest labgrid/ --lg-initial-state shell`: acquire once, iterate on assertions
+# against a board that is already up, release when done. The hw-* recipes notice
+# the place is already held and leave it that way.
+[doc('Acquire the bench place and keep it')]
+hw-acquire:
+  labgrid-client -p "$LG_PLACE" acquire
+
+[doc('Release the bench place')]
+hw-release:
+  labgrid-client -p "$LG_PLACE" release
 
 # Apply the R2 bucket lifecycle policy from ops/r2-lifecycle.json (R2 speaks the
 # S3 PutBucketLifecycleConfiguration API). Needs R2_ACCOUNT_ID + R2 S3 credentials
