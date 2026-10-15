@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # The full journey is tested against a real Home Assistant on the bench
@@ -13,7 +13,7 @@ The Bench Home Assistant is pinned and its state is reset from a committed fixtu
 ## Consequences
 
 - A bad integration release can redden this repo's gate. That is correct, because the journey spans both, but it means the device-side and Home-Assistant-side assertions are named so a failure says which half broke.
-- The state fixture is married to the pinned Home Assistant version: its on-disk schema migrates between releases, so the two bump together in one commit. The same holds for the browser automation's container and its client library, which must match.
+- The state fixture is married to the pinned Home Assistant version: its on-disk schema migrates between releases, so the two bump together in one commit. The browser automation and the browser it drives are married in the same way — Playwright speaks a CDP dialect that tracks the Chromium it was released against — but that pair needs no discipline from anyone: both are resolved from the one pinned nixpkgs ([0008](0008-every-board-builds-from-pinned-nixos-unstable.md)), so a single `nix flake update` moves them together. Taking the client from anywhere else, a container image included, would put the drift back.
 - Home Assistant has to sit on the bench's own network segment, with host networking. It always opens the connection to the device ([0002](0002-home-assistant-talks-to-devices-over-https-not-mqtt.md)) and zeroconf is link-local, so anything that reflects or routes multicast becomes a thing the gate can fail on.
 - Asserting the kiosk's own DOM needs a channel off the device, and the browser's debugging port is bound to loopback. A **dev image** therefore carries a key that can sign unattended, gated exactly like its root password — release images gain nothing.
 - A release image has no shell, so its own check is the screenshot the device API already serves. That is a weaker oracle than the DOM, and it is the only one available without adding a surface to a shipped image; it exercises two shipped features rather than none.

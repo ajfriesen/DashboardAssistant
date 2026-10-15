@@ -207,3 +207,47 @@ def plug_draw(host):
 def plug_state(host):
     """Whether the relay is closed, as "ON" or "OFF"."""
     return "ON" if _shelly_gen1(host, "/relay/0")["ison"] else "OFF"
+
+
+def host_resource(resources):
+    """The first resource that is actually reached over the network, or None.
+
+    Needed because "any resource will do" is false in a way that fails
+    *silently*. labgrid defines `wrap_command` on the base `Resource` too,
+    where it returns the command unchanged — "no need for command wrapping for
+    local resources" — so a duck-typed check matches everything, picks the
+    `RemotePlace` (which is first in the list), and then runs every "command on
+    the bench host" on the machine running pytest instead. A reset that never
+    happened is indistinguishable from one that did until something much later
+    reads the wrong state.
+
+    Only `NetworkResource` carries the ssh prefix, so only `NetworkResource`
+    will do. Which one of them does not matter — the place's exported
+    resources all come from the same host.
+
+    `command_prefix` is deliberately not used as the probe: it is a property
+    that opens an ssh connection when read.
+    """
+    from labgrid.resource.common import NetworkResource
+
+    for resource in resources:
+        if isinstance(resource, NetworkResource):
+            return resource
+    return None
+
+
+def on_bench_host(resource, command, timeout=60):
+    """Run `command` on the host the resource is exported from, and return stdout.
+
+    Uses labgrid's own wrapping rather than an ssh invocation of our own, so the
+    hostname, the proxy and the ssh options are the ones the exporter published
+    and there is no second copy of them here to drift. Any exported resource
+    will do — they all come from the same host — so callers pass whichever one
+    they already have in hand.
+
+    Lived in preflight.py first; moved here when the Home Assistant fixtures
+    needed it too, which is the moment a helper stops belonging to one script.
+    """
+    wrapped = resource.wrap_command(["sh", "-c", command])
+    done = subprocess.run(wrapped, capture_output=True, text=True, timeout=timeout)
+    return done.stdout + done.stderr

@@ -33,6 +33,26 @@
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINY2u6VzTMl9DchTo/PojqTibpE3LRxUouwlZ4RSiYjp andrej@gridscale.io"
     "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIE5Wfy20Rsolvzooa4qJ/5uRcZ6cganO7TfCIEiGlbUcAAAABHNzaDo= nixos-desktop-2026-07-11-yubikey3"
     "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIN3NFv4a2U/X6mxDSxJLLZECuyae7a/ijgjD3Lwz8iy2AAAABHNzaDo= nixos-desktop-2026-07-11-yubikey5"
+
+    # The bench key: the one key here that can sign with nobody present, which is
+    # what lets the release gate reach a device at all. The two sk- keys above
+    # are hardware-backed and need a human to touch a token, and an unsignable
+    # key is worse than no key — the failed attempt counts as a failed
+    # authentication, and OpenSSH's per-source penalties then drop every
+    # connection from that address for an hour. So an automated run holding only
+    # those would lock itself out of the board it was trying to test.
+    #
+    # The private half lives on the bench host and never enters this repository;
+    # labgrid/README.md says where. Its one job is the CDP tunnel: the kiosk
+    # browser's debugging port is bound to loopback and must stay that way (it is
+    # unauthenticated and runs with permissive origins, so exposing it would put
+    # a remote-code-execution surface on every dev image on every network), and
+    # `ssh -L` over this key is how the gate reaches it without opening anything.
+    #
+    # DEV IMAGES ONLY, behind the same gate as everything else in this file. A
+    # release image carries no key that can sign unattended, and the
+    # release-has-no-unattended-access check in flake.nix is what keeps that true.
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEvE8ZMQXyChCxh021628VNVsNmpzaVBm8wG58DDBBcn bench@keepassxc (dashboard-assistant labgrid)"
   ];
 
   # Root password for the *serial console* only: "dashboard". This is how the

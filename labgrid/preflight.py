@@ -25,7 +25,6 @@ the one holding labgrid.
 import argparse
 import collections
 import re
-import subprocess
 import sys
 import time
 
@@ -201,18 +200,6 @@ def report(checks):
 # --------------------------------------------------------------------------- #
 
 
-def on_bench_host(resource, command):
-    """Run `command` on the host the resource is exported from, and return stdout.
-
-    Uses labgrid's own wrapping rather than an ssh invocation of our own, so the
-    hostname, the proxy and the ssh options are the ones the exporter published
-    and there is no second copy of them here to drift.
-    """
-    wrapped = resource.wrap_command(["sh", "-c", command])
-    done = subprocess.run(wrapped, capture_output=True, text=True, timeout=60)
-    return done.stdout + done.stderr
-
-
 def measure_serial_loss(shell, lines=SERIAL_LINES):
     """Echo a known line `lines` times from the board and count what arrives whole.
 
@@ -262,7 +249,7 @@ def gather(target, measure_serial=False):
     # authentication, and OpenSSH's per-source penalties then drop every
     # connection from this address for an hour, which presents as a connection
     # reset and looks nothing like a key problem.
-    probe = on_bench_host(mux, "echo reachable").strip()
+    probe = bench.on_bench_host(mux, "echo reachable").strip()
     if "reachable" not in probe:
         checks.append(
             Check(
@@ -316,7 +303,7 @@ def gather(target, measure_serial=False):
         driver.set_mode("host")
         node = mux.path.split("/")[-1]
         size = read_medium_size(
-            lambda: on_bench_host(mux, f"cat /sys/block/{node}/size")
+            lambda: bench.on_bench_host(mux, f"cat /sys/block/{node}/size")
         )
         checks.append(card_verdict(size))
     finally:
@@ -324,8 +311,8 @@ def gather(target, measure_serial=False):
 
     checks.append(
         controller_verdict(
-            on_bench_host(serial, f"readlink -f /sys/class/tty/{serial.extra['path'].split('/')[-1]}/device"),
-            on_bench_host(mux, f"readlink -f /sys/block/{mux.path.split('/')[-1]}/device"),
+            bench.on_bench_host(serial, f"readlink -f /sys/class/tty/{serial.extra['path'].split('/')[-1]}/device"),
+            bench.on_bench_host(mux, f"readlink -f /sys/block/{mux.path.split('/')[-1]}/device"),
         )
     )
 

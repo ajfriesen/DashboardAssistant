@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        check: [first-boot, kiosk-flash-flags, screenshot-path-agreement, one-nixpkgs]
+        check: [first-boot, kiosk-flash-flags, screenshot-path-agreement, one-nixpkgs, release-has-no-unattended-access]
     steps:
       - uses: actions/checkout@v7
       - uses: cachix/install-nix-action@v31

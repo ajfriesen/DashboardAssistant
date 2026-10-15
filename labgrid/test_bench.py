@@ -177,3 +177,35 @@ def test_an_environment_with_no_board_reads_as_none(tmp_path):
 
 def test_an_unreadable_environment_reads_as_none(tmp_path):
     assert bench.declared_board(str(tmp_path / "nope.yaml")) is None
+
+
+# --------------------------------------------------------------------------- #
+# Which resource can actually run a command on the bench host
+# --------------------------------------------------------------------------- #
+
+
+def test_the_exported_resource_is_the_one_that_reaches_the_bench_host():
+    from labgrid.resource.common import NetworkResource, Resource
+
+    # The order labgrid builds them in: the RemotePlace first, then whatever
+    # the exporter published.
+    resources = [
+        Resource(None, "RemotePlace"),
+        NetworkResource(None, "console", host="bench"),
+    ]
+    assert bench.host_resource(resources).name == "console"
+
+
+def test_a_local_resource_is_not_mistaken_for_a_remote_one():
+    """labgrid defines wrap_command on the *base* Resource as well, where it
+    returns the command unchanged. So a duck-typed check matches everything,
+    picks the RemotePlace, and silently runs every "command on the bench host"
+    on the machine running pytest — a reset that never happened, reported as
+    one that did."""
+    from labgrid.resource.common import Resource
+
+    assert bench.host_resource([Resource(None, "RemotePlace")]) is None
+
+
+def test_a_target_with_no_remote_resources_at_all_reads_as_none():
+    assert bench.host_resource([]) is None

@@ -259,6 +259,68 @@ in the transcript before touching the regex.
 
 `just hw-console` shows you the real prompt if it ever changes again.
 
+## Reaching the board over the network, and its browser
+
+The serial console is the channel that survives everything, and it is the one
+every assertion above uses. Two of them need more than that: asserting the
+**dashboard** is on screen means talking to the kiosk browser, and the browser
+does not answer on a UART.
+
+### The bench key
+
+`~/.ssh/id_ed25519_bench` — the same key the prerequisites above give the bench
+host — is also declared on **dev images** (`modules/dev.nix`), so the **release
+gate** can log into a board with nobody present. The private half lives on the
+bench host and in the operator's password manager; it is never in this
+repository, and a bench that does not have it skips the tests that need it
+rather than failing them.
+
+It is the only key on a dev image that can sign unattended. The two `sk-` keys
+beside it are hardware-backed and want a human to touch a token, and **an
+unsignable key is worse than no key**: the failed attempt counts as a failed
+authentication, so OpenSSH's `PerSourcePenalties` drops every connection from
+that address for the next hour. An automated run holding only those keys locks
+itself out of the board it came to test. Same trap as the bench host, same fix —
+`IdentitiesOnly yes`.
+
+**Release images carry no such key, and no sshd at all.** That is not a
+convention anyone has to remember: `nix build
+.#checks.x86_64-linux.release-has-no-unattended-access` fails if a release image
+ever picks one up, along with the root password and the loopback binding below.
+
+### The debugging port is tunnelled, never exposed
+
+Chromium's CDP port (9222) binds to loopback on **every** image, release and dev
+alike, and it has to stay that way. It is unauthenticated and already runs with
+`--remote-allow-origins=*`, so a device that published it would hand remote code
+execution to anything on the same network — a far larger affordance than the
+documented console password next to it, and one that would ship on every dev
+image rather than sitting behind a board's UART pins.
+
+So nothing on the board is opened. The gate forwards the port over ssh instead:
+
+```sh
+ssh -N -L 9222:127.0.0.1:9222 root@<device>     # what kiosk.py does for you
+```
+
+and the browser automation attaches to `http://127.0.0.1:9222` on the bench host.
+`just qemu-ssh` does the same thing for the QEMU target, which is what makes
+`just inject-token` and `just cdp-eval` work.
+
+### Playwright and Chromium are a married pair
+
+`test_journey.py` drives the kiosk with Playwright over that tunnel. Playwright
+speaks a CDP dialect that tracks the Chromium it was released against, so the
+client and the browser have to move together.
+
+Here they cannot drift: **both come out of the one pinned nixpkgs**
+(`docs/adr/0008`). `ps.playwright` in the dev shell and the `chromium` in
+`modules/core/kiosk.nix` are resolved from the same `flake.lock` entry, so
+`nix flake update nixpkgs-unstable` bumps the pair in a single commit. If you
+ever take Playwright from somewhere else — a pip install, a container image —
+you have reintroduced the drift this paragraph exists to prevent, and the
+symptom is a protocol error that reads like a broken page.
+
 ## Layout
 
 | File | |
@@ -267,11 +329,16 @@ in the transcript before touching the regex.
 | `qemu-x86.yaml` | labgrid environment for the x86_64 target: QEMU, OVMF, the scratch disk, `board: x86_64` |
 | `strategy.py` | `off` → `flashed` → `booted` → `shell` for both targets: `DashboardAssistantStrategy` on the bench, `QEMUStrategy` under QEMU. Plus `reboot()`, a warm reboot in place for across-a-boot assertions |
 | `bench.py` | paths, image discovery and the plug's meter, shared by `conftest.py` and `flash.py` |
-| `capability.py` | what this bench can do, derived from the place's resources and the board — never from a flag |
+| `capability.py` | what this bench can do, derived from the place's resources, the board, and what answers on the network — never from a flag |
+| `bench_ha.py` | the **Bench Home Assistant**: finding it, resetting it, and driving its websocket and config-flow APIs |
+| `device.py` | parsers for what the board says about itself over the console — addresses, Wi-Fi association, persisted state |
+| `kiosk.py` | the ssh tunnel to the kiosk browser's loopback debugging port, and the verdict on what is on screen |
 | `preflight.py` | `just hw-preflight` — is the bench healthy, reported as a bench fault (exit 2) rather than a test failure |
-| `test_capability.py`, `test_preflight.py` | unit tests for both of the above; need no bench |
-| `conftest.py` | option defaults and the `shell` / `console_log` / `image` / `plug` fixtures |
-| `test_first_boot.py` | the assertions |
+| `test_capability.py`, `test_preflight.py`, `test_bench.py`, `test_bench_ha.py`, `test_device.py`, `test_kiosk.py` | unit tests for the modules above; need no bench, no board and no network |
+| `conftest.py` | option defaults and the `shell` / `console_log` / `image` / `plug` / `bench_home_assistant` / `paired` / `gate_key` fixtures |
+| `test_first_boot.py` | the assertions about a device on its own |
+| `test_journey.py` | the assertions about a device and a real Home Assistant: discovery, pairing, a service call, a dashboard on the screen |
+| `test_wifi.py` | the assertions about a device on the Bench Wi-Fi with its wire down |
 | `with-place.sh` | acquire if nobody holds it, run, release what it acquired — the prelude every `hw-*` recipe shares |
 | `flash.py` | `just hw-flash` — transition to `flashed` and stop |
 | `logs/` | serial transcripts, cleared at the start of each run (gitignored) |
@@ -294,7 +361,26 @@ pytest labgrid/ --image path/to/other.img
 pytest labgrid/ -vvv                          # -vv info, -vvv console, -vvvv debug
 
 pytest labgrid/test_capability.py labgrid/test_preflight.py   # no bench needed
+
+pytest labgrid/test_journey.py -v             # discovery, pairing, the dashboard
+pytest labgrid/test_wifi.py -v                # Wi-Fi only, wire down and back
 ```
+
+`test_journey.py` and `test_wifi.py` need a **Bench Home Assistant** at
+`$BENCH_HA_URL` (defaulted by the justfile) and skip themselves cleanly when
+there is none — which is what the x86_64 target below does, since user-mode
+networking carries no mDNS. `test_wifi.py` additionally needs the Bench Wi-Fi's
+credentials, declared in `secretspec.toml` and never committed:
+
+```sh
+secretspec run -- just hw-test
+```
+
+One caveat worth knowing: that passphrase reaches the card over the board's
+**serial console**, because that is the only channel to a board that has no
+network yet — so it appears in `logs/console_main`. The directory is
+gitignored, but the file is real. Do not attach a bench transcript to a public
+issue.
 
 An ordinary run needs no `-m` expression. Tests whose hardware is not on this
 bench skip themselves — see "Skipping is derived, never selected" below.

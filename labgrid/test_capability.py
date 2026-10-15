@@ -110,3 +110,111 @@ def test_a_target_that_declares_no_board_is_a_configuration_error():
     except ValueError:
         return
     raise AssertionError("an undeclared board must not quietly pass")
+
+
+# --------------------------------------------------------------------------- #
+# Whether this target is a bench at all
+# --------------------------------------------------------------------------- #
+
+
+def test_a_place_with_an_exported_console_is_a_bench():
+    assert capability.missing_bench_place({"NetworkSerialPort"}) is None
+
+
+def test_a_local_vm_is_a_different_target_not_a_broken_image():
+    """The x86_64 QEMU target: user-mode networking carries no mDNS and puts
+    the guest behind a NAT with no route in, so nothing can dial the device."""
+    reason = capability.missing_bench_place({"QEMUDriver"})
+    assert reason is not None
+    assert "VM" in reason
+
+
+def test_the_bench_place_check_does_not_ask_whether_the_device_answers():
+    """Measuring reachability instead would also skip on a bench where the
+    device has genuinely stopped answering — and a silent skip is the wrong
+    answer to that. This bench has shipped a bug that way before."""
+    assert capability.missing_bench_place({"NetworkSerialPort"}) is None
+
+
+# --------------------------------------------------------------------------- #
+# Whether this target has a Bench Home Assistant to pair with
+# --------------------------------------------------------------------------- #
+
+
+def test_a_reachable_bench_home_assistant_is_no_reason_to_skip():
+    assert capability.missing_bench_home_assistant("http://bench:8123", True) is None
+
+
+def test_a_target_with_no_home_assistant_configured_skips_and_says_how():
+    """The x86_64 QEMU target has none: user-mode networking carries no mDNS and
+    Home Assistant opens the connection *to* a device, so there is nothing for
+    it to pair with. That is a different target, not a defect in the image."""
+    reason = capability.missing_bench_home_assistant(None, False)
+    assert reason is not None
+    assert "BENCH_HA_URL" in reason
+
+
+def test_a_configured_but_unreachable_home_assistant_names_the_address():
+    reason = capability.missing_bench_home_assistant("http://bench:8123", False)
+    assert reason is not None
+    assert "http://bench:8123" in reason
+
+
+# --------------------------------------------------------------------------- #
+# Whether the gate holds a key it can sign with
+# --------------------------------------------------------------------------- #
+
+
+def test_a_private_key_on_disk_is_what_ssh_is_pointed_at():
+    assert capability.gate_key_choice("/k/bench", True, True) == ("/k/bench", None)
+
+
+def test_a_key_held_only_by_an_agent_is_used_through_its_public_half():
+    """The normal case here: the private half lives in the operator's password
+    manager and is served by ssh-agent, so only the .pub is on disk — and `ssh
+    -i <pubkey>` is enough for the agent to be asked for the matching key."""
+    key, reason = capability.gate_key_choice("/k/bench", False, True)
+    assert key == "/k/bench.pub"
+    assert reason is None
+
+
+def test_neither_half_present_skips_and_names_both_paths():
+    key, reason = capability.gate_key_choice("/k/bench", False, False)
+    assert key is None
+    assert "/k/bench" in reason and "/k/bench.pub" in reason
+
+
+def test_the_absent_key_reason_warns_about_the_lockout():
+    """A key that cannot sign is worse than no key: the failed attempt trips
+    OpenSSH's per-source penalties and locks this address out for an hour. So
+    the harness must not try — and whoever reads the skip should know why."""
+    _, reason = capability.gate_key_choice("/nope", False, False)
+    assert "hour" in reason
+
+
+# --------------------------------------------------------------------------- #
+# Whether the Bench Wi-Fi's credentials are available to this run
+# --------------------------------------------------------------------------- #
+
+
+def test_both_wifi_credentials_present_is_no_reason_to_skip():
+    assert capability.missing_wifi_credentials("BenchNet", "hunter2") is None
+
+
+def test_missing_wifi_credentials_name_the_declarations_not_the_values():
+    reason = capability.missing_wifi_credentials(None, None)
+    assert reason is not None
+    assert "BENCH_WIFI_SSID" in reason and "BENCH_WIFI_PSK" in reason
+
+
+def test_a_half_configured_wifi_names_only_the_missing_half():
+    reason = capability.missing_wifi_credentials("BenchNet", None)
+    assert reason is not None
+    assert "BENCH_WIFI_PSK" in reason
+    assert "BENCH_WIFI_SSID" not in reason
+
+
+def test_the_wifi_reason_never_contains_the_passphrase():
+    """This reason lands in a transcript that is not private."""
+    reason = capability.missing_wifi_credentials("BenchNet", "")
+    assert "hunter2" not in (reason or "")

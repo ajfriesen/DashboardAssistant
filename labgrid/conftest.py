@@ -15,12 +15,18 @@ Adds three conveniences on top of labgrid's own pytest plugin (which supplies th
     anywhere and the x86_64 target needs no coordinator
   * tests whose hardware is not on this bench skip themselves, from what the
     place publishes and from what the board reports. See capability.py.
+  * the **Bench Home Assistant** and the journey through it — reset, pairing,
+    the key the gate signs with, the Bench Wi-Fi's credentials. All
+    session-scoped, because a run should pair once, and all skipping rather
+    than failing when this target simply has no Home Assistant. See bench_ha.py
+    and docs/adr/0012-the-full-journey-is-tested-against-a-real-home-assistant.md.
 
 The hardware is not local: bench.yaml names a place on a labgrid coordinator, and
 the place has to be acquired before any of this works. `just hw-test` does that
 for you.
 """
 
+import collections
 import os
 import shutil
 
@@ -28,7 +34,9 @@ import pytest
 from labgrid.resource import NetworkPowerPort
 
 import bench
+import bench_ha
 import capability
+import device
 
 
 def pytest_addoption(parser):
@@ -363,3 +371,230 @@ def plug(target, published_resources):
         raise ValueError(f"unknown plug query {what!r}")
 
     return read
+
+
+# --------------------------------------------------------------------------- #
+# The Bench Home Assistant, and the journey through it
+#
+# See docs/adr/0012-the-full-journey-is-tested-against-a-real-home-assistant.md
+# and bench_ha.py. Session-scoped throughout: the reset takes ~27s and the
+# pairing is the thing every later assertion builds on, so doing either per test
+# would make a run take longer than the flash it follows.
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture(scope="session")
+def on_the_bench(published_resources):
+    """Skip unless this target is a board on the bench's own network segment.
+
+    Every journey assertion needs a device other machines can dial: discovery
+    is link-local, Home Assistant opens the connection *to* the device
+    (docs/adr/0002), and the kiosk's browser is reached by tunnelling into the
+    board. The x86_64 QEMU target can do none of that and never will, so it
+    skips rather than failing — which is also why this asks what the place is
+    rather than whether the device happens to answer. See
+    capability.missing_bench_place.
+
+    Applied per module (`pytestmark = pytest.mark.usefixtures("on_the_bench")`)
+    rather than per test, because it is true of a whole file or of none of it.
+    """
+    unmet = capability.missing_bench_place(published_resources)
+    if unmet:
+        pytest.skip(unmet)
+
+
+@pytest.fixture(scope="session")
+def bench_host(target, on_the_bench):
+    """Any resource from the acquired place, for running commands on its host.
+
+    Which one does not matter — they are all exported from the same bench host,
+    and labgrid's own wrapping carries the hostname, the proxy and the ssh
+    options. Which *kind* does matter, and subtly: see bench.host_resource.
+    """
+    resource = bench.host_resource(target.resources)
+    if resource is None:
+        pytest.skip("this place exports nothing that can run a command on its host")
+    return resource
+
+
+@pytest.fixture(scope="session")
+def bench_ha_url(on_the_bench):
+    """Where the Bench Home Assistant is, or a skip saying this target has none.
+
+    Separate from the client fixture because the Wi-Fi seed needs the address
+    without needing a session against it — and because a target with no Home
+    Assistant should skip before anything resets anything.
+    """
+    url = bench_ha.configured_url()
+    unmet = capability.missing_bench_home_assistant(
+        url, bool(url) and bench_ha.reachable(url)
+    )
+    if unmet:
+        pytest.skip(unmet)
+    return url
+
+
+@pytest.fixture(scope="session")
+def bench_home_assistant(bench_host, bench_ha_url):
+    """The Bench Home Assistant, reset to its fixture and authenticated.
+
+    Reset *here* rather than in a test: a long-lived mutable instance makes a
+    red gate meaningless, so every run starts from the committed fixture — one
+    administrator, one token, a known dashboard, discovery on, the integration
+    installed but deliberately not configured. The unit on the bench host does
+    the waiting and exits non-zero unless Home Assistant is up, answers to the
+    fixture's token and has loaded the integration, so a slow start cannot read
+    as a failure here.
+    """
+    reset = bench.on_bench_host(
+        bench_host,
+        f"systemctl start {bench_ha.RESET_UNIT} && echo reset-ok",
+        timeout=bench_ha.RESET_TIMEOUT,
+    )
+    if "reset-ok" not in reset:
+        pytest.fail(
+            f"the Bench Home Assistant would not reset: {reset.strip()!r}. That "
+            "is the bench, not the image — no result from this run means anything"
+        )
+
+    token = bench_ha.read_token(
+        os.environ,
+        lambda: bench.on_bench_host(
+            bench_host, f"cat {bench_ha.TOKEN_PATH}"
+        ),
+    )
+    if not token:
+        pytest.fail(
+            f"no token at {bench_ha.TOKEN_PATH} on the bench host and "
+            f"none in ${bench_ha.TOKEN_ENV} — the reset wrote a fixture "
+            "whose credential cannot be found"
+        )
+
+    with bench_ha.BenchHomeAssistant(bench_ha_url, token) as client:
+        yield client
+
+
+@pytest.fixture(scope="session")
+def device_ip(shell):
+    """The board's address on the wire, asked of the board itself.
+
+    Not read from a lease table or an environment file: the board is reflashed
+    on most runs and its address is whatever DHCP just gave it, so anything
+    written down here would be a second copy waiting to go stale.
+    """
+    output = "\n".join(shell.run(device.ADDR_COMMAND)[0])
+    address = device.wired_address(output)
+    if not address:
+        pytest.fail(
+            bench_ha.device_side(
+                f"the board has no address on its wire:\n{output}"
+            )
+        )
+    return address
+
+
+@pytest.fixture(scope="session")
+def gate_key(on_the_bench):
+    """The key the release gate signs with, or a skip saying why not.
+
+    Checked for existence before anything tries to use it, because the failure
+    is not recoverable within a run: an attempt with a key that cannot sign
+    counts as a failed authentication, and OpenSSH's per-source penalties then
+    drop every further connection from this address for an hour — taking the
+    rest of the suite with it. See labgrid/README.md.
+    """
+    path = os.path.expanduser(capability.GATE_KEY)
+    key, unmet = capability.gate_key_choice(
+        path, os.path.isfile(path), os.path.isfile(f"{path}.pub")
+    )
+    if unmet:
+        pytest.skip(unmet)
+    return key
+
+
+@pytest.fixture(scope="session")
+def paired(bench_home_assistant, shell, device_ip):
+    """The device enrolled into the Bench Home Assistant, and what that produced.
+
+    The journey itself, run once: wait for Home Assistant to raise a discovery
+    flow on its own, step that flow to completion, and read back the device and
+    entities it created. Every assertion in test_journey.py reads this record
+    rather than repeating the enrollment, so a run pairs once and a failure
+    points at one step rather than at the fourth attempt to do the same thing.
+
+    The entry is removed afterwards. The reset at the start of the next run
+    would do it anyway, but leaving a paired device behind makes the instance
+    confusing to look at by hand, and `already_configured` is the abort this
+    fixture is most likely to hit.
+    """
+    client = bench_home_assistant
+    flow = bench_ha.wait_for_unprompted_flow(client)
+    entry_id = client.finish_flow(flow["flow_id"])
+    registry_device = bench_ha.wait_for_device(client, entry_id)
+    entities = bench_ha.wait_for_entities(client, registry_device["id"])
+    try:
+        yield bench_ha.Pairing(
+            flow=flow,
+            entry_id=entry_id,
+            device=registry_device,
+            entities=entities,
+            address=device_ip,
+        )
+    finally:
+        try:
+            client.delete_entry(entry_id)
+        except Exception as err:  # noqa: BLE001 - teardown must not mask a failure
+            print(f"could not remove config entry {entry_id}: {err!r}")
+
+
+#: Never logged, never put in an assertion message: `psk` is a passphrase
+#: and the console transcript is not private.
+BenchWifi = collections.namedtuple("BenchWifi", "ssid psk")
+
+
+@pytest.fixture(scope="session")
+def bench_wifi():
+    """The Bench Wi-Fi's SSID and passphrase, from the secret declarations.
+
+    Declared in secretspec.toml and resolved into the environment by
+    `secretspec run`; never committed, because the access point is the site's
+    and the passphrase is not this repository's to hold. A bench without them
+    skips rather than fails — a missing secret is a bench that is not set up,
+    not an image that is broken.
+    """
+    ssid = os.environ.get(capability.WIFI_SSID_ENV)
+    psk = os.environ.get(capability.WIFI_PSK_ENV)
+    unmet = capability.missing_wifi_credentials(ssid, psk)
+    if unmet:
+        pytest.skip(unmet)
+    return BenchWifi(ssid=ssid, psk=psk)
+
+
+@pytest.fixture
+def wired_link_down(shell):
+    """Take the board's wire down for the test, and put it back afterwards.
+
+    This is the assertion that is cheap *here* and expensive on most benches:
+    the harness drives the board over its serial console, not over the network,
+    so taking the only wired path away costs no control over it. Which is what
+    makes a genuine Wi-Fi-only claim affordable — asserting that a credentials
+    file was written is the weaker half of it.
+
+    Restored in a `finally`, whatever the test did. A board left with no wire
+    is a board every later test on this bench fails against, and the next
+    person would be debugging the wrong run.
+    """
+    wire = device.wired_interface("\n".join(shell.run(device.ADDR_COMMAND)[0]))
+    if not wire:
+        pytest.skip("this board has no wired interface to take down")
+    shell.run_check(f"ip link set {wire} down")
+    try:
+        yield wire
+    finally:
+        shell.run(f"ip link set {wire} up")
+        # Give DHCP a moment to put the address back, so the next test does not
+        # inherit a board that is technically up and not yet addressed.
+        shell.run(
+            f"timeout 60 sh -c 'until ip -4 addr show {wire} "
+            "| grep -q \"inet \"; do sleep 1; done'"
+        )
