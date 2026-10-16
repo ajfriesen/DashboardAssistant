@@ -459,13 +459,18 @@
           # Manage the Cloudflare R2 images bucket over its S3 API — notably apply
           # the lifecycle policy in ops/r2-lifecycle.json (`just r2-lifecycle-apply`).
           pkgs.awscli2
-          # Declarative secrets: secretspec.toml declares the R2 credentials the
-          # ops recipes need; `secretspec run -- <cmd>` resolves them from the
-          # configured provider (pass/GPG) and injects them as env vars. pass +
-          # gnupg back the default provider choice. See ops/README.md.
+          # Declarative secrets: secretspec.toml declares which secrets exist —
+          # the R2 credentials the ops recipes need and the Bench Wi-Fi the
+          # hardware suite joins — and `secretspec run -- <cmd>` resolves them
+          # from the provider configured per machine, injecting them as env vars
+          # for that command only. See ops/README.md.
+          #
+          # No password-manager tooling rides along: the documented provider is
+          # `kdbx`, which secretspec implements itself against a KeePassXC
+          # database, and the master password comes from the system keyring. The
+          # `pass` + `gnupg` pair that used to sit here backed a provider choice
+          # nothing had ever actually been stored in.
           pkgs.secretspec
-          pkgs.pass
-          pkgs.gnupg
           # `just qemu-run` boots the raw disk image, which is UEFI-only (the
           # bootloader lives in an EFI system partition), so QEMU needs firmware.
           pkgs.qemu

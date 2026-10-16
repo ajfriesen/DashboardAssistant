@@ -376,6 +376,11 @@ credentials, declared in `secretspec.toml` and never committed:
 secretspec run -- just hw-test
 ```
 
+They come from whatever provider your machine is configured for — a KeePassXC
+database here; `ops/README.md` has the one-time setup. An invocation secretspec
+detects as an agent also needs `--reason "<why>"`, which is its audit-log policy
+and worth leaving on.
+
 One caveat worth knowing: that passphrase reaches the card over the board's
 **serial console**, because that is the only channel to a board that has no
 network yet — so it appears in `logs/console_main`. The directory is

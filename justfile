@@ -379,7 +379,8 @@ hw-release:
 # Apply the R2 bucket lifecycle policy from ops/r2-lifecycle.json (R2 speaks the
 # S3 PutBucketLifecycleConfiguration API). Needs R2_ACCOUNT_ID + R2 S3 credentials
 # in the environment; run it through secretspec so those come from your provider
-# (pass), and R2_BUCKET defaults to the images bucket. See ops/README.md.
+# (a KeePassXC database, per ops/README.md), and R2_BUCKET defaults to the images
+# bucket.
 #   secretspec run -- just r2-lifecycle-apply
 [doc('Apply ops/r2-lifecycle.json to the R2 images bucket')]
 r2-lifecycle-apply:
