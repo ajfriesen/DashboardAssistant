@@ -324,6 +324,14 @@ hw-seed *ARGS:
 #
 # While iterating on assertions, hold the place and skip the reflash entirely:
 #   just hw-acquire && pytest labgrid/ --lg-initial-state shell
+#
+# To gate a *candidate* rather than a working tree, name its tag — that is what
+# turns on the check that its closure is in the cache, before an update phase
+# spends the night compiling one on the board (labgrid/README.md, "The candidate
+# has to be in the cache"). Deliberately not defaulted here, unlike LG_PLACE and
+# BENCH_HA_URL: a default would quietly gate whatever tag someone wrote down
+# months ago.
+#   BENCH_CANDIDATE=v1.2.0 just hw-test
 [doc('Flash the Pi 5 dev image to the bench board and assert first boot')]
 hw-test *ARGS: build-rpi5-dev
   ./labgrid/with-place.sh pytest labgrid/ -v {{ARGS}}
