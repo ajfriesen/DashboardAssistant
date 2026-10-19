@@ -245,6 +245,11 @@
       checks.${system} = {
         first-boot = import ./tests/first-boot.nix { inherit pkgs version; };
 
+        # Automatic rollback end to end: boot counting with the loader installed
+        # at the removable path and no EFI variables written, the good-boot gate
+        # failing three times, and the fallback that follows (docs/adr/0009).
+        good-boot = import ./tests/good-boot.nix { inherit pkgs; };
+
         # Flash-wear flags on the browser command line. This is an eval-time
         # check rather than an assertion in first-boot.nix because that test
         # force-disables greetd (no GPU — Chromium crash-loops and buries the

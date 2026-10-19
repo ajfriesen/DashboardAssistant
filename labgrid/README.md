@@ -341,6 +341,7 @@ symptom is a protocol error that reads like a broken page.
 | `test_journey.py` | the assertions about a device and a real Home Assistant: discovery, pairing, a service call, a dashboard on the screen |
 | `test_wifi.py` | the assertions about a device on the Bench Wi-Fi with its wire down |
 | `test_update.py` | the update phase: today its precondition only, that the candidate's closure is in the cache |
+| `test_good_boot.py` | whether automatic rollback is armed on the board: the loader counted this boot and the boot was blessed. Pi-marked, because the x86 side of the same question is answered by `nix build .#checks.x86_64-linux.good-boot` |
 | `with-place.sh` | acquire if nobody holds it, run, release what it acquired — the prelude every `hw-*` recipe shares |
 | `flash.py` | `just hw-flash` — transition to `flashed` and stop |
 | `logs/` | serial transcripts, cleared at the start of each run (gitignored) |
