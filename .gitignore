@@ -12,8 +12,9 @@ ha.yaml
 # Writable copy of the disk image booted by `just qemu-run`
 .qemu-disk.raw
 
-# labgrid coordinator/exporter runtime state, written into whatever directory the
-# coordinator was started in — not configuration (labgrid/labgrid-config.yaml is).
+# labgrid coordinator runtime state, written into whatever directory the
+# coordinator was started in. The coordinator runs on the bench host now
+# (docs/adr/0010), so these are only left over from running one here.
 /labgrid/places.yaml
 /labgrid/resources.yaml
 # Serial transcripts captured by `just hw-test`

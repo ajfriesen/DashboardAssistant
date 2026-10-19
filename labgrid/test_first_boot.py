@@ -8,9 +8,13 @@ systemd-boot -> Linux), first-boot growfs on a real SD card, the ESP that
 carries both the Raspberry Pi firmware and the bootloader, and whether the board
 is drawing current at all.
 
-    just hw-test                        flash, boot, assert
+    just hw-preflight                   is the bench healthy?
+    just hw-test                        flash, boot, assert on the Pi 5 bench
+    just qemu-test                      the same assertions, x86_64 under QEMU
     pytest labgrid/ --lg-initial-state shell    skip the flash, board already up
-    pytest labgrid/ -m "not needs_display"      headless bench
+
+A headless bench needs no marker expression: tests whose hardware is absent
+skip themselves. See labgrid/README.md, "Skipping is derived, never selected".
 """
 
 import json
@@ -55,9 +59,16 @@ def umount_fat(shell):
 
 # --------------------------------------------------------------------------- #
 # Boot chain — only observable on the serial console
+#
+# These four are about the *Pi's* boot chain and GPU specifically — the GPU
+# firmware chainloading U-Boot, U-Boot's EFI bootmanager, the firmware-merged
+# device tree, and VideoCore's render node. Everything below this section holds
+# on any board and runs on the QEMU x86_64 target too; these carry a `board`
+# marker and skip themselves there. See labgrid/capability.py.
 # --------------------------------------------------------------------------- #
 
 
+@pytest.mark.board("rpi4", "rpi5")
 def test_uboot_ran(console_log):
     """The GPU firmware must chainload U-Boot.
 
@@ -71,6 +82,7 @@ def test_uboot_ran(console_log):
     assert "U-Boot 2" in console_log, "no U-Boot banner on the console"
 
 
+@pytest.mark.board("rpi4", "rpi5")
 def test_uboot_handed_off_to_systemd_boot(console_log):
     """U-Boot's EFI bootmanager must find \\EFI\\BOOT\\BOOTAA64.EFI.
 
@@ -82,6 +94,7 @@ def test_uboot_handed_off_to_systemd_boot(console_log):
     assert "efi_mgr" in console_log, "U-Boot did not boot a bootflow via efi_mgr"
 
 
+@pytest.mark.board("rpi4", "rpi5")
 def test_kernel_got_the_firmware_device_tree(shell):
     """The firmware-merged device tree has to survive the U-Boot -> EFI handoff.
 
@@ -110,6 +123,7 @@ def test_kernel_got_the_firmware_device_tree(shell):
     assert model and model[0].startswith("Raspberry Pi"), model
 
 
+@pytest.mark.board("rpi4", "rpi5")
 def test_gpu_render_node(shell):
     """v3d must have probed, which only happens if the vc4-kms-v3d overlay from
     config.txt made it into the device tree the kernel booted on.
@@ -139,11 +153,75 @@ def test_no_systemd_ordering_cycle(shell):
     assert out == ["0"], f"systemd deleted jobs during boot: {out}"
 
 
-@pytest.mark.needs_display
+#: Units that only work with a display attached. greetd/sway/Chromium crash-loop
+#: with nothing plugged into HDMI or DSI, so on a headless bench their failure
+#: says nothing about the code under test. Everything *else* failing is a defect
+#: wherever it is found — which is why the general check below is not marked
+#: needs_display. It used to be, and that hid a storage bug on every headless
+#: run: see "growpart raced the /tmp mount" in README.md.
+KIOSK_UNITS = ("greetd", "sway", "chromium", "cage", "dashboard-assistant-kiosk")
+
+
+def value(sh, cmd):
+    """First line of a command's output, without the console's stray CRs.
+
+    Lines come back off the serial console carrying `\r`, which int() happens to
+    tolerate and string comparison does not — so an exact `== "success"` fails
+    against `"\rsuccess"` and reads like a real defect. Anything comparing
+    output to a literal goes through here.
+    """
+    out = sh.run_check(cmd)
+    return out[0].strip("\r") if out else ""
+
+
+def failed_units(sh):
+    """Units in the failed state, as unit names."""
+    out, _, _ = sh.run("systemctl --failed --no-legend --plain --no-pager")
+    names = []
+    for line in out:
+        # "● foo.service loaded failed failed Some description", and the bullet
+        # arrives with a stray CR from the serial console.
+        fields = line.strip("\r").lstrip("●×*").split()
+        if fields:
+            names.append(fields[0])
+    return names
+
+
 def test_no_failed_units(shell):
-    """Nothing may sit in the failed state after a clean boot."""
-    failed, _, _ = shell.run("systemctl --failed --no-legend")
+    """Nothing may sit in the failed state after a clean boot.
+
+    Display-dependent units are excluded rather than this whole test being
+    skipped on a headless bench, because the failures worth catching here have
+    nothing to do with the screen.
+    """
+    failed = [u for u in failed_units(shell) if not u.startswith(KIOSK_UNITS)]
     assert failed == [], f"failed units: {failed}"
+
+
+@pytest.mark.needs_display
+def test_kiosk_units_not_failed(shell):
+    """The kiosk session itself came up, which needs a real display."""
+    failed = [u for u in failed_units(shell) if u.startswith(KIOSK_UNITS)]
+    assert failed == [], f"failed kiosk units: {failed}"
+
+
+def test_growpart_succeeded(shell):
+    """The partition-growing step must not fail on the boot where it has work.
+
+    Named by its unit on purpose. `test_no_failed_units` catches the symptom but
+    reports "something failed"; this says which thing, and it is the regression
+    test for the race described in README.md — growpart kept its scratch
+    directory under /tmp, the tmpfs from flash-wear.nix was mounted over it
+    mid-run, and pt_resize died with exit 2. The damage was not deterministic:
+    the same image sometimes grew the filesystem anyway, so a test asserting
+    only on the end state passes by luck. This one does not.
+    """
+    result = value(shell, "systemctl show growpart.service -p Result --value")
+    status = value(shell, "systemctl show growpart.service -p ExecMainStatus --value")
+    assert result == "success", (
+        f"growpart.service Result={result!r}, ExecMainStatus={status!r} — "
+        "journalctl -b -u growpart on the device for why"
+    )
 
 
 def test_daemon_state_dir(shell):
@@ -244,7 +322,7 @@ def test_board_draws_power(plug):
     running" from "the console is misconfigured" — the two failures that otherwise
     look identical from a silent serial port.
     """
-    watts = float(plug("draw"))
+    watts = plug("draw")
     assert watts > 0.5, f"board drawing {watts} W — is it plugged into the bench plug?"
 
 
@@ -252,22 +330,36 @@ def test_root_filesystem_grew(shell, image):
     """First boot resizes the root filesystem to fill the card, so one image fits
     any capacity (see rpi5.nix). No VM test covers it: there is no card to grow
     into. If growfs silently no-ops the device ships full.
-    """
-    if image is None:
-        pytest.skip("no image path to compare against")
 
-    image_bytes = os.path.getsize(image)
-    out = shell.run_check("findmnt -bno SIZE /")
-    fs_bytes = int(out[0])
-    assert fs_bytes > image_bytes, (
-        f"root filesystem is {fs_bytes} B, image was {image_bytes} B — "
-        "first-boot growfs did not run"
+    Measured against the *medium*, not the image. "Bigger than the image" was
+    the old bar and it is too low: a partial growth — partition resized, btrfs
+    not — clears it on a large enough card while leaving most of the device
+    unreachable. The real claim is that the filesystem fills the thing it was
+    flashed onto.
+    """
+    # The whole medium, found from the mount rather than hardcoded: SOURCE on a
+    # btrfs root carries a "[/@]" subvolume suffix, and PKNAME is lsblk's own
+    # answer to "which disk is this partition on" — no guessing at mmcblk0p2 vs
+    # sda2 naming.
+    size_cmd = (
+        'src=$(findmnt -no SOURCE / | cut -d"[" -f1); '
+        'lsblk -bndo SIZE "/dev/$(lsblk -no PKNAME "$src" | head -1)"'
     )
+    device_bytes = int(shell.run_check(size_cmd)[0])
+    fs_bytes = int(shell.run_check("findmnt -bno SIZE /")[0])
+
+    # 90%: the ESP, the GPT and btrfs' own metadata are not available to the
+    # filesystem, and that overhead is a few hundred MB on any medium we ship on.
+    assert fs_bytes > device_bytes * 0.9, (
+        f"root filesystem is {fs_bytes} B on a {device_bytes} B medium — "
+        "first-boot growth did not finish (check growpart.service)"
+    )
+    if image is not None:
+        assert fs_bytes > os.path.getsize(image), "filesystem smaller than the image"
 
 
 def test_boot_partition_is_the_esp(shell):
-    """/boot is the vfat EFI system partition, carrying both halves of the boot
-    chain: the Raspberry Pi firmware (config.txt, u-boot.bin) and systemd-boot.
+    """/boot is the vfat EFI system partition, on every board.
 
     No VM test can cover this: first-boot.nix has no disk layout at all and just
     mkdir's a plain /boot. And the partition *type* is load-bearing rather than
@@ -275,6 +367,10 @@ def test_boot_partition_is_the_esp(shell):
     ("has wrong type for an EFI System Partition"), so a layout change that
     quietly reverted partition 1 to Microsoft basic data would break the next
     update rather than this boot.
+
+    Deliberately board-agnostic. One disk layout on every board is the whole
+    point of ADR 0003, so the assertion that proves it has to run everywhere —
+    what each board then *puts* on that partition is the next test's business.
     """
     assert shell.run_check("findmnt -no FSTYPE /boot") == ["vfat"]
     assert shell.run_check(
@@ -282,13 +378,26 @@ def test_boot_partition_is_the_esp(shell):
     ) == ["EFI System"]
 
     fat = mount_fat(shell)
-    # The Raspberry Pi half...
+    shell.run_check(f"test -d {fat}/loader/entries")
+
+
+@pytest.mark.board("rpi4", "rpi5")
+def test_boot_partition_carries_the_pi_firmware(shell):
+    """On a Pi the ESP carries both halves of the boot chain: the Raspberry Pi
+    firmware the GPU reads, and the UEFI loader it chainloads.
+
+    Split from the ESP assertion above because `config.txt`, `u-boot.bin` and
+    `overlays/` are Raspberry Pi firmware and exist on no other board — bundling
+    them together made a universal claim unprovable anywhere but the Pi. Which
+    is how it showed up: the x86_64 target failed on `test -f /boot/config.txt`
+    while the ESP itself was perfectly correct.
+    """
+    fat = mount_fat(shell)
     shell.run_check(f"test -f {fat}/config.txt")
     shell.run_check(f"test -f {fat}/u-boot.bin")
     shell.run_check(f"test -d {fat}/overlays")
-    # ...and the UEFI half, at the removable fallback path U-Boot scans for.
+    # The UEFI half, at the removable fallback path U-Boot scans for.
     shell.run_check(f"test -f {fat}/EFI/BOOT/BOOTAA64.EFI")
-    shell.run_check(f"test -d {fat}/loader/entries")
 
 
 def test_root_has_subvolumes(shell):
@@ -341,7 +450,12 @@ def test_nix_builds_outside_the_tmpfs(shell):
     as much RAM as we hand it and no binary cache to miss.
     """
     assert shell.run_check("findmnt -no FSTYPE /tmp") == ["tmpfs"]
-    assert shell.run_check("nix config show build-dir") == ["/var/tmp"]
+    # Last line, not the whole output: nix writes diagnostics to stderr and the
+    # shell hands both back interleaved, so an offline device prefixes this with
+    # "warning: you don't have Internet access; disabling some network-dependent
+    # features" and an exact comparison fails on a setting that is in fact right.
+    build_dir = shell.run_check("nix config show build-dir 2>/dev/null | tail -1")
+    assert build_dir == ["/var/tmp"], build_dir
     # /var/tmp has to be on real storage, or the setting bought nothing.
     assert shell.run_check("findmnt -no FSTYPE -T /var/tmp") == ["btrfs"]
 
@@ -414,10 +528,12 @@ def test_screenshot_lands_on_tmpfs(shell):
 def test_seed_file_from_flashed_partition(shell):
     """Provisioning the way docs/flash/seed.md tells a user to do it.
 
-    Mount the flashed card's FAT partition, drop dashboard-assistant.yaml in its
-    root, eject, boot. This is the whole point of testing on hardware: the harness
-    owns the card through the SD-Mux, so it performs the literal user action
-    rather than a stand-in for it.
+    Drop dashboard-assistant.yaml in the root of the FAT partition the user sees,
+    then make the importer read it. The file lands where a user would put it, on
+    the real artifact built for this board — which is what matters here, and is
+    what no VM test reaches. The one thing it is not is the literal user gesture:
+    the partition is mounted on the board over the shell rather than through the
+    SD-Mux with the card in the host's hands.
 
     It used to be a strict xfail. modules/core/configimport.nix read only /boot,
     which on this board is a directory on the btrfs root — so the file landed

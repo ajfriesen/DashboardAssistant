@@ -16,15 +16,21 @@ name: release image
 # filename, so an image stays identifiable once it is downloaded and out of its
 # folder:
 #   release/x86_64/dashboard-assistant-x86_64-<version>.raw.zst (immutable, per release)
-#   release/x86_64/latest.raw.zst                               (newest full release)
 #   pre-release/x86_64/…                                        (same, for a hyphened SemVer tag)
 #   dev/x86_64/dashboard-assistant-x86_64-<commit>.raw.zst      (branch build)
 #
+# There is deliberately no `latest` object. It only duplicated the download table
+# in the release notes, and a release is now held back as a candidate until the
+# bench has booted its images — keeping two pointers in step across that gate
+# buys nothing. The pointer that matters is GitHub's /releases/latest, which is
+# what devices poll and what promotion moves. See
+# docs/adr/0011-a-release-is-promoted-after-the-release-gate.md.
+#
 # The channel comes from the ref alone: a v* tag publishes a release (pre-release
 # for a hyphen, e.g. v0.1.0-rc.1), anything else is a dev build keyed by the short
-# commit, so two runs off the same branch can't overwrite each other. Only a tag
-# moves the channel's `latest` pointer — a test build must never become the image
-# people flash. dev/ objects are swept after 7 days by the bucket lifecycle policy
+# commit, so two runs off the same branch can't overwrite each other. Publishing
+# an object never makes it the image people flash; only promotion does. dev/
+# objects are swept after 7 days by the bucket lifecycle policy
 # (ops/r2-lifecycle.json).
 #
 # Required repo config (Settings -> Secrets and variables -> Actions):
@@ -115,11 +121,10 @@ jobs:
           set -euo pipefail
           zstd -19 -T0 -c "$(readlink -f result)/dashboard-assistant.raw" > "$ASSET"
 
-      # Publish the immutable per-build object, and for a release also overwrite
-      # the channel's `latest` pointer (the single flashable artifact for that
-      # channel/board), attaching provenance metadata (x-amz-meta-*) to each —
-      # readable with `aws s3api head-object` or an HTTP HEAD via the custom
-      # domain.
+      # Publish the immutable per-build object, attaching provenance metadata
+      # (x-amz-meta-*) — readable with `aws s3api head-object` or an HTTP HEAD via
+      # the custom domain. One object, nothing pointing at it: a release is a
+      # candidate until the gate has passed and promotion links it.
       - name: Publish image to R2
         if: ${{ vars.R2_BUCKET != '' }}
         env:
@@ -141,16 +146,10 @@ jobs:
           # `ref` is the tag on a release build and the branch on a dev one, so it
           # answers "where did this come from" for both without an empty key.
           meta="board=$ARCH,arch=x86_64,channel=$CHANNEL,version=${VERSION:-$baked},ref=$GITHUB_REF_NAME,commit=$GITHUB_SHA,nixos-version=$nixos,built=$built,sha256=$sha,run-url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          keys=("$DIR/$ASSET")
-          # Only a release moves the pointer people flash; dev builds are keyed by
-          # commit and have no `latest`.
-          [ "$CHANNEL" = dev ] || keys+=("$DIR/latest.raw.zst")
-          for key in "${keys[@]}"; do
-            aws s3 cp "$ASSET" "s3://$bucket/$key" \
-              --endpoint-url "$R2_ENDPOINT" \
-              --content-type application/zstd \
-              --metadata "$meta"
-          done
+          aws s3 cp "$ASSET" "s3://$bucket/$DIR/$ASSET" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --content-type application/zstd \
+            --metadata "$meta"
           size=$(du -h "$ASSET" | cut -f1)
           {
             echo "### 📦 $ARCH image published to $DIR/"

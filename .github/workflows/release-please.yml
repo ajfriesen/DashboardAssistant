@@ -13,9 +13,18 @@ name: release-please
 # (or no scope) for changes that apply to all.
 #
 # Prereleases: force one with a `Release-As: 0.3.0-rc.1` commit footer, usually on
-# an empty commit (`git commit --allow-empty`). The step below flags any release
-# whose tag has a SemVer prerelease suffix (a hyphen) as a GitHub pre-release; its
-# images go to pre-release/ (not release/), off the stable update path.
+# an empty commit (`git commit --allow-empty`). A tag with a SemVer prerelease
+# suffix (a hyphen) publishes its images to pre-release/ rather than release/.
+#
+# Every release starts as a *candidate*: published, but held off the update path
+# until the release gate on the bench has passed and it is promoted. See
+# docs/adr/0011-a-release-is-promoted-after-the-release-gate.md. That is what the
+# "Hold the release back as a candidate" step below does, and it is why a release
+# has no download links in its notes when it is first cut — promotion writes
+# them. A candidate is held back by marking it a GitHub pre-release, which is the
+# documented way to keep it out of /releases/latest: that endpoint returns the
+# newest non-prerelease, non-draft release, and `modules/core/update.nix` polls
+# it on an hourly interval. Nothing else reaches a device by itself.
 #
 # No paths-ignore here: a `paths-ignore` filter skips pushes that change no
 # matching files, and an empty commit changes *no* files at all — so filtering
@@ -44,52 +53,34 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-      # Flag prerelease versions (tag contains a hyphen) as GitHub pre-releases and
-      # drop them from "latest", so they stay off the stable update path.
-      - name: Mark prereleases
-        if: ${{ steps.release.outputs.release_created == 'true' && contains(steps.release.outputs.tag_name, '-') }}
+      # Hold the release back as a candidate: a pre-release, and not "latest", so
+      # no device is offered it and the releases page does not hand it out. This
+      # applies to *every* tag, not only the hyphened ones — a full release is a
+      # candidate too until the bench has booted its images. Promotion reverses
+      # exactly this.
+      - name: Hold the release back as a candidate
+        if: ${{ steps.release.outputs.release_created == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.release.outputs.tag_name }}
-        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease --latest=false
-
-      # Write the per-board download links into the release notes. URLs are
-      # deterministic from the tag + channel, so we write them here once (no race
-      # between the parallel image workflows); the objects appear a few minutes
-      # later as those builds finish. Skipped without R2_PUBLIC_URL (e.g. forks).
-      - name: Add image download links to the release notes
-        if: ${{ steps.release.outputs.release_created == 'true' && vars.R2_PUBLIC_URL != '' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.release.outputs.tag_name }}
-          R2_PUBLIC_URL: ${{ vars.R2_PUBLIC_URL }}
         run: |
           set -euo pipefail
-          version="${TAG#v}"
-          case "$TAG" in *-*) channel=pre-release ;; *) channel=release ;; esac
-          base="$R2_PUBLIC_URL/$channel"
-          # <board>/dashboard-assistant-<board>-<version>.<ext>: the board is both the
-          # folder and part of the filename, so a downloaded image is still
-          # identifiable once it's out of its folder. Kept in step with the layout
-          # the image workflows publish (see release-image.yml).
-          x86_name="dashboard-assistant-x86_64-$version.raw.zst"
-          rpi4_name="dashboard-assistant-rpi4-$version.raw.zst"
-          rpi5_name="dashboard-assistant-rpi5-$version.raw.zst"
-          x86="$base/x86_64/$x86_name"
-          pi5="$base/rpi5/$rpi5_name"
-          body=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body -q .body)
-          notes=$(mktemp)
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease --latest=false
           {
-            printf '%s\n' "$body"
+            echo "### 🚧 $TAG is a candidate"
             echo
-            echo "## Images"
+            echo "Its images publish to R2 in a few minutes, but nothing points at"
+            echo "them: the release is held off \`/releases/latest\`, which"
+            echo "\`modules/core/update.nix\` polls, and its notes carry no download"
+            echo "links. Run the release gate on the bench, then promote it."
             echo
-            echo "Flashable images (published to R2 within a few minutes of this release):"
+            echo "Until the gate has a single entry point, by hand:"
             echo
-            echo "| Board | Image |"
-            echo "|---|---|"
-            echo "| x86_64 | [\`$x86_name\`]($x86) |"
-            echo "| Raspberry Pi 4 | [\`$rpi4_name\`]($base/rpi4/$rpi4_name) |"
-            echo "| Raspberry Pi 5 | [\`$rpi5_name\`]($pi5) |"
-          } > "$notes"
-          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$notes"
+            echo '```sh'
+            echo "just hw-preflight     # is the bench healthy?"
+            echo "just hw-test          # the Pi 5 bench"
+            echo "just qemu-test        # the x86_64 image under QEMU"
+            echo "gh release edit $TAG --draft=false --prerelease=false --latest"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+

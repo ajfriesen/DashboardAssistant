@@ -21,6 +21,10 @@ _Avoid_: using it for the whole device
 **Dashboard**:
 The Home Assistant page the kiosk shows.
 
+**App**:
+A capability built into the image and switched on per device, like Sendspin. Apps ship in a generation; a device never installs one at runtime.
+_Avoid_: add-on, plugin, service
+
 **Sendspin**:
 The music player running on a device that lets audio be streamed to it.
 
@@ -62,6 +66,20 @@ _Avoid_: bare "token", HA token
 The state of a device whose device API token the integration has used. Pairing happens once; removing the integration does not unpair a device, only a factory reset does.
 _Avoid_: connected, enrolled, provisioned (a different state)
 
+### Talking to Home Assistant
+
+**Device API**:
+The authenticated API a device serves on the local network for the integration. Home Assistant always opens the connection; a device never calls Home Assistant. Distinct from the admin page, which serves people.
+_Avoid_: local API, REST API
+
+**State stream**:
+The connection a device holds open to push snapshots to Home Assistant.
+_Avoid_: event stream, websocket, push channel
+
+**Snapshot**:
+One complete picture of a device's state. Every state message is a whole snapshot, never a delta.
+_Avoid_: state update, patch, diff
+
 ### Keeping a device alive
 
 **Admin page**:
@@ -89,6 +107,14 @@ _Avoid_: bad release, failed update
 
 ### Builds and releases
 
+**Candidate**:
+A release whose images are published but not yet promoted. Devices never see one, and nothing links to it.
+_Avoid_: rc (a hyphened tag, which a candidate need not be), build
+
+**Promotion**:
+Marking a candidate as the release users get: the newest release devices offer to install, and the one the download links point at. The images do not move; only the pointers do.
+_Avoid_: publish (the images already are), release (ambiguous)
+
 **Channel**:
 A release stream a device can follow: `release`, `pre-release` or `dev` (branch builds). Never "unstable", which only names the NixOS branch every board is built from.
 
@@ -98,3 +124,20 @@ An image built with root SSH access and a root password, for development on real
 **Bench**:
 The physical Raspberry Pi 5 rig for running tests on real hardware.
 _Avoid_: lab, rig, testbed
+
+**Bench host**:
+The always-on machine the bench is plugged into. It owns the hardware and the identity of every part of it, and makes the bench available to whichever machine runs the tests. It is never itself a board under test.
+_Avoid_: test server, runner, lab PC
+
+**Bench Home Assistant**:
+The Home Assistant the bench's devices pair with, running on the bench host. Pinned, and reset to a known state before each run, so a failure is the image's and never yesterday's leftovers.
+_Avoid_: test HA, mock HA, fake HA
+
+**Bench Wi-Fi**:
+The dedicated SSID the bench's devices join to exercise Wi-Fi seeding.
+_Avoid_: test wifi, lab wifi
+
+**Release gate**:
+The suite on the bench a candidate must pass before promotion.
+_Avoid_: CI, hardware CI
+

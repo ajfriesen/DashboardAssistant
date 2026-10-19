@@ -1,0 +1,89 @@
+# labgrid environment for the x86_64 image under QEMU — `just qemu-test`.
+#
+# The second target the suite runs against, and the only one the x86_64 image
+# ever gets. The bench has one Raspberry Pi 5 in it and a second board is a
+# purchase; a UEFI firmware, a GPT partition table, a real EFI system partition,
+# a btrfs root and first-boot growth are not. So everything in
+# test_first_boot.py that is not specifically about the Pi's boot chain runs
+# here too — the Pi-only assertions carry a `board` marker and skip themselves.
+#
+# Needs one thing in the environment:
+#
+#   LG_OVMF_FD   path to the UEFI firmware image (the same one `just qemu-run`
+#                uses). conftest.py defaults it from the dev shell's OVMF_FD, so
+#                there is normally nothing to set. The LG_ prefix is not
+#                decoration: labgrid maps *only* LG_* variables into !template,
+#                deliberately, so `!template $OVMF_FD` would fail with "unknown
+#                variable" however well the variable is exported.
+#
+# The disk it boots (.qemu-disk.raw, beside this file and gitignored) is written
+# by QEMUStrategy before the driver is activated. It is a copy of the image,
+# grown: the image comes out of the read-only Nix store, QEMU writes to its disk
+# in place, and a disk the size of the image leaves first-boot growth nothing to
+# do. See bench.prepare_qemu_disk.
+#
+# No place, no coordinator and no acquire: there is no shared hardware to hold.
+targets:
+  main:
+    drivers:
+      # Provides both the power and the console protocols, so it is the whole
+      # hardware stack in one driver. `-enable-kvm` is not optional in spirit:
+      # without it a first boot that grows a filesystem takes long enough to
+      # look hung.
+      - QEMUDriver:
+          qemu_bin: qemu-system-x86_64
+          machine: q35
+          cpu: host
+          memory: "2048"
+          bios: ovmf
+          # The disk is attached by hand rather than through the driver's `disk`
+          # option, because that option hardcodes `if=virtio` — and this image
+          # has no virtio driver in its initrd. modules/hardware/generic-x86-disk.nix
+          # carries SATA, NVMe, eMMC and USB, which is the right list for the
+          # mini-PCs it is meant for, and the symptom of booting it off a bus it
+          # cannot see is a 90-second wait for the root partition followed by
+          # emergency mode — the same failure its own comment describes for eMMC.
+          #
+          # So: an ICH9 AHCI controller, which q35 would have anyway, and which
+          # tests the image *as shipped* rather than asking the product to grow
+          # a driver for the test rig's convenience. $BASE is the directory
+          # holding this file, supplied by labgrid.
+          extra_args: !template "-enable-kvm -drive id=hd,if=none,format=raw,file=$BASE/.qemu-disk.raw -device ich9-ahci,id=ahci -device ide-hd,drive=hd,bus=ahci.0"
+
+          # `none` rather than a framebuffer, deliberately. With no graphics
+          # device there is no DRM connector, so capability.missing_display sees
+          # a board with no screen and the kiosk tests skip themselves — which
+          # is honest. A framebuffer would present a connected output that
+          # Chromium then cannot render on, and the tests would fail rather than
+          # skip, for a reason that has nothing to do with the image.
+          display: none
+          # User-mode networking, with the device API forwarded. This is the one
+          # place this target is weaker than the bench: user-mode NAT cannot
+          # carry mDNS, and Home Assistant opens connections *to* a device
+          # (ADR 0002), so discovery and pairing are not reachable here. Those
+          # assertions belong on the bench until this grows a tap interface.
+          nic: "user,model=virtio-net-pci,hostfwd=tcp::18081-:8081"
+      - ShellDriver:
+          # The same plain prompt modules/dev.nix forces, for the same reason —
+          # read the comment there before touching either side.
+          prompt: 'root@[^\s]+:[^\s]*# '
+          login_prompt: 'login: '
+          username: root
+          password: dashboard
+          # No SD card to be slow about, but first boot still grows the
+          # filesystem and generates a TLS keypair, and neither prints anything
+          # while it works. 180 s was not enough on a cold 8 GiB disk.
+          login_timeout: 300
+      - QEMUStrategy: {}
+
+images:
+  ovmf: !template $LG_OVMF_FD
+
+# Which board this target drives. Read by the `board` fixture, which is what
+# lets a Pi boot-chain assertion skip itself here instead of failing. Declared
+# rather than measured on purpose — see capability.py.
+options:
+  board: x86_64
+
+imports:
+  - strategy.py
