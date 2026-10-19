@@ -26,10 +26,13 @@ icon: lucide/sparkles
 **Stays alive**
 
 - Atomic OS updates surfaced as a Home Assistant `update` entity.
-- Recovery built in: if an update misbehaves, roll back to a previous
-  generation from the [admin page](../usage/admin.md) — LAN-only, off the
-  touchscreen. (Automatic rollback on a failed boot isn't switched on yet,
-  though every image now boots through systemd-boot, which provides it.)
+- Automatic rollback: an update gets three attempts to come back up on your
+  network, and a device that cannot returns to the version it was running
+  before, unattended. It then skips the release it refused until a newer one
+  ships, and tells Home Assistant it rolled back.
+- Recovery built in for everything rollback cannot see: if an update leaves the
+  device reachable but misbehaving, roll back by hand to a previous generation
+  from the [admin page](../usage/admin.md) — LAN-only, off the touchscreen.
 
 **Hands-off provisioning**
 
@@ -65,7 +68,7 @@ press on the tablet. It appears as a single device with these entities:
 | Page 1 … N | `text` | Edit the dashboard URL list from HA |
 | Sendspin player | `switch` | Turn the device's multi-room audio player on/off; carries a `status` attribute. Only on builds with the audio stack |
 | Reboot / Shut down | `button` | Power-cycle the device |
-| System update | `update` | Installed vs. latest release, with one-tap install |
+| System update | `update` | Installed vs. latest release, with one-tap install. After an automatic rollback it carries the release the device refused, and stops offering it until a newer one ships |
 
 ### Sensors
 

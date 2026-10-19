@@ -41,20 +41,35 @@ reference for the complete entity list.
 
 OS updates are atomic and surface in Home Assistant as an `update` entity: it
 compares the installed version against the latest release and offers a one-tap
-install. Every version is kept as a NixOS generation, so if an update misbehaves
-you can roll back from the device (see below).
+install. Every version is kept as a NixOS generation, so an update that goes
+wrong is undone rather than repaired — automatically if the device cannot come
+back up, and by hand from the admin page otherwise.
+
+## Automatic rollback
+
+An update gets three attempts to come back up. If the device is not reachable on
+your network after the third, it returns to the version it was running before,
+on its own and with nobody present. It then remembers the release it refused and
+does not offer it again until a newer one ships, so it cannot get stuck
+reinstalling the same bad update in a loop. The rollback shows up in Home
+Assistant, so you find out that it happened rather than noticing the version
+number went backwards.
+
+"Came back up" means the device is reachable, and nothing more. A blank screen
+or a Home Assistant that happens to be down does not count as a failed update:
+neither is the update's fault, and rolling back for them would undo a release
+that was fine.
+
+A freshly flashed device has nothing to roll back to. If it never comes up, the
+fix is to flash it again — automatic rollback protects updates, not the first
+boot.
 
 ## Recovery
 
-If an update or configuration change misbehaves, open the
-[admin page](admin.md) at `http://<device-ip>:8099/` from another machine on the
-network and pick an older, known-good generation to boot into. There is no
-recovery option on the tablet itself: the screen is read-only so that nobody
+If an update or configuration change misbehaves in a way that leaves the device
+*reachable* — a dashboard that will not load, a setting that broke the screen —
+nothing rolls back on its own, because from the outside the device is fine. Open
+the [admin page](admin.md) at `http://<device-ip>:8099/` from another machine on
+the network and pick an older, known-good generation to boot into. There is no
+recovery option on the device itself: the screen is read-only so that nobody
 walking past it can roll the device back or reset it.
-
-!!! note "Automatic rollback isn't available yet"
-    Booting into the previous generation *automatically* after a failed boot
-    relies on boot-counting support, which comes from **systemd-boot**. Every
-    image boots through it now, so the mechanism is available — switching it on
-    is tracked separately. Until then recovery is manual, using the admin
-    page.
