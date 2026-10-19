@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Analytics opt-out control (docs/legal/datenschutz.md)
+   Analytics opt-out control (website/content/legal/datenschutz.md)
    --------------------------------------------------------------------------
    Renders the Art. 21 GDPR objection as a button instead of asking visitors to
    paste a snippet into their developer console.

@@ -13,6 +13,14 @@
 # Read more: https://zensical.org/docs/setup/basics/#site_name
 site_name = "Dashboard Assistant"
 
+# The directory holding the Markdown pages and assets of this site. Zensical's
+# default is "docs", but `docs/` at the repository root means something else
+# here — the contributor documentation, which is never published (see
+# docs/adr/0013). Hence "content": one word, one meaning.
+#
+# Read more: https://zensical.org/docs/setup/basics/#docs_dir
+docs_dir = "content"
+
 # The site_description is included in the HTML head and should contain a
 # meaningful description of the site content for use by search engines.
 #
@@ -304,10 +312,10 @@ logo = "brand/mark-wide.svg"
 # Fonts are self-hosted, so this is deliberately `false` rather than a
 # [project.theme.font] table: `false` is what makes base.html skip the
 # <link> to fonts.googleapis.com, which otherwise leaks every visitor's IP
-# address to Google (see docs/legal/datenschutz.md).
+# address to Google (see website/content/legal/datenschutz.md).
 #
 # The same switch also suppresses the inline <style> Zensical uses to set
-# --md-text-font / --md-code-font, so docs/stylesheets/fonts.css sets those
+# --md-text-font / --md-code-font, so website/content/stylesheets/fonts.css sets those
 # itself alongside the @font-face rules. Changing this back to a table would
 # silently restore the Google request.
 # ----------------------------------------------------------------------------
@@ -335,8 +343,8 @@ font = false
 # - https://zensical.org/docs/setup/colors/
 # ----------------------------------------------------------------------------
 # "custom" suppresses the theme's built-in indigo rules and hands the palette
-# to CSS: docs/stylesheets/brand-theme.css maps the brand tokens in
-# docs/brand/colors.css onto Material's --md-* variables for both schemes.
+# to CSS: website/content/stylesheets/brand-theme.css maps the brand tokens in
+# website/content/brand/colors.css onto Material's --md-* variables for both schemes.
 [[project.theme.palette]]
 scheme = "default"
 primary = "custom"

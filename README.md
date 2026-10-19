@@ -1,4 +1,4 @@
-<h3 align="center"><img width="80" alt="Dashboard Assistant: the best Home Assistant Tablet Experience: at any time." src="docs/brand/mark-wide.svg"></h3>
+<h3 align="center"><img width="80" alt="Dashboard Assistant: the best Home Assistant Tablet Experience: at any time." src="website/content/brand/mark-wide.svg"></h3>
 
 <h3 align="center">The Best Home Assistant Tablet Experience!</h3>
 
@@ -41,12 +41,12 @@ The screen itself becomes something you can see and control from your automation
 
 <!-- 
 <p align="center">
-  <img src="docs/img/home-assistant-light.jpeg" width="49%" alt="Dashboard View (light)">
-  <img src="docs/img/home-assistant-dark.jpeg" width="49%" alt="Dashboard View (dark)">
-  <img src="docs/img/keyboard.jpeg" width="49%" alt="Keyboard View">
-  <img src="docs/img/recovery.jpeg" width="49%" alt="Recovery View">
-  <img src="docs/img/home-assistant-vertical.jpeg" width="49%" alt="Vertical Dashboard View">
-  <img src="docs/img/random-website.jpeg" width="49%" alt="Website View">
+  <img src="website/content/img/home-assistant-light.jpeg" width="49%" alt="Dashboard View (light)">
+  <img src="website/content/img/home-assistant-dark.jpeg" width="49%" alt="Dashboard View (dark)">
+  <img src="website/content/img/keyboard.jpeg" width="49%" alt="Keyboard View">
+  <img src="website/content/img/recovery.jpeg" width="49%" alt="Recovery View">
+  <img src="website/content/img/home-assistant-vertical.jpeg" width="49%" alt="Vertical Dashboard View">
+  <img src="website/content/img/random-website.jpeg" width="49%" alt="Website View">
 </p> -->
 
 ## License

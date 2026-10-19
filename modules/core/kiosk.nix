@@ -909,15 +909,16 @@ let
   # printed the API token and could roll the system back and reboot it; that moved
   # to the LAN admin listener (daemon/admin.go). The sponsor page carries a read-only
   # device-info view, which is as far as on-screen introspection goes.
-  # Sponsor button artwork. Referenced straight out of docs/brand/ rather than
-  # copied, so the bar can never drift from the shipped mark. This is the one
-  # place a raster beats the SVGs: it is the only *square* official asset, and
-  # the two SVGs cannot stand in for it — favicon.svg's .plate/.tile classes are
-  # defined nowhere in the repo (it renders black standalone) and mark-wide.svg
-  # is a 64x40 lockup. At 180px source for a 26px slot there is resolution to
-  # spare. waybar can load SVG here if a square one ever lands: its wrapper sets
-  # GDK_PIXBUF_MODULE_FILE to a librsvg loaders.cache that registers image/svg+xml.
-  sponsorLogo = ../../docs/brand/apple-touch-icon-180.png;
+  # Sponsor button artwork. Referenced straight out of the website's brand/
+  # directory rather than copied, so the bar can never drift from the shipped
+  # mark. This is the one place a raster beats the SVGs: it is the only *square*
+  # official asset, and the two SVGs cannot stand in for it — favicon.svg's
+  # .plate/.tile classes are defined nowhere in the repo (it renders black
+  # standalone) and mark-wide.svg is a 64x40 lockup. At 180px source for a 26px
+  # slot there is resolution to spare. waybar can load SVG here if a square one
+  # ever lands: its wrapper sets GDK_PIXBUF_MODULE_FILE to a librsvg
+  # loaders.cache that registers image/svg+xml.
+  sponsorLogo = ../../website/content/brand/apple-touch-icon-180.png;
 
   waybarConfig = pkgs.writeText "ha-kiosk-waybar.json" ''
     {

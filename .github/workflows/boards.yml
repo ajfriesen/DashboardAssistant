@@ -75,14 +75,14 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    # Docs-only pushes do not change the Nix build, so do not warm the cache for
-    # them. These paths are owned by docs.yml (the GitHub Pages deploy). Note:
+    # Documentation-only pushes do not change the Nix build, so do not warm the
+    # cache for them: website/ is owned by docs.yml (the GitHub Pages deploy) and
+    # docs/ is contributor documentation that nothing builds at all. Note:
     # GitHub ignores path filters for tag pushes, so a v* release tag still
     # always builds and publishes the images regardless of what it touched.
     paths-ignore:
+      - 'website/**'
       - 'docs/**'
-      - 'overrides/**'
-      - 'zensical.toml'
       - '.github/workflows/docs.yml'
     tags:
       - "v*"

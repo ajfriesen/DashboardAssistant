@@ -30,6 +30,10 @@ help:
   @echo "  hw-power ACTION        on | off | cycle | get on the bench plug"
   @echo "  hw-acquire/hw-release  Hold the bench across several runs"
   @echo
+  @echo "Website (the public site at dashboardassistant.org — website/):"
+  @echo "  website-serve          Serve the website locally with live reload"
+  @echo "  website-build          Build the website into website/site/"
+  @echo
   @echo "Introspect:"
   @echo "  options                List the dashboardAssistant.* NixOS config options"
   @echo
@@ -383,6 +387,21 @@ hw-acquire:
 [doc('Release the bench place')]
 hw-release:
   labgrid-client -p "$LG_PLACE" release
+
+# Serve the public website locally with live reload. Both website recipes run in
+# website/ because that is where zensical.toml lives — zensical only looks in the
+# current directory, so running it from the repository root fails with
+# "No config file found in the current folder."
+[doc('Serve the website locally with live reload')]
+website-serve *ARGS:
+  cd website && zensical serve {{ARGS}}
+
+# Build the website into website/site/, the same way .github/workflows/docs.yml
+# builds what GitHub Pages serves. --clean so a renamed or deleted page cannot
+# survive in the output.
+[doc('Build the website into website/site/')]
+website-build *ARGS:
+  cd website && zensical build --clean {{ARGS}}
 
 # Apply the R2 bucket lifecycle policy from ops/r2-lifecycle.json (R2 speaks the
 # S3 PutBucketLifecycleConfiguration API). Needs R2_ACCOUNT_ID + R2 S3 credentials

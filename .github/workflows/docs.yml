@@ -5,9 +5,9 @@ on:
     branches:
       - main
     paths:
-      - 'docs/**'
-      - 'overrides/**'
-      - 'zensical.toml'
+      # The website is one self-contained Zensical project, so a single path
+      # covers its config, its theme overrides and its content.
+      - 'website/**'
       - '.github/workflows/docs.yml'
 permissions:
   contents: read
@@ -26,9 +26,12 @@ jobs:
         with:
           python-version: 3.x
       - run: pip install zensical
+      # zensical.toml is not at the repository root: it lives with the website
+      # it configures, and the build looks for it in the current directory.
       - run: zensical build --clean
+        working-directory: website
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: site
+          path: website/site
       - uses: actions/deploy-pages@v5
         id: deployment
