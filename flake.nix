@@ -79,6 +79,12 @@
         # nixpkgs-unstable` moves both in one commit. A pip install or a
         # container image would reintroduce exactly the drift this prevents.
         ps.playwright
+
+        # Reading .github/workflows/*.yml in test_candidate.py, which asserts
+        # that no board's image waits on another board's closure. PyYAML
+        # arrives with labgrid anyway; named here so the test does not rest on
+        # somebody else's dependency.
+        ps.pyyaml
       ]);
 
       # Optional per-build overrides (e.g. a seeded HA URL / debug flags). See

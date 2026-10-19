@@ -493,10 +493,11 @@ rather than remembered — the captured outputs are in `test_candidate.py`:
 
 #### Who pushes a candidate, and when
 
-[`boards.yml`](../.github/workflows/boards.yml)'s `closure` job, for every
-board. It builds each board's system closure on a runner of its own
-architecture and pushes it to Attic, on every `v*` tag — and on a push to
-`main`, which warms the cache without producing a candidate.
+[`boards.yml`](../.github/workflows/boards.yml), for every board. It calls
+[`board.yml`](../.github/workflows/board.yml) once per board, whose `closure`
+job builds that board's system closure on a runner of its own architecture and
+pushes it to Attic, on every `v*` tag — and on a push to `main`, which warms
+the cache without producing a candidate.
 
 Nothing local pushes: a developer's `just build-rpi5` pulls from the cache and
 never fills it, and the push token lives only in CI.

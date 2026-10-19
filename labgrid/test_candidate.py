@@ -10,8 +10,20 @@ import pathlib
 import re
 
 import pytest
+import yaml
 
 import candidate
+
+WORKFLOWS = pathlib.Path(__file__).resolve().parent.parent / ".github/workflows"
+
+
+def _boards_matrixed_by(job):
+    """Which boards a job fans out over, if it does. Both spellings: an
+    `include` table of entries carrying a `board`, and a bare `board:` list."""
+    matrix = (job.get("strategy") or {}).get("matrix") or {}
+    boards = {e["board"] for e in matrix.get("include") or [] if "board" in e}
+    listed = matrix.get("board") or []
+    return boards | {b for b in listed if isinstance(b, str)}
 
 
 #: A closure nix can substitute in full. The one answer that lets the update
@@ -291,6 +303,31 @@ def test_the_workflow_named_in_the_failure_exists():
     )
 
     assert workflow.is_file(), workflow
+
+
+def test_no_board_waits_on_another_boards_closure():
+    """`needs` takes a whole job and never one leg of its matrix, and
+    `fail-fast: false` does not change that. So a workflow that matrixes a job
+    over the boards and then has another job `needs` it gates *every* board on
+    every board: one flaky arm64 runner, and a `v*` tag publishes no images at
+    all, x86_64's included, however green its own closure was. That is why
+    boards.yml calls board.yml once per board instead of matrixing two jobs
+    (issue #55, PR #57).
+
+    Stated over every workflow rather than over boards.yml alone, because the
+    cheap way to reintroduce this is to inline board.yml back."""
+    offenders = []
+    for path in sorted(WORKFLOWS.glob("*.yml")):
+        jobs = yaml.safe_load(path.read_text()).get("jobs") or {}
+        for name, job in jobs.items():
+            needs = job.get("needs") or []
+            for upstream in [needs] if isinstance(needs, str) else needs:
+                boards = _boards_matrixed_by(jobs.get(upstream) or {})
+                if boards:
+                    offenders.append(f"{path.name}: {name} needs {upstream}, "
+                                     f"which is matrixed over {sorted(boards)}")
+
+    assert not offenders, "\n".join(offenders)
 
 
 def test_the_flake_reference_is_the_one_a_device_updates_from():
