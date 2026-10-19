@@ -51,7 +51,7 @@
       # the release PR to match the tag it cuts (via the x-release-please-version
       # annotation; tags may carry a leading "v", which the daemon strips) — don't
       # edit it by hand.
-      version = "1.0.0-rc.1"; # x-release-please-version
+      version = "1.1.0-rc.1"; # x-release-please-version
 
       # Interpreter for the hardware bench (labgrid/). labgrid and pytest have to
       # share one env: labgrid ships its fixtures as a pytest11 entry point, so a
