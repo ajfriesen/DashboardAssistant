@@ -6,9 +6,9 @@ result-*
 /daemon/dashboard-assistant-api
 ha.yaml
 
-# Zensical docs build output
-/site/
-/.cache/
+# Zensical build output and cache — both land beside website/zensical.toml
+/website/site/
+/website/.cache/
 # Writable copy of the disk image booted by `just qemu-run`
 .qemu-disk.raw
 

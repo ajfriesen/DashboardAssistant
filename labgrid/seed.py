@@ -14,9 +14,9 @@ history and out of this repo. Nothing is written to disk here: the YAML is
 assembled in memory and echoed onto the device over the serial console.
 
 NOTE on where it is written. This drops the file on the FAT partition — where
-docs/flash/seed.md tells a user to put it, and where configimport.nix now looks.
-It used to write to /boot instead, because on the Pi images /boot is a directory
-on the btrfs root and the documented path did not work at all; see
+website/content/flash/seed.md tells a user to put it, and where configimport.nix
+now looks. It used to write to /boot instead, because on the Pi images /boot is
+a directory on the btrfs root and the documented path did not work at all; see
 labgrid/README.md ("What this bench found"). So this now exercises the real
 user-facing path, not a stand-in for it.
 """

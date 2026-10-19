@@ -5,7 +5,7 @@
      signal when this attribute is literally the string "true"
      (src/tracker/index.ts, `config('do-not-track') === _true`). Without it a
      visitor sending DNT is still counted. Documented in
-     docs/legal/datenschutz.md. #}
+     website/content/legal/datenschutz.md. #}
   <script
     defer
     src="https://analytics.ajfriesen.com/curious-penguin"
@@ -15,9 +15,10 @@
     ></script>
 
   {# No font <link> here on purpose. Outfit and JetBrains Mono are self-hosted
-     from docs/fonts/ and declared in docs/stylesheets/fonts.css, so nothing is
-     requested from Google and no visitor IP reaches it. Outfit is a variable
-     font covering 100-900, so the wordmark's weight 600 needs no extra file. #}
+     from website/content/fonts/ and declared in the site's
+     stylesheets/fonts.css, so nothing is requested from Google and no visitor
+     IP reaches it. Outfit is a variable font covering 100-900, so the
+     wordmark's weight 600 needs no extra file. #}
 
   {# The SVG favicon comes from theme.favicon; these are the raster fallbacks,
      which the TOML has no slot for. #}

@@ -526,7 +526,7 @@ def test_screenshot_lands_on_tmpfs(shell):
 
 
 def test_seed_file_from_flashed_partition(shell):
-    """Provisioning the way docs/flash/seed.md tells a user to do it.
+    """Provisioning the way website/content/flash/seed.md tells a user to do it.
 
     Drop dashboard-assistant.yaml in the root of the FAT partition the user sees,
     then make the importer read it. The file lands where a user would put it, on

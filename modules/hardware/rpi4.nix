@@ -10,7 +10,7 @@
 # partition tables"). Older boards will not boot this image, and because
 # recovery.bin is read by the mask ROM — which understands neither GPT nor an
 # EFI partition type — this card cannot update the EEPROM either. Such a board
-# needs a Raspberry Pi OS card first; see docs/flash/flash.md.
+# needs a Raspberry Pi OS card first; see website/content/flash/flash.md.
 { pkgsBuild, ... }:
 {
   imports = [

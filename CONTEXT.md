@@ -141,3 +141,12 @@ _Avoid_: test wifi, lab wifi
 The suite on the bench a candidate must pass before promotion.
 _Avoid_: CI, hardware CI
 
+### Documentation
+
+**Website**:
+The public site at dashboardassistant.org, written for users and built from `website/` with Zensical.
+_Avoid_: docs, documentation (for the public pages)
+
+**Developer docs**:
+Everything in `docs/` — ADRs, agent skills and the contributor guide. Read on GitHub, never published.
+_Avoid_: internal docs, dev notes

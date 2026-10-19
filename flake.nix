@@ -17,7 +17,7 @@
   inputs = {
     # The one nixpkgs every board builds from: nixos-unstable, pinned by
     # flake.lock and bumped on purpose about once a month with
-    # `nix flake update nixpkgs-unstable` (docs/adr/0008, developer/README.md).
+    # `nix flake update nixpkgs-unstable` (docs/adr/0008, docs/README.md).
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
 
     # Wired for the future on-disk install path (tmpfs root + ext4 /persist).
@@ -457,7 +457,7 @@
           pkgs.curl
           pkgs.jq
           pkgs.websocat
-          # Static site generator for the docs/ site (`zensical serve`/`build`).
+          # Static site generator for the website in website/ (`just website-serve`).
           pkgs.zensical
           # Conventional Commits: `cz commit` for a guided message, `cz check` to
           # lint one. Matches the integration repo's dev shell.

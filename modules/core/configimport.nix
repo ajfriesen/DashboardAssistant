@@ -301,8 +301,9 @@ in
     # This is also the x86 image's first copy of these files. Under the
     # sd-image builder the README and the example only ever reached the Pi
     # targets, because they were staged via sdImage.populateFirmwareCommands —
-    # which the x86 image has no equivalent of — while docs/flash/seed.md told
-    # x86 users to write a seed file onto the ESP all the same.
+    # which the x86 image has no equivalent of — while the seed documentation
+    # (website/content/flash/seed.md) told x86 users to write a seed file onto
+    # the ESP all the same.
     (lib.mkIf cfg.enable {
       boot.loader.systemd-boot.extraFiles = {
         "README.txt" = dropzoneReadme;
