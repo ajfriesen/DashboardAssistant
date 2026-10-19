@@ -18,8 +18,9 @@
   nixpkgs.hostPlatform = "x86_64-linux";
   hardware.enableRedistributableFirmware = true;
 
-  # In-place updates: build this config's toplevel from the release tag. The
-  # boot-assessment auto-rollback below covers an update that won't come up.
+  # In-place updates: build this config's toplevel from the release tag. An
+  # update that won't come up is covered by the automatic rollback every board
+  # shares (../core/good-boot.nix).
   dashboardAssistant.update.installable = true;
   dashboardAssistant.update.flakeAttr = "dashboard-assistant-x86-disk";
 
@@ -51,58 +52,9 @@
   boot.loader.systemd-boot.configurationLimit = 3;
   boot.loader.efi.canTouchEfiVariables = false;
 
-  # Automatic Boot Assessment (a new generation boots with a counter and is only
-  # marked good once it reaches boot-complete.target, otherwise systemd-boot
-  # reverts to the previous generation) is NOT enabled yet, although the
-  # `boot.loader.systemd-boot.bootCounting` option now exists on the nixpkgs this
-  # flake pins (docs/adr/0008). Recovery from a broken update is therefore manual,
-  # via the recovery UI. It stays off until it can be tested on a real board:
-  #
-  #   - systemd-bless-boot reads LoaderBootCountPath, a volatile EFI variable
-  #     systemd-boot sets at runtime, and this target installs with
-  #     --no-variables at the removable fallback path. That combination is
-  #     untested.
-  #   - The bless condition below requires greetd, so a board whose GPU the
-  #     kernel cannot drive would be marked bad on every boot.
-  #
-  # `bootctl status` must report boot-loader-set ESP information and
-  # systemd-bless-boot must succeed rather than skip before switching it on:
-  #   boot.loader.systemd-boot.bootCounting.enable = true;
-
-  # Gate "boot succeeded" on the dashboard actually being up: the boot is blessed
-  # only once the daemon answers /healthz and the kiosk session is active. Kept in
-  # place so it works the moment boot counting is re-enabled — until then it runs
-  # but nothing acts on the result (no counter to bless).
-  # Deliberately NOT gated on Home Assistant reachability (which can be down for
-  # unrelated reasons) — a functional-but-buggy build (e.g. broken integration
-  # logic) still boots healthy here and is rolled back manually from the recovery
-  # UI instead.
-  systemd.services.ha-boot-health = {
-    description = "Gate boot success on the dashboard being healthy";
-    before = [ "boot-complete.target" ];
-    requiredBy = [ "boot-complete.target" ];
-    after = [ "dashboard-assistant-daemon.service" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      ExecStart = pkgs.writeShellScript "ha-boot-health" ''
-        # Wait up to ~3 min for the dashboard to come up healthy. Success blesses
-        # this boot; persistent failure lets systemd-boot revert on later boots.
-        i=0
-        while [ "$i" -lt 90 ]; do
-          if ${pkgs.curl}/bin/curl -fsS --max-time 3 http://localhost:8080/healthz >/dev/null 2>&1 \
-             && ${pkgs.systemd}/bin/systemctl is-active --quiet greetd.service; then
-            echo "dashboard healthy; blessing this boot"
-            exit 0
-          fi
-          i=$((i + 1))
-          ${pkgs.coreutils}/bin/sleep 2
-        done
-        echo "dashboard did not become healthy in time; not blessing this boot" >&2
-        exit 1
-      '';
-    };
-  };
+  # Automatic Boot Assessment — boot counting and the good-boot gate — is shared
+  # by every board and lives in ../core/good-boot.nix. It used to be defined
+  # here, which is how the Raspberry Pi boards ended up without it.
 
   # Enough to bring up SATA/NVMe/eMMC/USB storage and HID in early boot. The eMMC
   # set (sdhci* + mmc_block + cqhci) is essential on boards that boot from soldered
