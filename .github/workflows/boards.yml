@@ -57,8 +57,9 @@ name: boards
 # runs. No other workflow builds these R2 paths: a candidate's notes carry no
 # download links at all (release-please.yml, "Hold the release back as a
 # candidate"), and promotion writes them by hand today. What does hard-code the
-# object names is docs/flash/flash.md, the filename table users read while
-# flashing — change the layout in board.yml and that table goes stale with it.
+# object names is website/content/flash/flash.md, the filename table users read
+# while flashing — change the layout in board.yml and that table goes stale
+# with it.
 #
 # Required repo config (Settings -> Secrets and variables -> Actions):
 #   Variables: R2_ACCOUNT_ID, R2_BUCKET, R2_PUBLIC_URL
