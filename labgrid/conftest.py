@@ -28,13 +28,16 @@ for you.
 
 import collections
 import os
+import shlex
 import shutil
+import subprocess
 
 import pytest
 from labgrid.resource import NetworkPowerPort
 
 import bench
 import bench_ha
+import candidate
 import capability
 import device
 
@@ -598,3 +601,95 @@ def wired_link_down(shell):
             f"timeout 60 sh -c 'until ip -4 addr show {wire} "
             "| grep -q \"inet \"; do sleep 1; done'"
         )
+
+
+# --------------------------------------------------------------------------- #
+# The candidate under test, and whether the board can fetch it
+#
+# A precondition rather than an assertion about the image: without it the
+# update phase does not fail, it *compiles a system on a Raspberry Pi* — and a
+# release gate that takes a night is a release gate nobody runs. See
+# candidate.py and README.md, "The candidate has to be in the cache".
+# --------------------------------------------------------------------------- #
+
+
+def _host_eval(command):
+    """Run an evaluation on the machine driving the bench, not on the board.
+
+    Here rather than in candidate.py so that module stays pure and testable
+    with no nix anywhere near it. The timeout is generous because a cold
+    evaluation fetches the tag and a nixpkgs tarball first; it exists so a
+    machine with no network fails in minutes rather than hanging.
+
+    No shell: the command is a list of plain arguments once split, and the
+    candidate's tag arrives from the environment. candidate.toplevel_installable
+    already refuses a tag that is not one, the same way
+    modules/core/update.nix refuses a ref that is not one — this is the second
+    half of that, so neither has to hold the line alone.
+    """
+    done = subprocess.run(
+        shlex.split(command), capture_output=True, text=True, timeout=1800
+    )
+    if done.returncode != 0:
+        pytest.fail(
+            f"could not resolve the candidate's closure on this machine: "
+            f"`{command}` exited {done.returncode}\n{done.stderr.strip()}"
+        )
+    return done.stdout
+
+
+@pytest.fixture(scope="session")
+def candidate_tag():
+    """The release tag this run is gating, or a skip saying it is gating none.
+
+    A skip, not a failure: the suite runs against a working tree far more
+    often than against a release, and `just hw-test` on a branch is not a
+    broken gate.
+    """
+    tag = candidate.configured_tag(os.environ)
+    unmet = candidate.missing_candidate(tag)
+    if unmet:
+        pytest.skip(unmet)
+    return tag
+
+
+@pytest.fixture(scope="session")
+def candidate_closure(candidate_tag, board, shell):
+    """The candidate's system closure, and what the board would do to realise it.
+
+    Split across the two machines on purpose, and the split is the whole
+    design:
+
+      * the store path is resolved on the *host*, because evaluation is pure
+        and so gives the same answer anywhere — while on the board it would
+        mean a full nixpkgs evaluation driven over a serial console
+      * whether that path can be fetched is asked on the *board*, because the
+        answer depends on the board's own substituters and trusted keys
+        (modules/core/binary-cache.nix). Nothing off the board can answer it:
+        a cache the bench host can reach says nothing about a device.
+
+    Session-scoped, so the board is asked once however many phases depend on
+    it.
+    """
+    installable = candidate.toplevel_installable(candidate_tag, board)
+    path = candidate.store_path(installable, _host_eval)
+    # Querying a whole system closure's narinfos is hundreds of round trips
+    # from a board on a home LAN, so this gets a timeout of its own rather
+    # than the driver's 30 s default.
+    output = "\n".join(shell.run(candidate.dry_run_command(path), timeout=600)[0])
+    return path, candidate.plan(output)
+
+
+@pytest.fixture(scope="session")
+def candidate_in_cache(candidate_tag, board, candidate_closure):
+    """Refuse to start a phase that would build a system on the board.
+
+    What an update phase asks for. It fails rather than skipping: a candidate
+    whose closure is not in the cache is a release that cannot be gated, and
+    silently passing over that is how a verdict comes to mean nothing.
+    """
+    path, verdict = candidate_closure
+    missing = candidate.not_in_cache(candidate_tag, board, path, verdict)
+    if missing:
+        pytest.fail(missing)
+    return path

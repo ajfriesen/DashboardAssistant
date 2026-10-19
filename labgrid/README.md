@@ -333,12 +333,14 @@ symptom is a protocol error that reads like a broken page.
 | `bench_ha.py` | the **Bench Home Assistant**: finding it, resetting it, and driving its websocket and config-flow APIs |
 | `device.py` | parsers for what the board says about itself over the console — addresses, Wi-Fi association, persisted state |
 | `kiosk.py` | the ssh tunnel to the kiosk browser's loopback debugging port, and the verdict on what is on screen |
+| `candidate.py` | which closure a **candidate** would install, and whether the board can fetch it rather than compile it |
 | `preflight.py` | `just hw-preflight` — is the bench healthy, reported as a bench fault (exit 2) rather than a test failure |
-| `test_capability.py`, `test_preflight.py`, `test_bench.py`, `test_bench_ha.py`, `test_device.py`, `test_kiosk.py` | unit tests for the modules above; need no bench, no board and no network |
-| `conftest.py` | option defaults and the `shell` / `console_log` / `image` / `plug` / `bench_home_assistant` / `paired` / `gate_key` fixtures |
+| `test_capability.py`, `test_preflight.py`, `test_bench.py`, `test_bench_ha.py`, `test_device.py`, `test_kiosk.py`, `test_candidate.py` | unit tests for the modules above; need no bench, no board and no network |
+| `conftest.py` | option defaults and the `shell` / `console_log` / `image` / `plug` / `bench_home_assistant` / `paired` / `gate_key` / `candidate_closure` fixtures |
 | `test_first_boot.py` | the assertions about a device on its own |
 | `test_journey.py` | the assertions about a device and a real Home Assistant: discovery, pairing, a service call, a dashboard on the screen |
 | `test_wifi.py` | the assertions about a device on the Bench Wi-Fi with its wire down |
+| `test_update.py` | the update phase: today its precondition only, that the candidate's closure is in the cache |
 | `with-place.sh` | acquire if nobody holds it, run, release what it acquired — the prelude every `hw-*` recipe shares |
 | `flash.py` | `just hw-flash` — transition to `flashed` and stop |
 | `logs/` | serial transcripts, cleared at the start of each run (gitignored) |
@@ -447,6 +449,68 @@ unlike the Pi, which has one unconditionally. Without `console=ttyS0` the kernel
 writes to nothing a harness can read, and a boot that works perfectly says
 absolutely nothing. Same failure mode as the Pi's wrong-UART problem below, same
 cause: no console, no evidence.
+
+### The candidate has to be in the cache
+
+An update phase does not fail when a **candidate**'s closure is missing from the
+cache. It compiles a system on a Raspberry Pi — the `linux-rpi` kernel is on no
+public cache — and a **release gate** that takes a night is a release gate
+nobody runs. So before any update assertion runs, the board is asked whether it
+could fetch the candidate at all:
+
+```sh
+BENCH_CANDIDATE=v1.2.0 just hw-test          # gate a candidate
+just hw-test                                 # gating nothing: the check skips
+```
+
+`BENCH_CANDIDATE` is deliberately **not** defaulted in the `justfile`, unlike
+`LG_PLACE` and `BENCH_HA_URL`. Unset has to mean "this run is gating no
+release", because a default would quietly gate whichever tag someone wrote down
+months ago.
+
+The check is split across the two machines, and the split is the point:
+
+| Step | Where | Why there |
+| --- | --- | --- |
+| resolve the candidate's closure to a store path | the machine running the suite | evaluation is pure, so the path is the same anywhere — on the board it would be a full nixpkgs evaluation driven over a serial line |
+| ask whether that path can be fetched | **the board** | what a device can fetch is decided by *its* substituters and *its* trusted keys (`modules/core/binary-cache.nix`). A bench host with a developer's `nix.conf` answers a different question |
+
+The bar is `nix-store --realise --dry-run` reporting nothing to build at all,
+not "mostly cached". A closure that is 99% fetched and 1% compiled is still a
+kernel build on a Pi.
+
+Two details of nix's behaviour the check has to work around, both measured
+rather than remembered — the captured outputs are in `test_candidate.py`:
+
+- The verdict goes to **stderr** and the exit status is `0` whichever answer it
+  is. A command reading only stdout sees every answer as the empty one, and the
+  empty one means "already in the local store" — the single verdict that lets
+  the phase run.
+- A cache miss is remembered for `narinfo-cache-negative-ttl`, an hour by
+  default. A candidate checked while that workflow was still pushing would stay
+  "missing" long after it had arrived, so the check asks the cache rather than
+  nix's memory of it.
+
+#### Who pushes a candidate, and when
+
+| Board | What fills the cache | When |
+| --- | --- | --- |
+| `rpi4`, `rpi5` | [`cache-rpi.yml`](../.github/workflows/cache-rpi.yml)'s `build` job, which builds the aarch64 system on a native arm64 runner and pushes the whole closure to Attic | on every `v*` tag (and on a push to `main`, which warms the cache without producing a candidate) |
+| `x86_64` | **nothing** | — |
+
+Nothing local pushes: a developer's `just build-rpi5` pulls from the cache and
+never fills it, and the push token lives only in CI.
+
+So a `v*` tag produces a candidate whose Pi closures are substitutable once that
+workflow is green, and the check's job is to say so before the phase starts
+rather than after ninety minutes of compiling.
+
+**The x86_64 gap is real, and the check reports it as a gap rather than as a
+failed run.** `release-image.yml` builds and publishes the x86_64 image but
+never pushes its closure, so an x86 candidate is not substitutable and the
+update phase cannot be gated on that board. Most of an x86 closure does come
+from `cache.nixos.org`, so the cost is minutes rather than a night — but it is
+not zero, and nothing in this repository currently closes it.
 
 ### Skipping is derived, never selected
 
