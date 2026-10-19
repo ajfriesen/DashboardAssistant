@@ -49,14 +49,18 @@ back up, and by hand from the admin page otherwise.
 
 An update gets three attempts to come back up. If the device is not reachable on
 your network after the third, it returns to the version it was running before,
-on its own and with nobody present. It then remembers the release it refused and
-does not offer it again until a newer one ships, so it cannot get stuck
-reinstalling the same bad update in a loop. The rollback shows up in Home
-Assistant, so you find out that it happened rather than noticing the version
-number went backwards.
+on its own and with nobody present.
+
+It then writes that release off and stops offering it until a newer one ships —
+and it keeps a list, not just the last one, so a device that has turned down two
+releases does not end up alternating between them. The release is still there in
+the version picker if you want to try it again deliberately; succeeding takes it
+off the list. The device reports the rollback for Home Assistant to surface, so
+you can find out it happened rather than noticing the version number went
+backwards.
 
 "Came back up" means the device is reachable, and nothing more. A blank screen
-or a Home Assistant that happens to be down does not count as a failed update:
+or a Home Assistant that happens to be down does not make the boot a bad one:
 neither is the update's fault, and rolling back for them would undo a release
 that was fine.
 

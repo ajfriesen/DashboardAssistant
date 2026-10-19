@@ -17,8 +17,7 @@ a reboot. Dashboard Assistant takes the opposite approach:
 - **Recoverable by design.** Updates are atomic and every version is kept as a
   NixOS generation. An update that leaves the device unreachable is undone
   without anyone present: after three failed attempts it returns to the previous
-  generation, skips the release it refused until a newer one ships, and reports
-  the rollback to Home Assistant. For anything that rollback cannot see — a
+  generation and skips the release it refused until a newer one ships. For anything that rollback cannot see — a
   device that boots fine but misbehaves — the LAN-only
   [admin page](../usage/admin.md) lets you roll back to an older, known-good
   generation from any machine on your network; the touchscreen itself stays
