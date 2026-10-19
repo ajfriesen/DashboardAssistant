@@ -1,0 +1,439 @@
+name: boards
+
+# Build every board the same way: its system closure on a runner of its own
+# architecture, pushed to the public Attic cache (Nix binary cache, backed by
+# Cloudflare R2); then its flashable image, assembled on x86 and published to
+# the R2 images bucket.
+#
+# This replaces cache-rpi.yml and release-image.yml, which did these two things
+# in two different shapes. The Pi flow existed first and for a good reason —
+# there is no local Pi builder here, and compiling the linux-rpi kernel under
+# binfmt emulation on an x86 box takes hours, so the aarch64 closure is built
+# on GitHub's native arm64 runner instead. Nothing about that reasoning is
+# Pi-specific; it is only where the pain was felt first.
+#
+# WHY EVERY BOARD NEEDS ITS CLOSURE PUSHED, x86_64 included. No public cache
+# ever holds a *system closure*: the daemon, sendspin-go, vboard, the kiosk
+# configuration and the toplevel itself are this repository's own output.
+# cache.nixos.org does serve the pinned nixos-unstable revision every board
+# builds from (docs/adr/0008), so most of an x86 closure substitutes — but the
+# part that matters never will. Until it is pushed, an x86 candidate cannot be
+# fetched by a device, so an OTA update compiles on the device and the update
+# phase of the release gate cannot be gated on that board at all. See
+# labgrid/candidate.py and labgrid/README.md, "The candidate has to be in the
+# cache".
+#
+# THE TWO JOBS, and why they run where they do:
+#
+#   closure  one runner per board architecture. Native, always: the whole point
+#            is that nothing is emulated to populate the cache.
+#   image    always x86_64. disko assembles an image by booting a QEMU VM, and
+#            the arm64 runners have no /dev/kvm, so an aarch64 guest there
+#            would be TCG on top of no acceleration. Here the builder VM is
+#            x86 and runs natively (dashboardAssistant.diskImage.builderPkgs);
+#            the only emulated part is nixos-install's chroot into the aarch64
+#            system, and the expensive half was already compiled natively by
+#            `closure` and comes back out of Attic.
+#
+# R2 layout. The board — x86_64, rpi4, rpi5 — is both the directory and part of
+# the filename, so an image stays identifiable once it is downloaded and out of
+# its folder:
+#   release/<board>/dashboard-assistant-<board>-<version>.raw.zst  (immutable, per release)
+#   pre-release/<board>/…                                          (same, for a hyphened SemVer tag)
+#   dev/<board>/dashboard-assistant-<board>-<commit>.raw.zst       (branch build)
+#
+# There is deliberately no `latest` object. Publishing an object never makes it
+# the image people flash: a release is held back as a candidate until the
+# release gate has booted its images, and promotion moves GitHub's
+# /releases/latest — the pointer devices actually poll. See
+# docs/adr/0011-a-release-is-promoted-after-the-release-gate.md. dev/ objects
+# are swept after 7 days by the bucket lifecycle policy (ops/r2-lifecycle.json).
+#
+# The channel comes from the ref alone: a v* tag publishes a release
+# (pre-release for a hyphen, e.g. v0.1.0-rc.1), anything else is a dev build
+# keyed by the short commit, so two runs off the same branch cannot overwrite
+# each other.
+#
+# Tag runs are started by the v* tag release-please creates — which only starts
+# this workflow because release-please authenticates with a PAT
+# (RELEASE_PLEASE_TOKEN); tags made by the default GITHUB_TOKEN do not start new
+# runs. The release notes' download links are written by release-please.yml,
+# which builds the same R2 paths.
+#
+# Required repo config (Settings -> Secrets and variables -> Actions):
+#   Variables: R2_ACCOUNT_ID, R2_BUCKET, R2_PUBLIC_URL
+#   Secrets:   R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
+#              ATTIC_TOKEN — an Attic token with push access to the cache
+#                (atticadm make-token --sub ci --validity 1y \
+#                   --pull dashboardassistant --push dashboardassistant)
+# The cache endpoint and name are public (baked into the images), so they are
+# plain env below; only the push token is secret, and the push only runs on the
+# canonical repository. Without R2_BUCKET — a fork — everything is still built
+# and checked, there is just nowhere to publish to.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    # Docs-only pushes do not change the Nix build, so do not warm the cache for
+    # them. These paths are owned by docs.yml (the GitHub Pages deploy). Note:
+    # GitHub ignores path filters for tag pushes, so a v* release tag still
+    # always builds and publishes the images below regardless of what it touched.
+    paths-ignore:
+      - 'docs/**'
+      - 'overrides/**'
+      - 'zensical.toml'
+      - '.github/workflows/docs.yml'
+    tags:
+      - "v*"
+
+permissions:
+  contents: read # checkout only; the release notes are written by release-please.yml
+
+# One in-flight run per ref is enough; a newer push supersedes an older cache
+# populate rather than queueing behind it.
+concurrency:
+  group: boards-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ATTIC_ENDPOINT: https://nix-cache.dashboardassistant.org
+  ATTIC_CACHE: dashboardassistant
+  # EU-jurisdiction R2 endpoint. Flip back to the non-".eu." host if the bucket
+  # is not EU.
+  R2_ENDPOINT: https://${{ vars.R2_ACCOUNT_ID }}.eu.r2.cloudflarestorage.com
+
+jobs:
+  closure:
+    name: ${{ matrix.board }} closure -> cache
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      # Do not let one board's build cancel another's already-succeeding push;
+      # each board's cache populate is independent.
+      fail-fast: false
+      matrix:
+        include:
+          # One entry per board. `attr` is the nixosConfigurations attribute —
+          # the same value modules/hardware/*.nix gives
+          # `dashboardAssistant.update.flakeAttr`, which is what a device
+          # updates with, and which labgrid/candidate.py mirrors to decide
+          # which closure a candidate would install. `runner` is a *native*
+          # runner for that board's architecture; that is the whole point of
+          # this job.
+          - board: rpi4
+            attr: dashboard-assistant-rpi4
+            runner: ubuntu-24.04-arm
+            arch: aarch64
+          - board: rpi5
+            attr: dashboard-assistant-rpi5
+            runner: ubuntu-24.04-arm
+            arch: aarch64
+          - board: x86_64
+            attr: dashboard-assistant-x86-disk
+            runner: ubuntu-24.04
+            arch: x86_64
+    steps:
+      - uses: actions/checkout@v7
+
+      # Register the public Attic cache as a system-level substituter (same
+      # values as flake.nix nixConfig / modules/core/binary-cache.nix). At
+      # system level it is honoured unconditionally, so the pull does not depend
+      # on the CI user being a trusted Nix user — an already-pushed toplevel
+      # substitutes instead of recompiling.
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            extra-substituters = https://nix-cache.dashboardassistant.org/dashboardassistant
+            extra-trusted-public-keys = dashboardassistant:qyNbqk1+S/2a2dqe7XcDfCGnSGT6ACBXgPr5/4BNLYU=
+
+      # attic-client is prebuilt in nixpkgs, so this pulls the binary from
+      # cache.nixos.org instead of compiling the client on the runner.
+      - name: Install Attic client
+        run: nix profile install github:NixOS/nixpkgs/nixos-26.05#attic-client
+
+      # Guard: the baked version must match the tag. release-please bumps
+      # flake.nix in the release PR, so this always holds — it just catches a
+      # mistake, and it catches it for every board rather than only for x86_64.
+      - name: Verify the baked version matches the tag
+        if: github.ref_type == 'tag'
+        run: |
+          set -euo pipefail
+          want="${GITHUB_REF_NAME#v}"
+          baked=$(nix eval --raw --accept-flake-config \
+            ".#nixosConfigurations.${{ matrix.attr }}.config.environment.etc.\"dashboard-assistant/version\".text")
+          echo "baked version = $baked, tag version = $want"
+          if [ "$baked" != "$want" ]; then
+            echo "::error::flake.nix version ($baked) != release version ($want)"
+            exit 1
+          fi
+
+      # Build the full system toplevel: its closure references the kernel,
+      # initrd and every system package, and that closure — not the image — is
+      # what makes a later local build, an OTA update, or the release gate's
+      # update phase a cache hit. This runs on every push so the cache stays
+      # warm for local `just build-*` and for devices in the field.
+      #
+      # --accept-flake-config honours the flake's Attic substituter (same as the
+      # justfile recipes), so a toplevel a previous run already pushed is
+      # substituted instead of recompiled. Only a not-yet-cached closure (after
+      # a nixpkgs bump, say) compiles.
+      - name: Build the system closure
+        run: |
+          nix build --print-build-logs --accept-flake-config \
+            ".#nixosConfigurations.${{ matrix.attr }}.config.system.build.toplevel" \
+            --out-link result-toplevel
+
+      # The seed-file README and example reach the ESP through systemd-boot's
+      # extraFiles (modules/core/configimport.nix). Lose them and seeding still
+      # works, but the partition stops explaining itself to whoever opens the
+      # card. Shared by every board, so asserted for every board.
+      - name: Assert the seed-file drop zone explains itself
+        run: |
+          set -euo pipefail
+          extra=$(nix eval --json --accept-flake-config \
+            ".#nixosConfigurations.${{ matrix.attr }}.config.boot.loader.systemd-boot.extraFiles" \
+            | nix run nixpkgs#jq -- -r 'keys[]')
+          echo "extraFiles: $extra"
+          fail=0
+          for want in README.txt dashboard-assistant.yaml.example; do
+            grep -qx "$want" <<<"$extra" || {
+              echo "FAIL: $want is not staged onto the ESP via systemd-boot extraFiles." >&2
+              fail=1
+            }
+          done
+          exit "$fail"
+
+      # The Pi boots: GPU firmware -> u-boot.bin -> \EFI\BOOT\BOOTAA64.EFI ->
+      # systemd-boot -> Linux. U-Boot is in that chain purely to provide the
+      # UEFI environment, which it does through CONFIG_EFI_LOADER (on by default
+      # for armv8) and BOOTMETH_EFILOADER, the bit that scans each filesystem
+      # for boot<arch>.efi.
+      #
+      # If a nixpkgs bump ever ships an rpi_arm64_defconfig built without the
+      # EFI loader, the image still builds and still flashes, and then U-Boot
+      # drops to its own prompt instead of chainloading systemd-boot — a board
+      # that never reaches Linux, with nothing in the Nix build to explain why.
+      # So assert it here, where it costs a second, instead of discovering it on
+      # a card.
+      #
+      # Pi-only, and it has to stay that way: x86 boards have no U-Boot in their
+      # chain at all, and an assertion that passed vacuously there would be
+      # worse than none.
+      - name: Assert U-Boot provides the UEFI loader
+        if: matrix.arch == 'aarch64'
+        run: |
+          set -euo pipefail
+          uboot=$(nix build --no-link --print-out-paths --accept-flake-config \
+            ".#nixosConfigurations.${{ matrix.attr }}.config.hardware.raspberry-pi.firmware.uboot.package")
+          echo "U-Boot: $uboot"
+          fail=0
+          for sym in BOOTAA64.EFI '/EFI/BOOT/' bootefi; do
+            if strings "$uboot/u-boot.bin" | grep -qF "$sym"; then
+              echo "OK: $sym present"
+            else
+              echo "FAIL: u-boot.bin has no '$sym' — it cannot chainload systemd-boot." >&2
+              fail=1
+            fi
+          done
+          exit "$fail"
+
+      # The Raspberry Pi boot chain (config.txt, u-boot.bin, DTBs, overlays/)
+      # comes from a disko postMountHook in rpi-disk-image.nix, because
+      # nixos-install ends in `switch-to-configuration boot`, which installs the
+      # bootloader and exits *before* activation — so nixos-hardware's
+      # activation script cannot do this job at image build time. Lose the hook
+      # and the board flashes the green LED seven times and says nothing.
+      - name: Assert the ESP carries the Pi boot chain
+        if: matrix.arch == 'aarch64'
+        run: |
+          set -euo pipefail
+          hook=$(nix eval --raw --accept-flake-config \
+            ".#nixosConfigurations.${{ matrix.attr }}.config.disko.devices.disk.main.content.partitions.ESP.content.postMountHook")
+          echo "$hook"
+          fail=0
+          for want in config.txt u-boot.bin overlays; do
+            grep -q "$want" <<<"$hook" || {
+              echo "FAIL: the ESP staging hook no longer installs $want." >&2
+              fail=1
+            }
+          done
+          exit "$fail"
+
+      - name: Push the closure to Attic
+        if: ${{ github.repository == 'ajfriesen/DashboardAssistant' }}
+        env:
+          ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
+        run: |
+          set -euo pipefail
+          attic login ci "$ATTIC_ENDPOINT" "$ATTIC_TOKEN"
+          # ONLY the system toplevel closure — the kernel, its modules and every
+          # system package. The image is deliberately NOT pushed: the image blob
+          # retains no store references to the kernel, so it is useless as a
+          # substitution target, and it is the single largest object (routinely
+          # >100 MB), which is exactly what the ingress chokes on. The flashable
+          # image goes to R2 in the next job.
+          attic push "ci:$ATTIC_CACHE" result-toplevel
+
+  # Assemble and publish the flashable image. Built for a v* tag release, and on
+  # a manual run so a branch can produce an image to test with. A push to main
+  # only warms the cache above.
+  image:
+    name: ${{ matrix.board }} image -> R2
+    needs: closure
+    if: ${{ github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - board: rpi4
+            attr: dashboard-assistant-rpi4
+            image: rpi4-image
+            arch: aarch64
+          - board: rpi5
+            attr: dashboard-assistant-rpi5
+            image: rpi5-image
+            arch: aarch64
+          - board: x86_64
+            attr: dashboard-assistant-x86-disk
+            image: disk-image
+            arch: x86_64
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          # extra-platforms is harmless for the x86 board and load-bearing for
+          # the Pis: nixos-install chroots into the aarch64 system.
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            extra-platforms = aarch64-linux
+            extra-substituters = https://nix-cache.dashboardassistant.org/dashboardassistant
+            extra-trusted-public-keys = dashboardassistant:qyNbqk1+S/2a2dqe7XcDfCGnSGT6ACBXgPr5/4BNLYU=
+
+      # Register aarch64 binfmt handlers with the `F` (fix-binary) flag, which
+      # is what makes them usable from inside a chroot — exactly what
+      # nixos-install does, and the reason disko's docs ask for
+      # `boot.binfmt.preferStaticEmulators` on a NixOS build host. Without it
+      # the image build dies with "chroot: failed to run command
+      # '…/activate': No such file or directory", which does not look like an
+      # emulation problem at all.
+      - uses: docker/setup-qemu-action@v3
+        if: matrix.arch == 'aarch64'
+        with:
+          platforms: arm64
+
+      - name: Install AWS CLI
+        if: ${{ vars.R2_BUCKET != '' }}
+        run: nix profile install github:NixOS/nixpkgs/nixos-26.05#awscli2
+
+      # Build first so a failure aborts before we touch R2.
+      #
+      # The x86_64-linux bucket explicitly, for every board: these runners are
+      # x86, and for a Pi that bucket wires disko's builder VM to the *build*
+      # platform (dashboardAssistant.diskImage.builderPkgs). The aarch64-linux
+      # bucket carries the native-builder wiring instead.
+      #
+      # Nothing here is cross-compiled, and nothing compiles under emulation.
+      # Each board sets its own nixpkgs.hostPlatform, so nixpkgs evaluates a
+      # *native* build for that architecture — and an emulated-native aarch64
+      # build yields byte-identical store paths to a truly native one, which is
+      # exactly what lets the closure the arm64 runner just pushed substitute
+      # here, and onto a device. pkgsCross would produce different paths, every
+      # one of those lookups would miss, and the native-runner job above would
+      # buy nothing.
+      #
+      # So the only emulated work is nixos-install's chroot into the installed
+      # system to run `switch-to-configuration boot` — a few activation
+      # scripts, under binfmt. The kernel and the system closure were compiled
+      # natively and come back out of Attic.
+      - name: Build the image
+        run: |
+          nix build --print-build-logs --accept-flake-config \
+            ".#packages.x86_64-linux.${{ matrix.image }}" \
+            --out-link result-image
+
+      # disko emits a single uncompressed .raw. Compressed here rather than in
+      # the image derivation: it keeps a ~4 GiB zstd pass out of every local
+      # `just build-*`.
+      - name: Compress the image
+        run: |
+          set -euo pipefail
+          raw=$(ls result-image/*.raw)
+          nix run nixpkgs#zstd -- -T0 -19 --long=27 "$raw" -o image.raw.zst
+          ls -l image.raw.zst
+
+      # Publish the immutable per-build object, attaching provenance metadata
+      # (x-amz-meta-*) — readable with `aws s3api head-object` or an HTTP HEAD
+      # via the custom domain. One object, nothing pointing at it: a release is
+      # a candidate until the gate has passed and promotion links it.
+      #
+      # One copy of this for every board, which is the point of the merge: the
+      # two workflows this replaces each had their own, and they had already
+      # drifted in what they recorded.
+      - name: Publish the image to R2
+        if: ${{ vars.R2_BUCKET != '' }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          BOARD: ${{ matrix.board }}
+          ARCH: ${{ matrix.arch }}
+          ATTR: ${{ matrix.attr }}
+          BUCKET: ${{ vars.R2_BUCKET }}
+          PUBLIC_URL: ${{ vars.R2_PUBLIC_URL }}
+        run: |
+          set -euo pipefail
+          img=image.raw.zst
+          nixos=$(nix eval --raw --accept-flake-config \
+            ".#nixosConfigurations.$ATTR.config.system.nixos.version")
+          baked=$(nix eval --raw --accept-flake-config \
+            ".#nixosConfigurations.$ATTR.config.environment.etc.\"dashboard-assistant/version\".text")
+          # The channel comes from the ref alone (see the header). A hyphen in
+          # the tag (SemVer prerelease, e.g. -rc.1) routes to pre-release/; the
+          # leading "v" is stripped for the filename.
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            version="${GITHUB_REF_NAME#v}"
+            case "$GITHUB_REF_NAME" in *-*) channel=pre-release ;; *) channel=release ;; esac
+            id="$version"
+          else
+            # Dev build: the commit is the identity, not the version. The baked
+            # version is still recorded in the object metadata.
+            version="$baked"
+            channel=dev
+            id="${GITHUB_SHA::7}"
+          fi
+          dir="$channel/$BOARD"
+          name="dashboard-assistant-$BOARD-$id.raw.zst"
+          sha=$(sha256sum "$img" | cut -d' ' -f1)
+          built=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          # `ref` is the tag on a release build and the branch on a dev one, so
+          # it answers "where did this come from" for both without an empty key.
+          meta="board=$BOARD,arch=$ARCH,channel=$channel,version=$version,ref=$GITHUB_REF_NAME,commit=$GITHUB_SHA,nixos-version=$nixos,built=$built,sha256=$sha,run-url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          aws s3 cp "$img" "s3://$BUCKET/$dir/$name" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --content-type application/zstd \
+            --metadata "$meta"
+          size=$(du -h "$img" | cut -f1)
+          {
+            echo "### 📦 $BOARD image published to $dir/"
+            echo
+            echo "**[$name]($PUBLIC_URL/$dir/$name)** ($size)"
+            echo
+            echo "nixos \`$nixos\` · commit \`${GITHUB_SHA::7}\` · sha256 \`$sha\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # A fork without R2 config: the image is built and checked, but there is
+      # nowhere to put it — and it is far too large to hand back as a run
+      # artifact, so say so plainly instead of failing at the upload.
+      - name: Note that publishing was skipped
+        if: ${{ vars.R2_BUCKET == '' }}
+        run: |
+          {
+            echo "### ${{ matrix.board }} image built, not published"
+            echo
+            echo "\`R2_BUCKET\` is not configured for this repository, so there is"
+            echo "nowhere to publish the image to. See the workflow header for the"
+            echo "variables and secrets it needs."
+          } >> "$GITHUB_STEP_SUMMARY"

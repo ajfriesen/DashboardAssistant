@@ -13,8 +13,13 @@
 # supportable.
 #
 # The cache is public: pulling needs no token. CI populates it via
-# .github/workflows/cache-rpi.yml (push access uses a secret token there). The
-# public key below is non-secret and only used to verify signatures on pull.
+# .github/workflows/boards.yml, which builds every board's closure on a runner
+# of its own architecture and pushes it (push access uses a secret token
+# there). Every board, x86_64 included, because no public cache holds a system
+# closure: the daemon, the kiosk configuration and the toplevel itself are this
+# repository's own output, so without that push an update compiles on the
+# device. The public key below is non-secret and only used to verify signatures
+# on pull.
 { lib, ... }:
 let
   # Single source of truth for the cache location (Attic cache name is

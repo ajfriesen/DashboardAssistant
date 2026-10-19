@@ -155,12 +155,13 @@ def test_the_message_says_what_would_happen_if_it_ran_anyway():
 
 
 def test_the_message_says_who_pushes_a_candidate_and_when():
-    """Nobody reading this failure knows that a tag populates the cache from
-    CI. Without it the next move is to build the thing by hand on the board,
+    """Nobody reading this failure knows that a tag is what populates the
+    cache. Without it the next move is to build the thing by hand on the board,
     which is the exact outcome the check exists to prevent."""
     message = candidate.not_in_cache("v1.2.0", "rpi5", PATH, candidate.plan(OUTPUT_UNKNOWN))
 
-    assert "cache-rpi.yml" in message
+    assert candidate.CACHE_WORKFLOW in message
+    assert "`v*` tag" in message
 
 
 def test_a_substitutable_closure_has_nothing_to_report():
@@ -249,40 +250,47 @@ def test_an_evaluation_that_answers_with_anything_but_a_store_path_is_an_error()
 # --------------------------------------------------------------------------- #
 # Which board's closure, and who fills the cache for it
 #
-# Not the same answer for every board, and the difference is not cosmetic.
-# .github/workflows/cache-rpi.yml pushes the aarch64 closures on a `v*` tag —
-# the linux-rpi kernel above all, which is on no public cache and costs hours
-# under emulation. Nothing pushes the x86_64 closure at all, so a message
-# naming that workflow on x86 would send somebody to look at a green workflow run
-# for a board it never touched.
+# One answer for every board now. .github/workflows/boards.yml builds each
+# board's closure on a runner of its own architecture and pushes it — the
+# linux-rpi kernel above all, which is on no public cache and costs hours under
+# emulation, but equally the x86_64 toplevel, which no public cache has either
+# because it is this repository's own output. Before that workflow existed the
+# two halves of the fleet were built in two different shapes and only the Pis
+# were pushed (issue #55).
 # --------------------------------------------------------------------------- #
 
 
-def test_a_pi_is_told_which_run_was_supposed_to_push_its_closure():
+def test_a_board_is_told_which_run_was_supposed_to_push_its_closure():
     message = candidate.not_in_cache(
         "v1.2.0", "rpi5", PATH, candidate.plan(OUTPUT_UNKNOWN)
     )
 
-    assert "cache-rpi.yml" in message
+    assert "boards.yml" in message
 
 
-def test_a_board_nothing_pushes_for_is_told_that_plainly():
-    """x86_64 today. Saying "the cache does not have it" without saying "and
-    nothing was ever going to put it there" is how somebody spends an
-    afternoon re-running the workflow."""
-    message = candidate.not_in_cache(
-        "v1.2.0", "x86_64", PATH, candidate.plan(OUTPUT_UNKNOWN)
+def test_every_board_is_told_the_same_thing():
+    """No board is left with "nothing pushes for this one", which is what x86_64
+    was told until the flows were unified. A board that cannot be pushed for
+    cannot have its update phase gated at all, so if that ever becomes true
+    again it needs saying here rather than being implied by a silence."""
+    for board in candidate.BOARD_ATTRS:
+        message = candidate.not_in_cache(
+            "v1.2.0", board, PATH, candidate.plan(OUTPUT_UNKNOWN)
+        )
+
+        assert candidate.CACHE_WORKFLOW in message, board
+        assert board in message
+
+
+def test_the_workflow_named_in_the_failure_exists():
+    """The message sends somebody to a path. A rename that left this behind
+    would send them to a file that is not there — which is exactly what
+    happened to `cache-rpi.yml`."""
+    workflow = (
+        pathlib.Path(__file__).resolve().parent.parent / candidate.CACHE_WORKFLOW
     )
 
-    assert "cache-rpi.yml" not in message
-    assert "nothing pushes" in message
-
-
-def test_every_board_the_bench_drives_has_an_answer_about_its_cache():
-    """A board with an attribute but no entry here would hit a KeyError in the
-    middle of composing a failure message, which replaces a usable diagnosis
-    with a traceback."""
-    assert set(candidate.CACHE_SOURCES) == set(candidate.BOARD_ATTRS)
+    assert workflow.is_file(), workflow
 
 
 def test_the_flake_reference_is_the_one_a_device_updates_from():

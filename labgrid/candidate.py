@@ -136,27 +136,25 @@ def toplevel_installable(tag, board, flake_ref=FLAKE_REF):
 #: on a working tree does not.
 TAG_ENV = "BENCH_CANDIDATE"
 
-#: Which run is supposed to have put a board's closure in the cache, per board,
-#: or None for a board nothing pushes for.
+#: Which run is supposed to have put a board's closure in the cache.
 #:
 #: Named in the failure because the fix is not discoverable from the board. A
-#: `v*` tag runs .github/workflows/cache-rpi.yml, whose `build` job builds each
-#: aarch64 system on a native arm64 runner and pushes the whole closure to
-#: Attic — the linux-rpi kernel above all, which is on no public cache and
-#: costs hours under emulation. Nothing a developer does locally pushes, and a
-#: plain branch push warms the cache without producing a candidate.
+#: `v*` tag runs this workflow, which builds each board's system closure on a
+#: runner of its own architecture and pushes it to Attic. Nothing a developer
+#: does locally pushes, and a plain branch push warms the cache without
+#: producing a candidate.
 #:
-#: x86_64 is None, and that is the state of the world rather than an omission
-#: here: .github/workflows/release-image.yml builds the image and never pushes
-#: the closure, so an x86 candidate is not substitutable and the update phase
-#: cannot be gated on that board. See README.md, "The candidate has to be in
-#: the cache".
-CACHE_WORKFLOW = ".github/workflows/cache-rpi.yml"
-CACHE_SOURCES = {
-    "rpi4": CACHE_WORKFLOW,
-    "rpi5": CACHE_WORKFLOW,
-    "x86_64": None,
-}
+#: One answer for every board, which was not always true: until the two flows
+#: were unified (issue #55) only the aarch64 closures were pushed, so an x86_64
+#: candidate could not be fetched by a device at all and its update phase could
+#: not be gated. The toplevel is the reason it mattered even on x86, where
+#: cache.nixos.org covers most of a closure: no public cache holds a *system*
+#: closure, because the daemon, the kiosk configuration and the toplevel itself
+#: are this repository's own output.
+#:
+#: test_candidate.py checks this file exists, because the message sends somebody
+#: to this path and the last rename left a stale one behind.
+CACHE_WORKFLOW = ".github/workflows/boards.yml"
 
 
 def configured_tag(environ):
@@ -196,20 +194,11 @@ def not_in_cache(tag, board, path, verdict):
             f"{verdict.build} of its derivations are not in any cache this "
             "board trusts and would be compiled on the board"
         )
-    workflow = CACHE_SOURCES[board]
-    if workflow:
-        whose = (
-            f"A `v*` tag populates the cache for {board} through {workflow}, "
-            f"on a native arm64 runner — so either that run has not finished, "
-            f"or it failed, or {tag} was never tagged."
-        )
-    else:
-        whose = (
-            f"And nothing pushes the {board} closure to the cache: no "
-            "workflow in this repository does, so this is not a run that "
-            "failed — it is a gap, and the update phase cannot be gated on "
-            "this board until something fills it."
-        )
+    whose = (
+        f"A `v*` tag populates the cache for {board} through {CACHE_WORKFLOW}, "
+        f"on a runner of its own architecture — so either that run has not "
+        f"finished, or it failed, or {tag} was never tagged."
+    )
     return (
         f"candidate {tag} is not substitutable from this board: {did} "
         f"({path}). Running the update phase anyway would build a system on "

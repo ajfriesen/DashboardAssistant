@@ -254,7 +254,7 @@
             ''
               set -euo pipefail
               # fail= accumulator so every sub-assertion reports before exiting,
-              # matching .github/workflows/cache-rpi.yml.
+              # matching .github/workflows/boards.yml.
               fail=0
               grep -q 'XDG_CACHE_HOME=.*kiosk-cache' "$launcher" || {
                 echo "FAIL: the kiosk browser cache is back on flash — Chromium's HTTP and V8 code caches will write to the SD card continuously." >&2
