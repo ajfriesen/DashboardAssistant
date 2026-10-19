@@ -396,8 +396,8 @@ hw-release:
 website-serve *ARGS:
   cd website && zensical serve {{ARGS}}
 
-# Build the website into website/site/, the same way .github/workflows/docs.yml
-# builds what GitHub Pages serves. --clean so a renamed or deleted page cannot
+# Build the website into website/site/, the same way
+# .github/workflows/website.yml builds what GitHub Pages serves. --clean so a renamed or deleted page cannot
 # survive in the output.
 [doc('Build the website into website/site/')]
 website-build *ARGS:

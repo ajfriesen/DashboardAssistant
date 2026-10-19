@@ -1,4 +1,4 @@
-name: Documentation
+name: Website
 on:
   workflow_dispatch:
   push:
@@ -8,7 +8,7 @@ on:
       # The website is one self-contained Zensical project, so a single path
       # covers its config, its theme overrides and its content.
       - 'website/**'
-      - '.github/workflows/docs.yml'
+      - '.github/workflows/website.yml'
 permissions:
   contents: read
   pages: write

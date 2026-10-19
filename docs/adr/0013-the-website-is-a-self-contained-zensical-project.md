@@ -6,7 +6,7 @@ Before this, one `docs/` directory held both, with `zensical.toml` at the reposi
 
 ## Considered Options
 
-Keeping `zensical.toml` at the root and pointing `docs_dir` at `website/` is the smaller change — one config line, no file moves beyond the content itself. It was rejected because it leaves the site's configuration and its theme overrides sitting at the repository root, two directories away from the pages they govern, while the root keeps accumulating tool config. A self-contained project is worth the `working-directory: website` in `.github/workflows/docs.yml` and the two `just` recipes that encapsulate the `cd`.
+Keeping `zensical.toml` at the root and pointing `docs_dir` at `website/` is the smaller change — one config line, no file moves beyond the content itself. It was rejected because it leaves the site's configuration and its theme overrides sitting at the repository root, two directories away from the pages they govern, while the root keeps accumulating tool config. A self-contained project is worth the `working-directory: website` in `.github/workflows/website.yml` and the two `just` recipes that encapsulate the `cd`.
 
 The content directory is `content/`, not Zensical's default `docs/`. `website/docs/` would have cost no config line and re-created the exact ambiguity this ADR removes: `docs/` meaning the public site in one place and the developer docs in another. One word, one meaning, at the price of `docs_dir = "content"`.
 
