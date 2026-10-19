@@ -15,8 +15,9 @@ that boots with a valid seed file joins your network directly.
 
 !!! warning "Physical access = full trust"
     Any USB stick carrying a `dashboard-assistant.yaml` is applied automatically,
-    and the file can carry a long-lived token in plain text. Only use seed files
-    on hardware and networks you control, and wipe the stick afterwards.
+    and the file can carry a long-lived kiosk token in plain text. Only use
+    seed files on hardware and networks you control, and wipe the stick
+    afterwards.
 
 ## Populate Seed File
 
@@ -27,10 +28,11 @@ only what you want to provision:
 # Home Assistant base URL the kiosk should open.
 ha_url: "https://homeassistant.local:8123"
 
-# Optional long-lived access token for kiosk auto-login. You normally don't
-# need this — the Dashboard Assistant integration provisions a login for the
-# device automatically. Only set it to preset a token yourself.
-token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiIyZWRlNGE0ZTFjNmQ0ZDY3OTY4ODhmMTk5OGNhNWVjMSIsImlhdCI6MTc4NDcxODk3MywiZXhwIjoyMTAwMDc4OTczfQ.Rd92pdzdYkC8HI3buVO6m9EVVI71Ye-MP_1nwogfOgU"
+# Optional kiosk token: the long-lived Home Assistant access token the kiosk
+# logs in with. You normally don't need this — the Dashboard Assistant
+# integration provisions a login for the device automatically. Only set it to
+# preset a kiosk token yourself.
+kiosk_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiIyZWRlNGE0ZTFjNmQ0ZDY3OTY4ODhmMTk5OGNhNWVjMSIsImlhdCI6MTc4NDcxODk3MywiZXhwIjoyMTAwMDc4OTczfQ.Rd92pdzdYkC8HI3buVO6m9EVVI71Ye-MP_1nwogfOgU"
 
 # Optional Wi-Fi credentials. Omit the whole block on a wired device.
 wifi:
@@ -54,18 +56,22 @@ pages:
 | Key           | Required | Description                                                      |
 | ------------- | -------- | ---------------------------------------------------------------- |
 | `ha_url`      | no       | Home Assistant base URL the dashboard loads on boot.             |
-| `token`       | no       | Optional. Kiosk login token; normally provisioned by the integration. |
+| `kiosk_token` | no       | Kiosk token the dashboard logs in with; normally provisioned by the integration. |
 | `wifi.ssid`   | no       | Wi-Fi network name to join.                                      |
 | `wifi.psk`    | no       | Wi-Fi pre-shared key (password).                                 |
 | `api_token`   | no       | Device API token for the Home Assistant integration. Generated per device if omitted. |
 | `pages`       | no       | List of `name` + `url` entries replacing the device's page list. `url` is required per entry. |
+| `token`       | no       | Deprecated name for `kiosk_token`, still applied. Ignored when `kiosk_token` is also present. |
 
-Two notes on the optional keys. `api_token` only takes effect when the daemon
+Three notes on the optional keys. `api_token` only takes effect when the daemon
 next starts, so a stick plugged into a running device needs a reboot for that one
 key (everything else applies immediately) — editing the file on the boot
 partition always applies it, because that is read during boot anyway. And `pages`
 replaces the list wholesale rather than merging, though importing it does not
-move the display off the page it is showing.
+move the display off the page it is showing. Finally, `kiosk_token` used to be
+called `token`: a file using the old name is still applied, and the device notes
+the rename in `journalctl -u dashboard-assistant-boot-import`. Rename the key
+anyway — a bare `token` next to `api_token` does not say which credential it is.
 
 ## Apply the Seed File
 

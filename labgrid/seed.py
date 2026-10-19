@@ -71,7 +71,7 @@ def build_seed(args):
             sys.exit("--wifi-ssid given but no passphrase: set $DA_WIFI_PSK")
         lines += ["wifi:", f"  ssid: {yaml_str(args.wifi_ssid)}", f"  psk: {yaml_str(psk)}"]
     if args.token:
-        lines.append(f"token: {yaml_str(args.token)}")
+        lines.append(f"kiosk_token: {yaml_str(args.token)}")
     return "\n".join(lines) + "\n"
 
 
@@ -85,7 +85,7 @@ def main():
     ap.add_argument("--ha-url", help="Home Assistant base URL (required unless --file)")
     ap.add_argument("--wifi-ssid", help="Wi-Fi SSID (omit on a wired board)")
     ap.add_argument("--wifi-psk", help="Wi-Fi passphrase (default: $DA_WIFI_PSK)")
-    ap.add_argument("--token", help="optional long-lived HA token for auto-login")
+    ap.add_argument("--token", help="optional kiosk token for auto-login (seeded as kiosk_token)")
     ap.add_argument(
         "--reflash",
         action="store_true",

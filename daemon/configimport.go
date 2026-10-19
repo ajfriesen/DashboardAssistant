@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 
 	"gopkg.in/yaml.v3"
 )
@@ -10,8 +11,15 @@ import (
 // stick or the ESP. Every field is optional; only the ones present are applied.
 type importConfig struct {
 	HAURL string `yaml:"ha_url"`
-	Token string `yaml:"token"`
-	WiFi  *struct {
+	// KioskToken is the long-lived Home Assistant token the kiosk logs in with.
+	// Named for the glossary (CONTEXT.md): a bare `token` next to `api_token`
+	// does not say which of the two credentials it is.
+	KioskToken string `yaml:"kiosk_token"`
+	// LegacyToken is the key kiosk_token replaced, kept so seed files already
+	// sitting on cards in the field keep provisioning a login. Read only when
+	// kiosk_token is absent; see kioskToken.
+	LegacyToken string `yaml:"token"`
+	WiFi        *struct {
 		SSID string `yaml:"ssid"`
 		PSK  string `yaml:"psk"`
 	} `yaml:"wifi"`
@@ -25,8 +33,23 @@ type importConfig struct {
 	} `yaml:"pages"`
 }
 
+// kioskToken returns the kiosk token the bundle carries, preferring the current
+// key over the deprecated one so a file mid-rename (carrying both) applies what
+// its author last edited rather than whichever key the parser looked at first.
+// Using the old key is logged, since the file is the only place to fix it and
+// the journal is a headless device's one feedback channel.
+func (c importConfig) kioskToken() string {
+	if c.KioskToken != "" {
+		return c.KioskToken
+	}
+	if c.LegacyToken != "" {
+		log.Printf("import: seed file uses the deprecated key `token`; rename it to `kiosk_token`")
+	}
+	return c.LegacyToken
+}
+
 // applyImport parses a YAML bundle and applies whatever it carries: Wi-Fi first
-// (so the box is online), then the token, then the HA URL (which also marks the
+// (so the box is online), then the kiosk token, then the HA URL (which also marks the
 // device provisioned). It returns a short summary of what it applied, so the
 // caller can decide whether to restart the kiosk.
 //
@@ -61,11 +84,11 @@ func (s *server) applyImport(data []byte) ([]string, error) {
 		}
 	}
 
-	if cfg.Token != "" {
-		if err := writeToken(cfg.Token); err != nil {
-			return applied, fmt.Errorf("write token: %w", err)
+	if tok := cfg.kioskToken(); tok != "" {
+		if err := writeToken(tok); err != nil {
+			return applied, fmt.Errorf("write kiosk token: %w", err)
 		}
-		applied = append(applied, "token")
+		applied = append(applied, "kiosk_token")
 	}
 
 	if cfg.HAURL != "" {

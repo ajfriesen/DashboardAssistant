@@ -13,8 +13,11 @@
 #
 # YAML schema (all keys optional):
 #   ha_url: "https://homeassistant.local:8123"
-#   token: "eyJhbGci..."          # long-lived access token (stored for injection)
+#   kiosk_token: "eyJhbGci..."    # long-lived HA access token (stored for injection)
 #   wifi: { ssid: "Net", psk: "secret" }
+#
+# `token` is still accepted for kiosk_token, deprecated: cards in the field
+# carry it, and the daemon logs the rename when it reads one (daemon/configimport.go).
 {
   config,
   lib,
@@ -88,7 +91,7 @@ let
     replaced by whatever the file says. Delete the pages: block to manage pages
     from Home Assistant instead.
 
-    Anyone who can pull this card can read your Wi-Fi password and token in
+    Anyone who can pull this card can read your Wi-Fi password and any token in
     plain text. Delete ${seedFileName} once setup is done if that matters
     where this device lives.
 
@@ -126,10 +129,10 @@ let
     #  ssid: "MyNetwork"
     #  psk: "supersecret"
 
-    # Long-lived Home Assistant access token for kiosk auto-login. You normally
-    # do NOT need this: the Dashboard Assistant integration provisions a login
-    # for the device by itself.
-    #token: "eyJhbGciOi..."
+    # Kiosk token: the long-lived Home Assistant access token the dashboard logs
+    # in with. You normally do NOT need this: the Dashboard Assistant
+    # integration provisions a login for the device by itself.
+    #kiosk_token: "eyJhbGciOi..."
 
     # Device API token, the credential Home Assistant uses to talk to this
     # device. Leave it out and the device generates its own, which Home
@@ -197,7 +200,7 @@ in
       type = lib.types.bool;
       default = true;
       description = ''
-        Import dashboard config (HA URL, token, Wi-Fi) from a dashboard-assistant.yaml
+        Import dashboard config (HA URL, tokens, Wi-Fi) from a dashboard-assistant.yaml
         on an inserted USB stick, and from the flashed boot medium.
 
         On by default: seed-file provisioning is the documented headless path (a
