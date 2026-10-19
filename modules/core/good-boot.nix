@@ -39,7 +39,12 @@
   boot.loader.systemd-boot.bootCounting.enable = true;
   boot.loader.systemd-boot.bootCounting.tries = 3;
 
-  systemd.services.ha-boot-health = {
+  # Named for what it decides, and with the project's own prefix (CONTEXT.md):
+  # this was `ha-boot-health` when it lived in the x86 target, which read as a
+  # Home Assistant unit checking boot "health" — and both halves were wrong.
+  # Home Assistant reachability is deliberately not part of the decision, and
+  # the decision is whether this was a **good boot**.
+  systemd.services.dashboard-assistant-good-boot = {
     description = "Gate boot success on the device being reachable";
     # This is what makes the gate load-bearing: boot-complete.target requires it
     # and is ordered after it, and systemd-bless-boot.service in turn requires
@@ -51,7 +56,7 @@
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
-      ExecStart = pkgs.writeShellScript "ha-boot-health" ''
+      ExecStart = pkgs.writeShellScript "dashboard-assistant-good-boot" ''
         # Wait up to ~3 min for the daemon to answer. Generous on purpose: a
         # cold Raspberry Pi on a slow card takes its time, and a gate that is
         # impatient rolls back a release that was fine.

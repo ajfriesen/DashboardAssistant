@@ -58,7 +58,7 @@ def test_this_boot_was_blessed(shell):
     """The good-boot gate must have passed and the boot been marked good.
 
     Two units in one assertion because neither means anything alone:
-    ha-boot-health is the project's definition of a good boot
+    dashboard-assistant-good-boot is the project's definition of a good boot
     (modules/core/good-boot.nix), and systemd-bless-boot is what acts on it.
     Both are oneshots with RemainAfterExit, so "active" is the record that they
     ran and succeeded.
@@ -68,7 +68,7 @@ def test_this_boot_was_blessed(shell):
     which is the expensive direction of wrong. It would spend a freshly
     installed release's three attempts and roll back a working update.
     """
-    shell.run_check("systemctl is-active --quiet ha-boot-health.service")
+    shell.run_check("systemctl is-active --quiet dashboard-assistant-good-boot.service")
     shell.run_check("systemctl is-active --quiet systemd-bless-boot.service")
 
 
@@ -91,6 +91,6 @@ def test_no_entry_is_left_counting(shell):
     assert not counting, (
         f"boot entries still carry a counter: {counting}. This boot was never "
         "blessed, so systemd-boot will spend the remaining attempts and fall "
-        "back to an older generation even though this one is healthy. Check "
-        "ha-boot-health.service and systemd-bless-boot.service."
+        "back to an older generation even though this one is reachable. Check "
+        "dashboard-assistant-good-boot.service and systemd-bless-boot.service."
     )

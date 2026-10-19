@@ -100,7 +100,7 @@ let
       # The gate orders itself after the daemon unit, which does not exist here.
       # Harmless on the node that has no stub either: After= on an absent unit
       # is a no-op.
-      systemd.services.ha-boot-health.after = lib.mkForce [ "stub-healthz.service" ];
+      systemd.services.dashboard-assistant-good-boot.after = lib.mkForce [ "stub-healthz.service" ];
 
       virtualisation.memorySize = 2048;
     };
@@ -150,7 +150,7 @@ pkgs.testers.runNixOSTest {
     # that failed, not how patiently it failed.
     unreachable = {
       imports = [ common ];
-      systemd.services.ha-boot-health.serviceConfig.TimeoutStartSec = 10;
+      systemd.services.dashboard-assistant-good-boot.serviceConfig.TimeoutStartSec = 10;
     };
   };
 
@@ -206,7 +206,7 @@ pkgs.testers.runNixOSTest {
       # enables the unit when that variable is set, so waiting on it is waiting
       # on the mechanism being live: it hangs rather than passes if boot counting
       # silently did nothing.
-      machine.wait_for_unit("ha-boot-health.service")
+      machine.wait_for_unit("dashboard-assistant-good-boot.service")
       machine.wait_for_unit("boot-complete.target")
       machine.wait_for_unit("systemd-bless-boot.service")
 
@@ -235,7 +235,7 @@ pkgs.testers.runNixOSTest {
           booted(unreachable, f"attempt {attempt} on the unreachable generation")
           # The gate has to actually fail, or this would be measuring some other
           # kind of broken boot than the one being guarded against.
-          machine.wait_until_succeeds("systemctl is-failed --quiet ha-boot-health.service")
+          machine.wait_until_succeeds("systemctl is-failed --quiet dashboard-assistant-good-boot.service")
           entry(3, left, attempt)
 
       # The fourth boot is the one that matters: generation 3 has spent all three
