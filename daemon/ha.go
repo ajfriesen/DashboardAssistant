@@ -145,6 +145,18 @@ type stateSnapshot struct {
 		Installable bool          `json:"installable"`
 		LastError   string        `json:"last_error,omitempty"` // why the last install attempt failed (e.g. the preflight guard's "reflash required")
 		Available   []ReleaseInfo `json:"available"`
+		// Automatic rollback (docs/adr/0009): this boot came up on an older
+		// generation because the one the device switched to never reached a good
+		// boot. Reported separately from last_error because nothing *failed* to
+		// install — the switch was clean and was reported as done, and the
+		// generation only gave up hours later, on the next boot. The rejected
+		// release stays out of latest_version until a newer one ships, so these
+		// are the only fields that explain why a device sits on an older release
+		// and calls itself up to date. Omitted entirely on a device that never
+		// rolled back, like the Present flags elsewhere in this snapshot.
+		RolledBack         bool   `json:"rolled_back,omitempty"`
+		Rejected           string `json:"rejected_version,omitempty"`
+		RejectedGeneration int    `json:"rejected_generation,omitempty"`
 	} `json:"update"`
 	Zoom  int `json:"zoom"`
 	Theme struct {
@@ -352,6 +364,9 @@ func (h *HAHub) snapshot() stateSnapshot {
 	s.Update.Installable = h.upd.Installable()
 	s.Update.LastError = us.LastError
 	s.Update.Available = us.Available
+	s.Update.RolledBack = us.RolledBack
+	s.Update.Rejected = us.Rejected
+	s.Update.RejectedGeneration = us.RejectedGeneration
 
 	s.Zoom = h.zoom.Level()
 	s.Theme.Dark = h.theme.Dark()

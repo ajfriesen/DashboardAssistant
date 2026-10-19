@@ -244,3 +244,67 @@ func TestFinishInstallFailureReason(t *testing.T) {
 		t.Fatalf("success: in_progress=%v last_error=%q", st.InProgress, st.LastError)
 	}
 }
+
+// A rejected release — one this device rolled back from — must not be offered
+// again. With nothing newer published, the device is "up to date" on the
+// notification entity rather than being nagged back toward the release that
+// just failed to boot; the rollback is reported instead (see State).
+func TestRejectedReleaseIsNotOffered(t *testing.T) {
+	u := newTestChecker("1.4.0", "", nil)
+	u.releases = []Release{
+		{TagName: "v1.5.0", Name: "Release 1.5.0", HTMLURL: "https://example/v1.5.0", Body: "the one that would not boot"},
+		{TagName: "v1.4.0", Name: "Release 1.4.0", HTMLURL: "https://example/v1.4.0", Body: "the one running"},
+	}
+	u.haveReleases = true
+	u.rollback = Rollback{Happened: true, Version: "1.5.0", Generation: 2}
+
+	st := u.State()
+	if st.Latest != "1.4.0" {
+		t.Errorf("Latest = %q, want 1.4.0 — v1.5.0 was rolled back from", st.Latest)
+	}
+	// None of the rejected release's metadata may reach the entity, or Home
+	// Assistant would show its release notes under an "up to date" state.
+	if st.URL == "https://example/v1.5.0" || st.Title == "Release 1.5.0" || strings.Contains(st.Summary, "would not boot") {
+		t.Errorf("State still advertises the rejected release: %+v", st)
+	}
+	if !st.RolledBack || st.Rejected != "1.5.0" {
+		t.Errorf("State = %+v, want the rollback reported with the rejected version", st)
+	}
+	if tag, ok := u.InstallTarget(); ok {
+		t.Errorf("InstallTarget = %q, want none — the only newer release is rejected", tag)
+	}
+	// The picker still lists it, marked, so a deliberate retry stays possible.
+	if len(st.Available) != 2 || !st.Available[0].Rejected || st.Available[1].Rejected {
+		t.Errorf("Available = %+v, want v1.5.0 marked rejected and v1.4.0 not", st.Available)
+	}
+}
+
+// "Skips it until a newer release ships" — once one does, it is offered normally
+// and the rejected one simply stays behind it.
+func TestANewerReleaseClearsTheSkip(t *testing.T) {
+	u := newTestChecker("1.4.0", "", nil)
+	u.releases = []Release{{TagName: "v1.6.0", Name: "Release 1.6.0"}, {TagName: "v1.5.0"}, {TagName: "v1.4.0"}}
+	u.haveReleases = true
+	u.rollback = Rollback{Happened: true, Version: "1.5.0", Generation: 2}
+
+	if st := u.State(); st.Latest != "1.6.0" {
+		t.Errorf("Latest = %q, want 1.6.0", st.Latest)
+	}
+	if tag, ok := u.InstallTarget(); !ok || tag != "v1.6.0" {
+		t.Errorf("InstallTarget = (%q, %v), want (\"v1.6.0\", true)", tag, ok)
+	}
+}
+
+// The two halves wired together: the checker reads the rejected release off the
+// system profile itself, so nothing has to tell it a rollback happened.
+func TestCheckerReadsTheRejectedReleaseFromTheSystemProfile(t *testing.T) {
+	dir := fakeSystems(t, map[int]string{1: "1.4.0", 2: "1.5.0"})
+	point(t, dir, 2, 1, 1)
+
+	u := newTestChecker("1.4.0", "", nil)
+	u.RefreshRollback()
+
+	if st := u.State(); !st.RolledBack || st.Rejected != "1.5.0" {
+		t.Fatalf("State = %+v, want the rollback read off the profile", st)
+	}
+}
