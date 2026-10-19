@@ -364,9 +364,9 @@ func (h *HAHub) snapshot() stateSnapshot {
 	s.Update.Installable = h.upd.Installable()
 	s.Update.LastError = us.LastError
 	s.Update.Available = us.Available
-	s.Update.RolledBack = us.RolledBack
-	s.Update.Rejected = us.Rejected
-	s.Update.RejectedGeneration = us.RejectedGeneration
+	s.Update.RolledBack = us.Rollback.Happened
+	s.Update.Rejected = us.Rollback.Version
+	s.Update.RejectedGeneration = us.Rollback.Generation
 
 	s.Zoom = h.zoom.Level()
 	s.Theme.Dark = h.theme.Dark()

@@ -250,13 +250,16 @@ func TestFinishInstallFailureReason(t *testing.T) {
 // notification entity rather than being nagged back toward the release that
 // just failed to boot; the rollback is reported instead (see State).
 func TestRejectedReleaseIsNotOffered(t *testing.T) {
+	dir := fakeSystems(t, map[int]string{1: "1.4.0", 2: "1.5.0"})
+	point(t, dir, 2, 1, 1)
+
 	u := newTestChecker("1.4.0", "", nil)
 	u.releases = []Release{
 		{TagName: "v1.5.0", Name: "Release 1.5.0", HTMLURL: "https://example/v1.5.0", Body: "the one that would not boot"},
 		{TagName: "v1.4.0", Name: "Release 1.4.0", HTMLURL: "https://example/v1.4.0", Body: "the one running"},
 	}
 	u.haveReleases = true
-	u.rollback = Rollback{Happened: true, Version: "1.5.0", Generation: 2}
+	u.RefreshRollback()
 
 	st := u.State()
 	if st.Latest != "1.4.0" {
@@ -267,7 +270,7 @@ func TestRejectedReleaseIsNotOffered(t *testing.T) {
 	if st.URL == "https://example/v1.5.0" || st.Title == "Release 1.5.0" || strings.Contains(st.Summary, "would not boot") {
 		t.Errorf("State still advertises the rejected release: %+v", st)
 	}
-	if !st.RolledBack || st.Rejected != "1.5.0" {
+	if !st.Rollback.Happened || st.Rollback.Version != "1.5.0" {
 		t.Errorf("State = %+v, want the rollback reported with the rejected version", st)
 	}
 	if tag, ok := u.InstallTarget(); ok {
@@ -282,10 +285,13 @@ func TestRejectedReleaseIsNotOffered(t *testing.T) {
 // "Skips it until a newer release ships" — once one does, it is offered normally
 // and the rejected one simply stays behind it.
 func TestANewerReleaseClearsTheSkip(t *testing.T) {
+	dir := fakeSystems(t, map[int]string{1: "1.4.0", 2: "1.5.0"})
+	point(t, dir, 2, 1, 1)
+
 	u := newTestChecker("1.4.0", "", nil)
 	u.releases = []Release{{TagName: "v1.6.0", Name: "Release 1.6.0"}, {TagName: "v1.5.0"}, {TagName: "v1.4.0"}}
 	u.haveReleases = true
-	u.rollback = Rollback{Happened: true, Version: "1.5.0", Generation: 2}
+	u.RefreshRollback()
 
 	if st := u.State(); st.Latest != "1.6.0" {
 		t.Errorf("Latest = %q, want 1.6.0", st.Latest)
@@ -304,7 +310,88 @@ func TestCheckerReadsTheRejectedReleaseFromTheSystemProfile(t *testing.T) {
 	u := newTestChecker("1.4.0", "", nil)
 	u.RefreshRollback()
 
-	if st := u.State(); !st.RolledBack || st.Rejected != "1.5.0" {
+	if st := u.State(); !st.Rollback.Happened || st.Rollback.Version != "1.5.0" {
 		t.Fatalf("State = %+v, want the rollback read off the profile", st)
+	}
+}
+
+// Two releases refused in a row must not become a loop. This is what "skips it
+// until a newer release ships" has to mean: a rejection outlives the next
+// update, or the device alternates between two releases it has already refused,
+// reinstalling each one as the other is forgotten.
+func TestRejectionsOutliveTheNextUpdate(t *testing.T) {
+	dir := fakeSystems(t, map[int]string{1: "1.5.0", 2: "1.6.0"})
+	point(t, dir, 2, 1, 1)
+
+	// Rolled back from 1.6.0 onto 1.5.0, so 1.7.0 is what gets offered.
+	u := newTestChecker("1.5.0", "", nil)
+	u.releases = []Release{{TagName: "v1.7.0"}, {TagName: "v1.6.0"}, {TagName: "v1.5.0"}}
+	u.haveReleases = true
+	u.RefreshRollback()
+	if tag, ok := u.InstallTarget(); !ok || tag != "v1.7.0" {
+		t.Fatalf("InstallTarget = (%q, %v), want (\"v1.7.0\", true)", tag, ok)
+	}
+
+	// 1.7.0 installs as generation 3 and is rolled back from too. systemd-boot
+	// skips the bad generation 2 as well, so the device lands back on 1.5.0.
+	addGeneration(t, dir, 3, "1.7.0")
+	point(t, dir, 3, 1, 1)
+	u.RefreshRollback()
+
+	if tag, ok := u.InstallTarget(); ok {
+		t.Fatalf("InstallTarget = %q — 1.6.0 was refused once already, offering it again is the loop", tag)
+	}
+	if st := u.State(); st.Latest != "1.5.0" {
+		t.Fatalf("Latest = %q, want 1.5.0 (up to date; both newer releases were refused)", st.Latest)
+	}
+}
+
+// A rejection is not a life sentence. The version picker still offers a rejected
+// release on purpose, so a device that successfully boots one — after the user
+// freed space on the ESP, say — must stop treating it as refused.
+func TestInstallingARejectedReleaseClearsIt(t *testing.T) {
+	dir := fakeSystems(t, map[int]string{1: "1.5.0", 2: "1.6.0"})
+	point(t, dir, 2, 1, 1)
+
+	u := newTestChecker("1.5.0", "", nil)
+	u.releases = []Release{{TagName: "v1.6.0"}, {TagName: "v1.5.0"}}
+	u.haveReleases = true
+	u.RefreshRollback()
+	if _, ok := u.InstallTarget(); ok {
+		t.Fatal("1.6.0 should be refused at this point")
+	}
+
+	// Installed by hand from the picker, and this time it booted: all three
+	// links agree on the generation carrying 1.6.0, so nothing rolled back.
+	point(t, dir, 2, 2, 2)
+	u.installed = "1.6.0"
+	u.RefreshRollback()
+
+	if st := u.State(); st.Latest != "1.6.0" {
+		t.Fatalf("Latest = %q, want 1.6.0 — the device is running it, so it is not refused", st.Latest)
+	}
+}
+
+// Rejections have to survive a daemon restart as well as a reboot, which is the
+// whole reason they are written down rather than derived.
+func TestRejectionsSurviveARestart(t *testing.T) {
+	dir := fakeSystems(t, map[int]string{1: "1.5.0", 2: "1.6.0"})
+	point(t, dir, 2, 1, 1)
+
+	first := newTestChecker("1.5.0", "", nil)
+	first.RefreshRollback()
+
+	// The rollback itself is no longer visible: someone re-pinned the system
+	// profile to the generation that boots, from the admin page. Only what was
+	// written down can answer for 1.6.0 now.
+	point(t, dir, 1, 1, 1)
+
+	restarted := newTestChecker("1.5.0", "", nil)
+	restarted.releases = []Release{{TagName: "v1.6.0"}, {TagName: "v1.5.0"}}
+	restarted.haveReleases = true
+	restarted.RefreshRollback()
+
+	if tag, ok := restarted.InstallTarget(); ok {
+		t.Fatalf("InstallTarget after a restart = %q, want none — 1.6.0 is on record as refused", tag)
 	}
 }

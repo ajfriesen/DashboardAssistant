@@ -27,16 +27,28 @@ package main
 // after an update switches, the profile and the booted system also disagree, and
 // reading only those two would report every pending update as a rollback.
 //
-// Nothing is persisted, deliberately. The profile keeps pointing at the rejected
-// generation until the next update switches, which is exactly as long as the
-// rejection is supposed to last ("skips it until a newer one ships") — so a
-// marker file would be a second copy of a fact the system already states, with
-// its own ways of going stale.
+// One thing the symlinks cannot tell us apart: a `nixos-rebuild switch` that
+// died *inside* switch-to-configuration — a full ESP, a failing activation
+// script — leaves the same three links in the same arrangement, because
+// nixos-rebuild sets the profile before it activates. Both outcomes mean the
+// same thing for what has to happen next (this device was told to run a release
+// and is not running it, so stop offering it), which is why they are not
+// separated here; what would separate them is the spent boot counter on the
+// ESP, and the ESP is mounted umask=0077 for root only. The accompanying
+// last_error says which one it was: a switch that failed reports one, a
+// generation that failed to boot cannot — it was reported "done" hours earlier.
+//
+// The *rejection* is written down, in stateDir, which the symlinks cannot carry:
+// the profile stops pointing at a rejected generation as soon as the next update
+// switches, and a device that rolls back from two releases in a row would
+// otherwise forget the first one and alternate between them forever. See
+// rejectedReleases.
 
 import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -126,4 +138,47 @@ func logRollback(r Rollback) {
 	}
 	log.Printf("update: this device rolled back from %s (generation %d never reached a good boot); skipping that release until a newer one ships",
 		version, r.Generation)
+}
+
+// rejectedReleasesFile is where the versions this device has refused are kept,
+// one per line. In stateDir, so it survives both a reboot and the generation
+// switch that retires the symlink evidence. Resolved per call because stateDir
+// is swapped in tests, same as readUpdateRefusal.
+func rejectedReleasesFile() string {
+	return filepath.Join(stateDir, "rejected-releases")
+}
+
+// rejectedReleases reads the versions this device has refused. A missing or
+// unreadable file means "none refused": a device that cannot read its own state
+// must offer updates rather than refuse all of them.
+func rejectedReleases() []string {
+	b, err := os.ReadFile(rejectedReleasesFile())
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, line := range strings.Split(string(b), "\n") {
+		if v := normalizeVersion(line); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// writeRejectedReleases replaces the record, and only when it would change —
+// this runs on every daemon start, and the journal already lives in RAM to keep
+// writes off the card (flash-wear.nix). An unwritable state dir is logged and
+// otherwise ignored: the in-memory set still protects this boot.
+func writeRejectedReleases(versions []string) {
+	slices.Sort(versions)
+	if slices.Equal(versions, rejectedReleases()) {
+		return
+	}
+	body := ""
+	for _, v := range versions {
+		body += v + "\n"
+	}
+	if err := os.WriteFile(rejectedReleasesFile(), []byte(body), 0o644); err != nil {
+		log.Printf("update: could not record the rejected releases: %v", err)
+	}
 }

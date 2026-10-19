@@ -12,6 +12,10 @@ import (
 // symlinks. Each generation gets a closure with the baked-in version file the
 // update module writes, so a rejected release can be named rather than guessed.
 //
+// stateDir is redirected too, because reading a rollback and recording it are
+// one operation — a test that swapped only the symlinks would write a real
+// device's rejected-releases file.
+//
 // Paths are swapped the same way btrfs_test.go and update_test.go swap theirs.
 func fakeSystems(t *testing.T, versions map[int]string) string {
 	t.Helper()
@@ -35,12 +39,13 @@ func fakeSystems(t *testing.T, versions map[int]string) string {
 		}
 	}
 
-	origProfile, origBooted, origCurrent := systemProfile, bootedSystemLink, currentSystemLink
+	origProfile, origBooted, origCurrent, origState := systemProfile, bootedSystemLink, currentSystemLink, stateDir
 	systemProfile = filepath.Join(profiles, "system")
 	bootedSystemLink = filepath.Join(dir, "booted-system")
 	currentSystemLink = filepath.Join(dir, "current-system")
+	stateDir = t.TempDir()
 	t.Cleanup(func() {
-		systemProfile, bootedSystemLink, currentSystemLink = origProfile, origBooted, origCurrent
+		systemProfile, bootedSystemLink, currentSystemLink, stateDir = origProfile, origBooted, origCurrent, origState
 	})
 	return dir
 }
@@ -63,6 +68,11 @@ func point(t *testing.T, dir string, profile, booted, current int) {
 			// /run/{booted,current}-system point straight at the closure, not
 			// through the numbered profile link.
 			target = filepath.Join(dir, "store", "system-"+strconv.Itoa(gen))
+		}
+		// Re-aimed rather than created: a test that installs a second release
+		// points the same three links at new generations.
+		if err := os.Remove(link); err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
 		}
 		if err := os.Symlink(target, link); err != nil {
 			t.Fatal(err)
@@ -133,5 +143,21 @@ func TestRollbackFromAGenerationWithNoVersionFile(t *testing.T) {
 	got := detectRollback()
 	if !got.Happened || got.Version != "" {
 		t.Fatalf("detectRollback() = %+v, want a rollback with no version", got)
+	}
+}
+
+// addGeneration adds one more generation to a tree built by fakeSystems, for
+// tests that install a second release after a rollback.
+func addGeneration(t *testing.T, dir string, n int, version string) {
+	t.Helper()
+	closure := filepath.Join(dir, "store", "system-"+strconv.Itoa(n))
+	if err := os.MkdirAll(filepath.Join(closure, "etc", "dashboard-assistant"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(closure, "etc", "dashboard-assistant", "version"), []byte(version+"\n"), 0o444); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(closure, filepath.Join(dir, "profiles", "system-"+strconv.Itoa(n)+"-link")); err != nil {
+		t.Fatal(err)
 	}
 }
