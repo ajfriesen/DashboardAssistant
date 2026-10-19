@@ -88,7 +88,7 @@ build-disk-image-dev:
 
 # Build the Raspberry Pi 4 (aarch64) SD-card image. On an x86 host the aarch64
 # closure builds via binfmt emulation — but once CI has populated the public
-# Attic cache (.github/workflows/cache-rpi.yml), --accept-flake-config lets the
+# Attic cache (.github/workflows/boards.yml), --accept-flake-config lets the
 # flake's extra-substituter pull the kernel + system instead of recompiling it,
 # so this is a download rather than a slow emulated build. Falls back to building
 # if the cache is cold or unreachable. Then flash the image to an SD card.

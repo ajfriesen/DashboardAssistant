@@ -1,8 +1,8 @@
 # ops
 
 Operational config for the Cloudflare R2 images bucket (the one the release
-workflows publish to; see `.github/workflows/release-image.yml` and
-`cache-rpi.yml`).
+workflows publish to; see `.github/workflows/boards.yml`, which builds and
+publishes every board's image).
 
 ## Bucket layout
 

@@ -1,0 +1,142 @@
+name: boards
+
+# Build every board the same way: its system closure on a runner of its own
+# architecture, pushed to the public Attic cache (Nix binary cache, backed by
+# Cloudflare R2); then its flashable image, assembled on x86 and published to
+# the R2 images bucket.
+#
+# This is the entry point, and board.yml is the per-board pair of jobs it calls
+# once per board. The split is not cosmetic: `needs` takes a whole job and
+# never one leg of its matrix, so two matrixed jobs in one file would gate
+# every board's image on *every* board's closure — one flaky arm64 runner and a
+# v* tag publishes nothing, x86_64 included. board.yml's header has the whole
+# argument, and the job placement (native runner for the closure, always x86
+# for the image). labgrid/test_candidate.py asserts the shape so it cannot
+# quietly come back.
+#
+# This replaces cache-rpi.yml and release-image.yml, which did these two things
+# in two different shapes. The Pi flow existed first and for a good reason —
+# there is no local Pi builder here, and compiling the linux-rpi kernel under
+# binfmt emulation on an x86 box takes hours, so the aarch64 closure is built
+# on GitHub's native arm64 runner instead. Nothing about that reasoning is
+# Pi-specific; it is only where the pain was felt first.
+#
+# WHY EVERY BOARD NEEDS ITS CLOSURE PUSHED, x86_64 included. No public cache
+# ever holds a *system closure*: the daemon, sendspin-go, vboard, the kiosk
+# configuration and the toplevel itself are this repository's own output.
+# cache.nixos.org does serve the pinned nixos-unstable revision every board
+# builds from (docs/adr/0008), so most of an x86 closure substitutes — but the
+# part that matters never will. Until it is pushed, an x86 candidate cannot be
+# fetched by a device, so an OTA update compiles on the device and the update
+# phase of the release gate cannot be gated on that board at all. See
+# labgrid/candidate.py and labgrid/README.md, "The candidate has to be in the
+# cache".
+#
+# R2 layout. The board — x86_64, rpi4, rpi5 — is both the directory and part of
+# the filename, so an image stays identifiable once it is downloaded and out of
+# its folder:
+#   release/<board>/dashboard-assistant-<board>-<version>.raw.zst  (immutable, per release)
+#   pre-release/<board>/…                                          (same, for a hyphened SemVer tag)
+#   dev/<board>/dashboard-assistant-<board>-<commit>.raw.zst       (branch build)
+#
+# There is deliberately no `latest` object. Publishing an object never makes it
+# the image people flash: a release is held back as a candidate until the
+# release gate has booted its images, and promotion moves GitHub's
+# /releases/latest — the pointer devices actually poll. See
+# docs/adr/0011-a-release-is-promoted-after-the-release-gate.md. dev/ objects
+# are swept after 7 days by the bucket lifecycle policy (ops/r2-lifecycle.json).
+#
+# The channel comes from the ref alone: a v* tag publishes a release
+# (pre-release for a hyphen, e.g. v0.1.0-rc.1), anything else is a dev build
+# keyed by the short commit, so two runs off the same branch cannot overwrite
+# each other.
+#
+# Tag runs are started by the v* tag release-please creates — which only starts
+# this workflow because release-please authenticates with a PAT
+# (RELEASE_PLEASE_TOKEN); tags made by the default GITHUB_TOKEN do not start new
+# runs. No other workflow builds these R2 paths: a candidate's notes carry no
+# download links at all (release-please.yml, "Hold the release back as a
+# candidate"), and promotion writes them by hand today. What does hard-code the
+# object names is docs/flash/flash.md, the filename table users read while
+# flashing — change the layout in board.yml and that table goes stale with it.
+#
+# Required repo config (Settings -> Secrets and variables -> Actions):
+#   Variables: R2_ACCOUNT_ID, R2_BUCKET, R2_PUBLIC_URL
+#   Secrets:   R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
+#              ATTIC_TOKEN — an Attic token with push access to the cache
+#                (atticadm make-token --sub ci --validity 1y \
+#                   --pull dashboardassistant --push dashboardassistant)
+# The cache endpoint and name are public (baked into the images), so they are
+# plain env in board.yml; only the push token is secret, and the push only runs
+# on the canonical repository. Without R2_BUCKET — a fork — everything is still
+# built and checked, there is just nowhere to publish to.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    # Docs-only pushes do not change the Nix build, so do not warm the cache for
+    # them. These paths are owned by docs.yml (the GitHub Pages deploy). Note:
+    # GitHub ignores path filters for tag pushes, so a v* release tag still
+    # always builds and publishes the images regardless of what it touched.
+    paths-ignore:
+      - 'docs/**'
+      - 'overrides/**'
+      - 'zensical.toml'
+      - '.github/workflows/docs.yml'
+    tags:
+      - "v*"
+
+permissions:
+  contents: read # checkout only; the release notes are written by release-please.yml
+
+# One in-flight run per ref is enough; a newer push supersedes an older cache
+# populate rather than queueing behind it.
+concurrency:
+  group: boards-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  board:
+    name: ${{ matrix.board }}
+    strategy:
+      # Do not let one board's build cancel another's already-succeeding push;
+      # each board is independent, and because the call below is per board that
+      # now holds for its image too, not only its closure.
+      fail-fast: false
+      matrix:
+        include:
+          # One entry per board. `attr` is the nixosConfigurations attribute —
+          # the same value modules/hardware/*.nix gives
+          # `dashboardAssistant.update.flakeAttr`, which is what a device
+          # updates with, and which labgrid/candidate.py mirrors to decide
+          # which closure a candidate would install. `image` is the existing
+          # packages attribute, unrenamed. `runner` is a *native* runner for
+          # that board's architecture; that is the whole point of the closure
+          # job.
+          - board: rpi4
+            attr: dashboard-assistant-rpi4
+            image: rpi4-image
+            runner: ubuntu-24.04-arm
+            arch: aarch64
+          - board: rpi5
+            attr: dashboard-assistant-rpi5
+            image: rpi5-image
+            runner: ubuntu-24.04-arm
+            arch: aarch64
+          - board: x86_64
+            attr: dashboard-assistant-x86-disk
+            image: disk-image
+            runner: ubuntu-24.04
+            arch: x86_64
+    uses: ./.github/workflows/board.yml
+    with:
+      board: ${{ matrix.board }}
+      attr: ${{ matrix.attr }}
+      image: ${{ matrix.image }}
+      runner: ${{ matrix.runner }}
+      arch: ${{ matrix.arch }}
+    # ATTIC_TOKEN, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY. Workflow-level `env`
+    # does not cross into a called workflow, so board.yml declares the public
+    # cache and R2 endpoint values itself.
+    secrets: inherit

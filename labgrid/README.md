@@ -493,24 +493,33 @@ rather than remembered — the captured outputs are in `test_candidate.py`:
 
 #### Who pushes a candidate, and when
 
-| Board | What fills the cache | When |
-| --- | --- | --- |
-| `rpi4`, `rpi5` | [`cache-rpi.yml`](../.github/workflows/cache-rpi.yml)'s `build` job, which builds the aarch64 system on a native arm64 runner and pushes the whole closure to Attic | on every `v*` tag (and on a push to `main`, which warms the cache without producing a candidate) |
-| `x86_64` | **nothing** | — |
+[`boards.yml`](../.github/workflows/boards.yml), for every board. It calls
+[`board.yml`](../.github/workflows/board.yml) once per board, whose `closure`
+job builds that board's system closure on a runner of its own architecture and
+pushes it to Attic, on every `v*` tag — and on a push to `main`, which warms
+the cache without producing a candidate.
 
 Nothing local pushes: a developer's `just build-rpi5` pulls from the cache and
 never fills it, and the push token lives only in CI.
 
-So a `v*` tag produces a candidate whose Pi closures are substitutable once that
-workflow is green, and the check's job is to say so before the phase starts
+So a `v*` tag produces a candidate whose closures are substitutable once that
+workflow is green, and this check's job is to say so before the phase starts
 rather than after ninety minutes of compiling.
 
-**The x86_64 gap is real, and the check reports it as a gap rather than as a
-failed run.** `release-image.yml` builds and publishes the x86_64 image but
-never pushes its closure, so an x86 candidate is not substitutable and the
-update phase cannot be gated on that board. Most of an x86 closure does come
-from `cache.nixos.org`, so the cost is minutes rather than a night — but it is
-not zero, and nothing in this repository currently closes it.
+**Every board, x86_64 included, and the reason is narrower than cache
+coverage.** `cache.nixos.org` does serve the pinned `nixos-unstable` revision
+every board builds from ([ADR 0008](../docs/adr/0008-every-board-builds-from-pinned-nixos-unstable.md)),
+so most of an x86 closure substitutes from upstream. What never substitutes is
+a *system closure*: the daemon, `sendspin-go`, `vboard`, the kiosk
+configuration and the toplevel itself are this repository's own output, and no
+public cache has ever held them. The Pi's `linux-rpi` kernel — hours under
+emulation, on no public cache at all — is a difference of degree, not of kind.
+
+This was not always true. Until the two flows were unified (issue #55) the
+aarch64 closures were built on a native arm64 runner and pushed, while the
+x86_64 image was built and published with no closure push at all — so an x86
+candidate could not be fetched by a device and its update phase could not be
+gated. This check is what surfaced it.
 
 ### Skipping is derived, never selected
 

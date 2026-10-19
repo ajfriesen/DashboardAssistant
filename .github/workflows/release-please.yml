@@ -7,8 +7,8 @@ name: release-please
 # On every push to main it opens/updates a single "release PR" that bumps
 # CHANGELOG.md and flake.nix's version. Merging it creates the vX.Y.Z tag and
 # GitHub Release. It authenticates with a PAT (RELEASE_PLEASE_TOKEN) so that tag
-# *does* start the tag-triggered image builds (release-image.yml for x86_64,
-# cache-rpi.yml for the Pis) — a tag made by the default GITHUB_TOKEN wouldn't.
+# *does* start the tag-triggered build of every board's closure and image
+# (boards.yml) — a tag made by the default GITHUB_TOKEN wouldn't.
 # Use the hardware target as the commit scope (feat(rpi5):/fix(x86):); daemon/core
 # (or no scope) for changes that apply to all.
 #

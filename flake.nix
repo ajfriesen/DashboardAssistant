@@ -79,6 +79,12 @@
         # nixpkgs-unstable` moves both in one commit. A pip install or a
         # container image would reintroduce exactly the drift this prevents.
         ps.playwright
+
+        # Reading .github/workflows/*.yml in test_candidate.py, which asserts
+        # that no board's image waits on another board's closure. PyYAML
+        # arrives with labgrid anyway; named here so the test does not rest on
+        # somebody else's dependency.
+        ps.pyyaml
       ]);
 
       # Optional per-build overrides (e.g. a seeded HA URL / debug flags). See
@@ -254,7 +260,7 @@
             ''
               set -euo pipefail
               # fail= accumulator so every sub-assertion reports before exiting,
-              # matching .github/workflows/cache-rpi.yml.
+              # matching .github/workflows/boards.yml.
               fail=0
               grep -q 'XDG_CACHE_HOME=.*kiosk-cache' "$launcher" || {
                 echo "FAIL: the kiosk browser cache is back on flash — Chromium's HTTP and V8 code caches will write to the SD card continuously." >&2
