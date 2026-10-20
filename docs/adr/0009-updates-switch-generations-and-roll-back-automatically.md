@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Updates switch generations and roll back automatically

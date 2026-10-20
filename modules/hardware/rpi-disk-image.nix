@@ -20,11 +20,23 @@
 # Why bother, when extlinux worked: systemd-boot is what the x86 target already
 # uses, and it is where NixOS puts the features this appliance needs —
 # boot.loader.systemd-boot.bootCounting (automatic rollback after a failed
-# update) exists nowhere else. `bootctl status` on the bench board reports the
-# loader's own "✓ Boot counting". It is also the boot method nixpkgs sanctions
-# for aarch64: "The only supported-by-NixOS boot methods for AArch64 are
+# update) exists nowhere else. It is also the boot method nixpkgs sanctions for
+# aarch64: "The only supported-by-NixOS boot methods for AArch64 are
 # standards-based boot methods, namely UEFI or the pragmatically almost-standard
 # extlinux-compatible for U-Boot" (nixpkgs#241534).
+#
+# Boot counting does work in here, which was not obvious and is the thing that
+# kept it switched off (docs/adr/0009). It needs systemd-boot to set
+# LoaderBootCountPath, a volatile EFI variable, at runtime — from a loader that
+# `bootctl` had to install with --no-variables because U-Boot cannot create a
+# Boot#### entry (see canTouchEfiVariables below). `bootctl status` on the bench
+# board reports the loader's own "✓ Boot counting", and the cycle itself was
+# read off a Pi 5: the image's entry goes onto the card carrying a `+3` counter
+# and the running board has none left on any entry. The only thing that removes
+# a counter is systemd-bless-boot, and it runs only when the loader set that
+# variable — so the loader does set it, --no-variables and all.
+# labgrid/test_first_boot.py keeps asking, on the one boot where the answer is
+# visible.
 #
 # Device tree: deliberately left to the GPU firmware. start*.elf merges the
 # config.txt dtoverlays (vc4-kms-v3d among them) into the DTB, hands it to

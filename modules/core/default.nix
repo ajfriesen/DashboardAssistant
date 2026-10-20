@@ -7,6 +7,7 @@
     ./daemon.nix
     ./ha-api.nix
     ./update.nix
+    ./good-boot.nix
     ./configimport.nix
     ./admin.nix
     ./seed.nix

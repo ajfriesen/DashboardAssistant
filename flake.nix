@@ -245,6 +245,11 @@
       checks.${system} = {
         first-boot = import ./tests/first-boot.nix { inherit pkgs version; };
 
+        # Automatic rollback end to end: boot counting with the loader installed
+        # at the removable path and no EFI variables written, the good-boot gate
+        # failing three times, and the fallback that follows (docs/adr/0009).
+        good-boot = import ./tests/good-boot.nix { inherit pkgs; };
+
         # Flash-wear flags on the browser command line. This is an eval-time
         # check rather than an assertion in first-boot.nix because that test
         # force-disables greetd (no GPU — Chromium crash-loops and buries the
@@ -319,6 +324,62 @@
                 echo "FAIL: the x86 kernel is $x86Kernel, not linuxPackages_latest ($latestKernel) — very recent hardware loses its display, Wi-Fi or touch. See boot.kernelPackages in modules/hardware/generic-x86-disk.nix." >&2
                 fail=1
               }
+
+              [ "$fail" = 0 ] || exit 1
+              touch "$out"
+            '';
+
+        # Automatic rollback is armed on every board (docs/adr/0009).
+        #
+        # Eval-time, for the reason kiosk-flash-flags gives: a regression here
+        # has no symptom at all. With bootCounting off, boot entries are simply
+        # written without a counter — nothing fails, nothing is logged, and the
+        # device looks exactly like one that is being assessed right up to the
+        # update that needed the safety net and found none.
+        #
+        # It is also the other half of a bench assertion that would otherwise go
+        # quiet. labgrid/test_first_boot.py proves a counter was *removed* from
+        # the ESP, which is only evidence of blessing if one was written in the
+        # first place; that is what this check guarantees. Neither can pass
+        # vacuously while both are in place.
+        #
+        # Reads all three boards, because this is per-board bootloader config
+        # reached through modules/core/default.nix — an override in one hardware
+        # module would leave the other two armed and say nothing.
+        rollback-is-armed =
+          let
+            counting = name: self.nixosConfigurations.${name}.config.boot.loader.systemd-boot.bootCounting;
+          in
+          pkgs.runCommand "rollback-is-armed"
+            {
+              x86 = lib.boolToString (counting "dashboard-assistant-x86-disk").enable;
+              rpi4 = lib.boolToString (counting "dashboard-assistant-rpi4").enable;
+              rpi5 = lib.boolToString (counting "dashboard-assistant-rpi5").enable;
+              x86Tries = toString (counting "dashboard-assistant-x86-disk").tries;
+              rpi4Tries = toString (counting "dashboard-assistant-rpi4").tries;
+              rpi5Tries = toString (counting "dashboard-assistant-rpi5").tries;
+            }
+            ''
+              set -euo pipefail
+              # fail= accumulator so every board reports before exiting, matching
+              # one-nixpkgs above.
+              fail=0
+
+              for board in x86:$x86 rpi4:$rpi4 rpi5:$rpi5; do
+                [ "''${board#*:}" = "true" ] || {
+                  echo "FAIL: ''${board%%:*} has boot.loader.systemd-boot.bootCounting.enable = false — an update that never reaches a good boot will not be rolled back on that board, and nothing else will say so. See modules/core/good-boot.nix (docs/adr/0009)." >&2
+                  fail=1
+                }
+              done
+
+              # Three attempts is the number ADR 0009 commits to, and the number
+              # tests/good-boot.nix asserts the entries are written with.
+              for board in x86:$x86Tries rpi4:$rpi4Tries rpi5:$rpi5Tries; do
+                [ "''${board#*:}" = "3" ] || {
+                  echo "FAIL: ''${board%%:*} gives a new generation ''${board#*:} boot attempts, not 3 (docs/adr/0009)." >&2
+                  fail=1
+                }
+              done
 
               [ "$fail" = 0 ] || exit 1
               touch "$out"

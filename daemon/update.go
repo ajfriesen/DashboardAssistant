@@ -62,11 +62,14 @@ type Release struct {
 }
 
 // ReleaseInfo is one entry in the version picker: the raw tag to install, a
-// display name, and whether it is a prerelease (so HA can mark it).
+// display name, and whether it is a prerelease (so HA can mark it). Rejected
+// marks the release this device rolled back from — still installable on purpose,
+// but never offered on its own (see rollback.go).
 type ReleaseInfo struct {
 	Tag        string `json:"tag"`
 	Name       string `json:"name"`
 	Prerelease bool   `json:"prerelease"`
+	Rejected   bool   `json:"rejected,omitempty"`
 }
 
 // UpdateState is a snapshot of the update status, safe to read after State().
@@ -82,6 +85,13 @@ type UpdateState struct {
 	InProgress bool
 	LastError  string // why the most recent install attempt failed; "" after a success or before any attempt
 	Available  []ReleaseInfo
+	// Rollback reports that this boot came up on an older generation because the
+	// one the device switched to never reached a good boot, and names the release
+	// it refused. Held as the one value the detection produces rather than
+	// flattened into three fields, so there is a single place to keep in step;
+	// the wire format flattens it once, in ha.go. Refused releases are left out
+	// of Latest and InstallTarget until a newer one ships — see rollback.go.
+	Rollback Rollback
 }
 
 // UpdateChecker polls the release source for the recent releases and holds the
@@ -98,14 +108,16 @@ type UpdateChecker struct {
 	installed    string
 	releases     []Release // recent releases, newest-first, drafts already dropped
 	haveReleases bool
-	installing   bool   // an update is currently being applied
-	lastError    string // failure reason of the most recent install attempt (see FinishInstall)
+	installing   bool            // an update is currently being applied
+	lastError    string          // failure reason of the most recent install attempt (see FinishInstall)
+	rollback     Rollback        // whether this boot is an automatic rollback, and from which release
+	rejected     map[string]bool // every release this device has refused, normalised; see rollback.go
 
 	observer func()
 }
 
 func NewUpdateChecker() *UpdateChecker {
-	return &UpdateChecker{
+	u := &UpdateChecker{
 		installed:   installedVersion(),
 		repo:        envOr("UPDATE_REPO", defaultUpdateRepo),
 		apiBase:     strings.TrimRight(envOr("UPDATE_API_BASE", defaultUpdateAPIBase), "/"),
@@ -113,6 +125,50 @@ func NewUpdateChecker() *UpdateChecker {
 		installable: os.Getenv("UPDATE_INSTALLABLE") == "1",
 		client:      &http.Client{Timeout: 15 * time.Second},
 	}
+	u.RefreshRollback()
+	logRollback(u.State().Rollback)
+	return u
+}
+
+// RefreshRollback re-derives whether this boot is an automatic rollback and
+// reconciles the record of refused releases with it. Called at startup and again
+// after a successful switch, which is what moves the system profile and so
+// retires the symlink evidence a rollback is read from.
+//
+// Two things reconcile, in this order:
+//
+//   - a rollback detected now is added, because the symlinks will stop saying so
+//     after the next update and the refusal has to outlive that;
+//   - the running version is removed, because the device is demonstrably able to
+//     boot it. That is the way back for a release refused by mistake — the
+//     version picker still offers a rejected release, so a user who freed space
+//     on a full ESP can install it, and succeeding clears the record.
+func (u *UpdateChecker) RefreshRollback() {
+	r := detectRollback()
+
+	u.mu.Lock()
+	installed := u.installed
+	u.mu.Unlock()
+
+	rejected := map[string]bool{}
+	for _, v := range rejectedReleases() {
+		rejected[v] = true
+	}
+	if r.Happened && r.Version != "" {
+		rejected[normalizeVersion(r.Version)] = true
+	}
+	delete(rejected, normalizeVersion(installed))
+
+	versions := make([]string, 0, len(rejected))
+	for v := range rejected {
+		versions = append(versions, v)
+	}
+	writeRejectedReleases(versions)
+
+	u.mu.Lock()
+	u.rollback = r
+	u.rejected = rejected
+	u.mu.Unlock()
 }
 
 // Installable reports whether this image can apply updates in place (a
@@ -231,14 +287,24 @@ func sameTags(a, b []Release) bool {
 	return true
 }
 
-// latestStableLocked returns the newest non-prerelease release. Caller holds mu.
+// latestStableLocked returns the newest non-prerelease release the device has
+// not already refused. Caller holds mu. Skipping refused releases here rather
+// than at every call site is what makes "skips it until a newer one ships" fall
+// out for free: a newer release is not on the record, so it is returned
+// normally, and the refused ones stay behind it however many there are.
 func (u *UpdateChecker) latestStableLocked() (Release, bool) {
 	for _, r := range u.releases {
-		if !r.Prerelease {
+		if !r.Prerelease && !u.rejectedLocked(r) {
 			return r, true
 		}
 	}
 	return Release{}, false
+}
+
+// rejectedLocked reports whether r is a release this device has refused. Caller
+// holds mu.
+func (u *UpdateChecker) rejectedLocked(r Release) bool {
+	return u.rejected[normalizeVersion(r.TagName)]
 }
 
 // installedIsPrereleaseLocked reports whether the running version matches a
@@ -263,7 +329,13 @@ func (u *UpdateChecker) State() UpdateState {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
-	st := UpdateState{Installed: u.installed, Latest: u.installed, InProgress: u.installing, LastError: u.lastError}
+	st := UpdateState{
+		Installed:  u.installed,
+		Latest:     u.installed,
+		InProgress: u.installing,
+		LastError:  u.lastError,
+		Rollback:   u.rollback,
+	}
 	if !u.haveReleases {
 		return st
 	}
@@ -295,6 +367,7 @@ func (u *UpdateChecker) availableLocked() []ReleaseInfo {
 			Tag:        strings.TrimSpace(r.TagName),
 			Name:       name,
 			Prerelease: r.Prerelease,
+			Rejected:   u.rejectedLocked(r),
 		})
 	}
 	return out
@@ -382,11 +455,15 @@ func readUpdateRefusal() string {
 
 // RefreshInstalled re-reads the baked-in version file. Called after a successful
 // switch that didn't restart the daemon, so "installed" reflects the new system.
+// A switch also moves the system profile, which is what a rejection is derived
+// from, so the rollback is re-derived in the same breath — otherwise a device
+// that updated past a rejected release would keep reporting it.
 func (u *UpdateChecker) RefreshInstalled() {
 	v := installedVersion()
 	u.mu.Lock()
 	u.installed = v
 	u.mu.Unlock()
+	u.RefreshRollback()
 }
 
 // normalizeVersion strips a leading "v" from a release tag ("v1.5.0" → "1.5.0")

@@ -14,7 +14,8 @@ import (
 // the bootable generations, and the symlink itself points at the current one.
 // All live under /nix, which is world-readable, so the unprivileged daemon can
 // enumerate them (rolling back needs root — see bootGeneration / dashboard-assistant-rollback@).
-const systemProfile = "/nix/var/nix/profiles/system"
+// A var, not a const, so rollback_test.go can point it at a fake profile tree.
+var systemProfile = "/nix/var/nix/profiles/system"
 
 // Generation is one bootable NixOS system generation.
 type Generation struct {

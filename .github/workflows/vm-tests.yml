@@ -1,14 +1,17 @@
 # NixOS VM tests on every push/PR. GitHub's Linux runners have KVM enabled, so
 # the QEMU-based tests run at native speed. first-boot is a full boot of the core
 # config with assertions on the things that have actually broken in the field
-# (ordering cycles, tmpfiles, seed provisioning).
+# (ordering cycles, tmpfiles, seed provisioning). good-boot boots a real
+# systemd-boot five times to prove automatic rollback actually fires, so it is
+# the slowest job here and the only one that needs nested reboots.
 #
 # The other entries are cheap eval-time checks for wiring no VM test can reach:
 # first-boot disables greetd, so the Chromium command line is invisible to it,
 # and the screenshot path is split across a Nix writer and a Go reader.
-# one-nixpkgs is the only job that reads the Pi configs. Every name in the
-# matrix must exist in flake.nix's checks.<system>, and every check there must
-# appear here or it never runs on a PR.
+# one-nixpkgs and rollback-is-armed are the jobs that read the Pi configs, which
+# no VM test ever evaluates. Every name in the matrix must exist in flake.nix's
+# checks.<system>, and every check there must appear here or it never runs on a
+# PR.
 name: vm-tests
 
 on:
@@ -22,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        check: [first-boot, kiosk-flash-flags, screenshot-path-agreement, one-nixpkgs, release-has-no-unattended-access]
+        check: [first-boot, good-boot, kiosk-flash-flags, screenshot-path-agreement, one-nixpkgs, rollback-is-armed, release-has-no-unattended-access]
     steps:
       - uses: actions/checkout@v7
       - uses: cachix/install-nix-action@v31

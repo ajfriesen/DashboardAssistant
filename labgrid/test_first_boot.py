@@ -58,13 +58,21 @@ def umount_fat(shell):
 
 
 # --------------------------------------------------------------------------- #
-# Boot chain — only observable on the serial console
+# Boot chain
 #
-# These four are about the *Pi's* boot chain and GPU specifically — the GPU
-# firmware chainloading U-Boot, U-Boot's EFI bootmanager, the firmware-merged
-# device tree, and VideoCore's render node. Everything below this section holds
-# on any board and runs on the QEMU x86_64 target too; these carry a `board`
-# marker and skip themselves there. See labgrid/capability.py.
+# These are about the *Pi's* boot chain and GPU specifically — the GPU firmware
+# chainloading U-Boot, U-Boot's EFI bootmanager, what systemd-boot does with a
+# boot counter once it is running in there, the firmware-merged device tree, and
+# VideoCore's render node. Everything below this section holds on any board and
+# runs on the QEMU x86_64 target too; these carry a `board` marker and skip
+# themselves there. See labgrid/capability.py.
+#
+# The first two are only observable on the serial console. The boot-assessment
+# pair below them is asked of the running system, and lives here rather than in
+# a file of its own for a reason worth keeping: boot counting applies to a
+# *freshly installed* generation, and the last test in this file reboots the
+# board. A separate file sorts after this one, so its assertions would land on
+# the second boot — which is not a counted boot and never was.
 # --------------------------------------------------------------------------- #
 
 
@@ -92,6 +100,135 @@ def test_uboot_handed_off_to_systemd_boot(console_log):
     and the board never reaches Linux.
     """
     assert "efi_mgr" in console_log, "U-Boot did not boot a bootflow via efi_mgr"
+
+
+#: Where systemd-boot records which boot entry carries this boot's counter. The
+#: GUID is systemd's loader interface vendor GUID, fixed by
+#: https://systemd.io/BOOT_LOADER_INTERFACE/ — not a per-device value.
+BOOT_COUNT_PATH_VAR = (
+    "/sys/firmware/efi/efivars/"
+    "LoaderBootCountPath-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f"
+)
+
+
+def boot_entries(shell):
+    """The boot entry filenames on the ESP, and nothing else from it.
+
+    The counter lives in the *name*: `+3` is three attempts left, `+0-3` is
+    three spent and the entry marked bad, and no suffix at all means the entry
+    was blessed. So the names are the whole state of Automatic Boot Assessment,
+    which is why this reads them rather than `bootctl list` — the suffix is the
+    one thing bootctl's output does not show.
+    """
+    # -1 rather than a bare `ls`: the shell here is a serial console, so `ls`
+    # columnises to fit it and a pair of entry names can share a line. One name
+    # per line is what makes the caller's per-name checks mean what they say.
+    return [name for name in shell.run_check("ls -1 /boot/loader/entries") if name]
+
+
+@pytest.mark.board("rpi4", "rpi5")
+def test_the_loader_counted_and_blessed_this_generation(shell):
+    """Boot counting has to work through U-Boot's UEFI, not just be configured.
+
+    This is the assertion the Pi boards exist to settle. systemd-boot counts
+    boots by setting LoaderBootCountPath, a *volatile* EFI variable, at runtime —
+    and here the loader is installed with `--no-variables` at the removable
+    fallback path, because U-Boot cannot create a Boot#### entry
+    ("as of U-Boot v2020.10 UEFI variables cannot be set at runtime"). Whether
+    that also costs it the volatile variable is not answerable in a VM, and it
+    is why automatic rollback stayed switched off for so long. See
+    modules/hardware/rpi-disk-image.nix.
+
+    Read off the entry names rather than off this boot, so the answer does not
+    depend on *which* boot this is — the image ships its entry with a counter
+    (`rollback-is-armed` in flake.nix guarantees that), and only
+    systemd-bless-boot ever takes one off again:
+
+        no counter, variable set      blessed on this boot
+        no counter, no variable       blessed on an earlier boot; a later boot
+                                      of a blessed generation is uncounted, and
+                                      correctly sets no variable
+        a counter still there         the loader is counting and nothing is
+                                      blessing — the device is spending
+                                      attempts it will not get back
+        no entries at all             the question was not asked
+
+    The last two are the failures that used to be silent: nothing logs, no unit
+    fails, and the board looks identical to one that is being assessed right up
+    to the update that needed the safety net.
+    """
+    entries = boot_entries(shell)
+    assert entries, (
+        "no boot entries on the ESP at all. Either /boot is not the EFI system "
+        "partition or `bootctl install` never ran, and either way nothing below "
+        "this would have been measuring anything."
+    )
+
+    counting = [name for name in entries if "+" in name]
+    assert not counting, (
+        f"boot entries still carry a counter: {counting}. systemd-boot is "
+        "counting this generation's attempts and nothing is clearing them, so "
+        "after three boots it will be marked bad and abandoned for an older "
+        "generation on a board where nothing is wrong. Check "
+        "dashboard-assistant-good-boot.service and systemd-bless-boot.service "
+        "(modules/core/good-boot.nix)."
+    )
+
+    # On the counted boot — a freshly flashed board, which is what `just hw-test`
+    # produces — the variable and the blessing are both observable, so say so
+    # while they are there. On any later boot there is deliberately nothing to
+    # see, and the blessed entry above already carries the proof.
+    # `test -e` exits 0 when the variable is there, i.e. when this boot is a
+    # counted one.
+    _, _, status = shell.run(f"test -e {BOOT_COUNT_PATH_VAR}")
+    if status == 0:
+        shell.run_check("systemctl is-active --quiet systemd-bless-boot.service")
+
+
+@pytest.mark.board("rpi4", "rpi5")
+def test_the_good_boot_gate_never_failed(shell):
+    """The gate must not have failed on a board that is answering this command.
+
+    A board running these tests is reachable over its network, which is the
+    entire definition of a **good boot** here (CONTEXT.md). So a failed gate is
+    the gate being wrong about a device that is fine — and that is the expensive
+    direction of wrong: it spends a freshly installed release's three attempts
+    and rolls back an update that worked.
+
+    Asked as `systemctl show -p`, the way test_growpart_succeeded asks, and not
+    as `systemctl cat` or `status`: those page. On the serial console stdout is
+    always a tty, so the pager always opens, and `less` then sits waiting for a
+    keypress that never comes — the shell never gets back to a prompt and every
+    later command in the run times out. One `systemctl cat` here cost 22
+    failures and 15 errors in a bench run, none of them about this device.
+
+    LoadState rather than ActiveState, because what has to be guarded is the
+    unit *existing*: a Result of "success" is also what a renamed or deleted
+    unit reports, so checking the outcome alone would pass forever after someone
+    quietly dropped the gate.
+
+    Result rather than `is-active`. On an uncounted boot nothing pulls in
+    boot-complete.target, so the gate never runs — and a oneshot that never ran
+    reports Result=success, which is the honest answer. Only a real failure
+    ("exit-code", "timeout") is ever a verdict.
+    """
+    gate = "dashboard-assistant-good-boot.service"
+
+    load = value(shell, f"systemctl show {gate} -p LoadState --value")
+    assert load == "loaded", (
+        f"dashboard-assistant-good-boot.service is {load!r}, not loaded — the "
+        "good-boot gate is not on this device, so nothing is deciding whether a "
+        "new generation reached a good boot and boot counting will mark every "
+        "generation bad. See modules/core/good-boot.nix."
+    )
+
+    result = value(shell, f"systemctl show {gate} -p Result --value")
+    assert result == "success", (
+        f"dashboard-assistant-good-boot.service reports Result={result!r} on a "
+        "board that answered this over its network, so the gate is stricter than "
+        "a good boot is. Left alone it would spend a new release's three attempts "
+        "and roll back a working update: journalctl -u dashboard-assistant-good-boot."
+    )
 
 
 @pytest.mark.board("rpi4", "rpi5")

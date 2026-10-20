@@ -30,12 +30,34 @@ Because every version is retained as a generation, you can always go back.
   from any machine on your network — useful if a configuration change
   misbehaves but the system still boots. The touchscreen itself is read-only,
   so nobody at the panel can roll the device back.
-- **Automatic rollback (in progress).** Booting into the previous generation
-  *automatically* after a failed boot relies on boot-counting support, which
-  comes from **systemd-boot**. Every target boots through it now — on the
-  Raspberry Pi, U-Boot stays in the chain only to provide the UEFI environment
-  it runs in — so the mechanism is finally available; switching it on is
-  tracked separately. Until then recovery is manual.
+- **Automatic rollback.** A new generation's boot entry is written with a
+  counter: **systemd-boot** decrements it on every attempt, and an entry whose
+  counter reaches zero is marked bad and skipped in favour of the previous
+  generation. The counter is cleared — the boot *blessed* — only once the
+  device is reachable on the network, which is what this OS means by a **good
+  boot**; a blank screen or an unreachable Home Assistant does not count,
+  because neither is the update's fault and rolling back for them would loop.
+  Three attempts, then the device is back on the release it came from. Every
+  release a device has turned down is written to its state directory and skipped
+  until a newer one ships — written down rather than derived, because the
+  evidence a rollback leaves behind (the system profile still pointing at the
+  abandoned generation) disappears at the next update, and a device that turned
+  down two releases would otherwise alternate between them. A rejected release
+  stays in the version picker, and installing one successfully takes it off the
+  list.
+
+  This is systemd's [Automatic Boot
+  Assessment](https://systemd.io/AUTOMATIC_BOOT_ASSESSMENT/), and it is the
+  reason every target boots through systemd-boot — on the Raspberry Pi, U-Boot
+  stays in the chain only to provide the UEFI environment it runs in. Both
+  bootloader installs pass `--no-variables` and rely on the removable fallback
+  path, so whether a loader that may not touch NVRAM can still count boots is
+  asserted rather than assumed: in a VM for x86 (`tests/good-boot.nix`) and on
+  the hardware bench for the Pi.
+
+  A freshly flashed device has a single generation and nothing to fall back to.
+  If it never reaches a good boot it keeps trying that one, and the fix is to
+  reflash: automatic rollback protects updates, not flashing.
 
 ## Storage & flash wear
 

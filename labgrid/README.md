@@ -259,6 +259,29 @@ in the transcript before touching the regex.
 
 `just hw-console` shows you the real prompt if it ever changes again.
 
+### Never run a command that pages
+
+Same failure shape as the prompt escapes above, and it costs a whole run rather
+than one test. On the console stdout is always a tty, so anything that pipes
+itself through a pager — `systemctl cat`, `systemctl status`, `journalctl`
+without `--no-pager`, `git log` — opens `less`, which then sits waiting for a
+keypress that never arrives. The shell never returns to a prompt, so *every*
+command after it times out: one `systemctl cat` in a boot-chain assertion once
+produced 22 failures and 15 errors, none of which were about the device.
+
+It reads as a board that died mid-run. The tell is in the pexpect buffer, which
+carries the pager's own status line:
+
+```
+buffer (last 100 chars): b'...Type=oneshot\r\n\x1b[7mlines 1-13/13 (END)\x1b[27m'
+```
+
+So: `--no-pager` on `journalctl`, and for unit state ask
+`systemctl show <unit> -p <Property> --value` through the `value()` helper —
+`show` does not page, and `value()` strips the console's stray CRs.
+`test_growpart_succeeded` and `test_the_good_boot_gate_never_failed` are the
+shape to copy.
+
 ## Reaching the board over the network, and its browser
 
 The serial console is the channel that survives everything, and it is the one
@@ -337,7 +360,7 @@ symptom is a protocol error that reads like a broken page.
 | `preflight.py` | `just hw-preflight` — is the bench healthy, reported as a bench fault (exit 2) rather than a test failure |
 | `test_capability.py`, `test_preflight.py`, `test_bench.py`, `test_bench_ha.py`, `test_device.py`, `test_kiosk.py`, `test_candidate.py` | unit tests for the modules above; need no bench, no board and no network |
 | `conftest.py` | option defaults and the `shell` / `console_log` / `image` / `plug` / `bench_home_assistant` / `paired` / `gate_key` / `candidate_closure` fixtures |
-| `test_first_boot.py` | the assertions about a device on its own |
+| `test_first_boot.py` | the assertions about a device on its own, the Pi's boot chain included — up to and including whether automatic rollback is armed, which has to be asked on the freshly flashed boot and so cannot live in a file that sorts later |
 | `test_journey.py` | the assertions about a device and a real Home Assistant: discovery, pairing, a service call, a dashboard on the screen |
 | `test_wifi.py` | the assertions about a device on the Bench Wi-Fi with its wire down |
 | `test_update.py` | the update phase: today its precondition only, that the candidate's closure is in the cache |
