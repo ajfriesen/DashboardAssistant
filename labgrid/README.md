@@ -259,6 +259,29 @@ in the transcript before touching the regex.
 
 `just hw-console` shows you the real prompt if it ever changes again.
 
+### Never run a command that pages
+
+Same failure shape as the prompt escapes above, and it costs a whole run rather
+than one test. On the console stdout is always a tty, so anything that pipes
+itself through a pager — `systemctl cat`, `systemctl status`, `journalctl`
+without `--no-pager`, `git log` — opens `less`, which then sits waiting for a
+keypress that never arrives. The shell never returns to a prompt, so *every*
+command after it times out: one `systemctl cat` in a boot-chain assertion once
+produced 22 failures and 15 errors, none of which were about the device.
+
+It reads as a board that died mid-run. The tell is in the pexpect buffer, which
+carries the pager's own status line:
+
+```
+buffer (last 100 chars): b'...Type=oneshot\r\n\x1b[7mlines 1-13/13 (END)\x1b[27m'
+```
+
+So: `--no-pager` on `journalctl`, and for unit state ask
+`systemctl show <unit> -p <Property> --value` through the `value()` helper —
+`show` does not page, and `value()` strips the console's stray CRs.
+`test_growpart_succeeded` and `test_the_good_boot_gate_never_failed` are the
+shape to copy.
+
 ## Reaching the board over the network, and its browser
 
 The serial console is the channel that survives everything, and it is the one

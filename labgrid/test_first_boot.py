@@ -195,26 +195,39 @@ def test_the_good_boot_gate_never_failed(shell):
     direction of wrong: it spends a freshly installed release's three attempts
     and rolls back an update that worked.
 
-    Not `is-active`, deliberately. On an uncounted boot nothing pulls in
-    boot-complete.target, so the gate never runs and "inactive" is the correct
-    answer; only "failed" is ever a verdict. `systemctl cat` is what keeps this
-    from going quiet if the unit is renamed or dropped — `is-failed` alone would
-    pass happily for a unit that does not exist.
-    """
-    shell.run_check("systemctl cat dashboard-assistant-good-boot.service")
+    Asked as `systemctl show -p`, the way test_growpart_succeeded asks, and not
+    as `systemctl cat` or `status`: those page. On the serial console stdout is
+    always a tty, so the pager always opens, and `less` then sits waiting for a
+    keypress that never comes — the shell never gets back to a prompt and every
+    later command in the run times out. One `systemctl cat` here cost 22
+    failures and 15 errors in a bench run, none of them about this device.
 
-    # `is-failed` exits 0 when the unit *is* failed, so a non-zero status here is
-    # the passing case. Named for the status rather than the verdict, because a
-    # variable called `failed` holding 0-means-failed is how this assertion gets
-    # silently inverted by the next person to touch it.
-    _, _, status = shell.run(
-        "systemctl is-failed --quiet dashboard-assistant-good-boot.service"
+    LoadState rather than ActiveState, because what has to be guarded is the
+    unit *existing*: a Result of "success" is also what a renamed or deleted
+    unit reports, so checking the outcome alone would pass forever after someone
+    quietly dropped the gate.
+
+    Result rather than `is-active`. On an uncounted boot nothing pulls in
+    boot-complete.target, so the gate never runs — and a oneshot that never ran
+    reports Result=success, which is the honest answer. Only a real failure
+    ("exit-code", "timeout") is ever a verdict.
+    """
+    gate = "dashboard-assistant-good-boot.service"
+
+    load = value(shell, f"systemctl show {gate} -p LoadState --value")
+    assert load == "loaded", (
+        f"dashboard-assistant-good-boot.service is {load!r}, not loaded — the "
+        "good-boot gate is not on this device, so nothing is deciding whether a "
+        "new generation reached a good boot and boot counting will mark every "
+        "generation bad. See modules/core/good-boot.nix."
     )
-    assert status != 0, (
-        "dashboard-assistant-good-boot.service failed on a board that answered "
-        "this over its network, so the gate is stricter than a good boot is. "
-        "Left alone it would spend a new release's three attempts and roll back "
-        "a working update: journalctl -u dashboard-assistant-good-boot."
+
+    result = value(shell, f"systemctl show {gate} -p Result --value")
+    assert result == "success", (
+        f"dashboard-assistant-good-boot.service reports Result={result!r} on a "
+        "board that answered this over its network, so the gate is stricter than "
+        "a good boot is. Left alone it would spend a new release's three attempts "
+        "and roll back a working update: journalctl -u dashboard-assistant-good-boot."
     )
 
 
