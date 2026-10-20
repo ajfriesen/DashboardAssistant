@@ -337,11 +337,10 @@ symptom is a protocol error that reads like a broken page.
 | `preflight.py` | `just hw-preflight` — is the bench healthy, reported as a bench fault (exit 2) rather than a test failure |
 | `test_capability.py`, `test_preflight.py`, `test_bench.py`, `test_bench_ha.py`, `test_device.py`, `test_kiosk.py`, `test_candidate.py` | unit tests for the modules above; need no bench, no board and no network |
 | `conftest.py` | option defaults and the `shell` / `console_log` / `image` / `plug` / `bench_home_assistant` / `paired` / `gate_key` / `candidate_closure` fixtures |
-| `test_first_boot.py` | the assertions about a device on its own |
+| `test_first_boot.py` | the assertions about a device on its own, the Pi's boot chain included — up to and including whether automatic rollback is armed, which has to be asked on the freshly flashed boot and so cannot live in a file that sorts later |
 | `test_journey.py` | the assertions about a device and a real Home Assistant: discovery, pairing, a service call, a dashboard on the screen |
 | `test_wifi.py` | the assertions about a device on the Bench Wi-Fi with its wire down |
 | `test_update.py` | the update phase: today its precondition only, that the candidate's closure is in the cache |
-| `test_good_boot.py` | whether automatic rollback is armed on the board: the loader counted this boot and the boot was blessed. Pi-marked, because the x86 side of the same question is answered by `nix build .#checks.x86_64-linux.good-boot` |
 | `with-place.sh` | acquire if nobody holds it, run, release what it acquired — the prelude every `hw-*` recipe shares |
 | `flash.py` | `just hw-flash` — transition to `flashed` and stop |
 | `logs/` | serial transcripts, cleared at the start of each run (gitignored) |

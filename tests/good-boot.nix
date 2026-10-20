@@ -31,7 +31,10 @@
 #
 # The Raspberry Pi half of the question is not answerable in a VM at all: there
 # the UEFI environment is U-Boot's, whose variable support is its own story.
-# That one is asserted on the bench (labgrid/test_good_boot.py).
+# That one is asserted on the bench, in labgrid/test_first_boot.py's boot-chain
+# section — in that file rather than one of its own because boot counting only
+# applies to a freshly installed generation, and a separate file sorts after it,
+# onto a second boot that is deliberately not counted.
 {
   pkgs,
   ...
