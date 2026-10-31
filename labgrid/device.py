@@ -178,6 +178,20 @@ def wifi_seed(ha_url, ssid, psk):
     bench's network is not open, and a device that silently never associates
     produces a failure that blames the radio.
     """
+    return f"ha_url: {json.dumps(ha_url)}\n" + wifi_only_seed(ssid, psk)
+
+
+def wifi_only_seed(ssid, psk):
+    """A seed file that carries the Bench Wi-Fi and nothing else.
+
+    What the bench seeds to get a board onto the network, because the journey
+    being asserted has Home Assistant hand over the dashboard URL itself
+    (POST /api/ha/kiosk_login). Seeding `ha_url` here would mark the device
+    provisioned before anything paired it and skip that path entirely.
+
+    Escaping and the empty-passphrase refusal live here, so wifi_seed above
+    cannot drift away from them.
+    """
     if not psk:
         raise ValueError(
             "no Wi-Fi passphrase — refusing to write a seed file without one. "
@@ -185,8 +199,25 @@ def wifi_seed(ha_url, ssid, psk):
             "never associate and the failure would read as a broken radio"
         )
     return (
-        f"ha_url: {json.dumps(ha_url)}\n"
         "wifi:\n"
         f"  ssid: {json.dumps(ssid)}\n"
         f"  psk: {json.dumps(psk)}\n"
     )
+
+
+def joined_network(run):
+    """The network the board's radio has joined, or None.
+
+    `run` takes a command and returns its output as one string, so the caller
+    owns how it reaches the board and this stays testable off hardware.
+
+    Asks the board which interface its radio is before asking `iw` about it: a
+    Pi 5 calls it wld0 and an x86 box something derived from its PCI path, and
+    a hardcoded name would turn a harness bug into "the Wi-Fi never came up".
+    No radio at all reads as None, not an error — a wired-only board has joined
+    no network, which is a fact rather than a fault.
+    """
+    radio = wireless_interface(run(ADDR_COMMAND))
+    if not radio:
+        return None
+    return associated_ssid(run(association_command(radio)))

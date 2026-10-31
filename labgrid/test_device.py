@@ -179,6 +179,54 @@ def test_a_passphrase_with_quotes_and_backslashes_round_trips():
     assert seeded["wifi"]["psk"] == nasty
 
 
+def test_a_wifi_only_seed_carries_no_home_assistant_url():
+    """What the bench seeds now: credentials and nothing else.
+
+    The journey the suite asserts has Home Assistant hand the device its
+    dashboard URL over /api/ha/kiosk_login, so seeding one here would mark the
+    device provisioned before pairing and skip the path being tested.
+    """
+    import yaml
+
+    seeded = yaml.safe_load(device.wifi_only_seed("BenchNet", "p@ss"))
+    assert seeded == {"wifi": {"ssid": "BenchNet", "psk": "p@ss"}}, seeded
+
+
+def test_a_wifi_only_seed_escapes_the_passphrase_the_same_way():
+    """The escaping is the shared half, so it must not regress in one of them."""
+    import yaml
+
+    nasty = 'a"b\\c d'
+    assert yaml.safe_load(device.wifi_only_seed("n", nasty))["wifi"]["psk"] == nasty
+
+
+def test_a_wifi_only_seed_without_a_passphrase_is_refused():
+    """Same refusal as wifi_seed — an open network is not what the bench has."""
+    with pytest.raises(ValueError):
+        device.wifi_only_seed("BenchNet", "")
+
+
+def test_the_joined_network_is_read_by_asking_the_radio_it_found():
+    """joined_network composes three steps; the interesting failure is the
+    middle one asking about the wrong interface."""
+    asked = []
+
+    def run(command):
+        asked.append(command)
+        if command == device.ADDR_COMMAND:
+            return "end0  DOWN\nwld0  UP  192.168.178.91/24\n"
+        return "wld0  Connected to aa:bb\n\tSSID: BenchNet\n"
+
+    assert device.joined_network(run) == "BenchNet"
+    assert any("wld0" in command for command in asked[1:]), asked
+
+
+def test_a_board_whose_radio_is_absent_has_joined_no_network():
+    """No radio at all reads as None rather than raising, so a wired-only board
+    reports "not on Wi-Fi" instead of taking the run down."""
+    assert device.joined_network(lambda _: "end0  UP  192.168.178.90/24\n") is None
+
+
 def test_building_a_seed_without_a_passphrase_is_refused():
     """An open network is not what the bench has, and silently writing a seed
     with no `psk` would produce a device that never associates and a failure
