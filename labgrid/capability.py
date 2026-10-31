@@ -35,6 +35,8 @@ Both return a *reason* to skip, or None to run. Keeping them pure keeps them
 testable with no bench attached: see test_capability.py.
 """
 
+import collections
+
 #: capability -> (labgrid resource class name, what it is there for).
 #:
 #: The class names are labgrid's, and they are the network-facing ones on
@@ -219,6 +221,28 @@ def gate_key_choice(path, private_exists, public_exists):
 #: site's, and the passphrase is not this repository's to hold.
 WIFI_SSID_ENV = "BENCH_WIFI_SSID"
 WIFI_PSK_ENV = "BENCH_WIFI_PSK"
+
+
+class BenchWifi(collections.namedtuple("BenchWifi", "ssid psk")):
+    """The Bench Wi-Fi's SSID and passphrase.
+
+    The passphrase is redacted in `repr`, and that is not decoration: pytest
+    prints every fixture argument's repr in a failure report, so a plain
+    namedtuple put the passphrase into the output of any test that errored
+    anywhere downstream of the fixture — ten copies in one run, in a log that
+    gets pasted into issues. The value itself is untouched, so this stays the
+    pair it was.
+
+    What this cannot fix is the console: the passphrase crosses the board's
+    serial line on its way onto the card, because that is the only channel to a
+    board with no network yet, and so it lands in `labgrid/logs/`. See
+    conftest's `on_the_wifi`.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self):
+        return f"BenchWifi(ssid={self.ssid!r}, psk=<redacted>)"
 
 
 def missing_wifi_credentials(ssid, psk):

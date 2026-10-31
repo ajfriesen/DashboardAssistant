@@ -26,7 +26,6 @@ the place has to be acquired before any of this works. `just hw-test` does that
 for you.
 """
 
-import collections
 import os
 import shlex
 import shutil
@@ -624,11 +623,6 @@ def paired(bench_home_assistant, shell, device_ip):
             print(f"could not remove config entry {entry_id}: {err!r}")
 
 
-#: Never logged, never put in an assertion message: `psk` is a passphrase
-#: and the console transcript is not private.
-BenchWifi = collections.namedtuple("BenchWifi", "ssid psk")
-
-
 @pytest.fixture(scope="session")
 def bench_wifi():
     """The Bench Wi-Fi's SSID and passphrase, from the secret declarations.
@@ -644,7 +638,7 @@ def bench_wifi():
     unmet = capability.missing_wifi_credentials(ssid, psk)
     if unmet:
         pytest.skip(unmet)
-    return BenchWifi(ssid=ssid, psk=psk)
+    return capability.BenchWifi(ssid=ssid, psk=psk)
 
 
 @pytest.fixture

@@ -123,28 +123,59 @@ def wireless_interface(output):
     return None
 
 
+#: NetworkManager's "fully activated" device state, the only one that means the
+#: radio has finished joining. Lower numbers are stages on the way there
+#: (`prepare`, `config`, `need-auth`), and NetworkManager already names the
+#: profile it is *attempting* during those, so the name alone does not mean
+#: joined.
+NM_STATE_ACTIVATED = "100"
+
+
 def association_command(interface):
-    """Ask `iw` what network the radio has joined.
+    """Ask NetworkManager what network the radio has joined.
 
     A different question from whether an address was configured — a board can
     hold a stale lease on a network it has left.
 
+    NetworkManager rather than `iw`, for two reasons. It is the authority: the
+    daemon joins by creating a profile and asking NetworkManager to activate it
+    (daemon/network.go), so there is no second opinion to prefer. And `iw` is
+    not in the image — it wrote "iw: command not found" on every poll, the SSID
+    read as None, and the wait spent its whole timeout blaming the access point
+    for a harness bug, which is the exact failure this docstring used to warn
+    about for a different reason. Adding `iw` would not do: the release gate
+    flashes release images, and a diagnostic tool does not belong in one.
+
+    The connection's *name* is the SSID because the daemon names the profile it
+    creates after the network it is for (`"id": ssid`, daemon/network.go:248).
+
     The interface is a parameter rather than a constant, because hardcoding
     `wlan0` would make this silently useless on any board that names its radio
-    something else: `iw` would write "No such device", the SSID would read as
-    None, and the wait would spend its whole timeout before blaming the access
-    point for a harness bug.
+    something else — a Pi 5 says `wld0`.
     """
-    return f"iw dev {interface} link"
+    return f"nmcli -t -f GENERAL.CONNECTION,GENERAL.STATE device show {interface}"
 
 
 def associated_ssid(output):
-    """The network the radio has joined, or None if it has joined none."""
+    """The network the radio has joined, or None if it has joined none.
+
+    Reads `nmcli -t` key:value lines (see association_command). Anything that
+    is not a fully activated device reads as None — including nmcli's own error
+    output for a device it has no row for, which is a harness bug and not an
+    SSID, and must not be mistaken for one.
+    """
+    fields = {}
     for line in output.splitlines():
-        label, separator, value = line.strip().partition("SSID:")
-        if separator and not label:
-            return value.strip() or None
-    return None
+        key, separator, value = line.partition(":")
+        if separator:
+            fields[key.strip()] = value
+    state = fields.get("GENERAL.STATE", "")
+    if not state.strip().startswith(NM_STATE_ACTIVATED):
+        return None
+    # `nmcli -t` backslash-escapes its own separator inside a value, so an SSID
+    # containing a colon arrives as `Bench\:5G`.
+    name = fields.get("GENERAL.CONNECTION", "").replace("\\:", ":").strip()
+    return name or None
 
 
 #: Where the daemon persists the kiosk's zoom level (daemon/config.go).

@@ -114,24 +114,63 @@ def test_the_interface_names_cover_what_these_boards_actually_use():
 # Whether the radio actually joined the Bench Wi-Fi
 # --------------------------------------------------------------------------- #
 
-IW_ASSOCIATED = """\
-Connected to aa:bb:cc:dd:ee:ff (on wlan0)
-\tSSID: BenchNet
-\tfreq: 5180
-\tsignal: -47 dBm
+#: `nmcli -t` on a joined radio. The connection's name is the SSID because the
+#: daemon names the profile it creates after the network (daemon/network.go:248).
+NMCLI_ASSOCIATED = """\
+GENERAL.CONNECTION:BenchNet
+GENERAL.STATE:100 (connected)
 """
 
 
 def test_an_associated_radio_reports_the_network_it_joined():
-    assert device.associated_ssid(IW_ASSOCIATED) == "BenchNet"
+    assert device.associated_ssid(NMCLI_ASSOCIATED) == "BenchNet"
 
 
 def test_an_unassociated_radio_reports_nothing():
-    assert device.associated_ssid("Not connected.\n") is None
+    """Disconnected is a state NetworkManager reports, not an absence."""
+    assert (
+        device.associated_ssid(
+            "GENERAL.CONNECTION:\nGENERAL.STATE:30 (disconnected)\n"
+        )
+        is None
+    )
+
+
+def test_a_radio_still_connecting_has_joined_nothing_yet():
+    """The state gate earns its place here: NetworkManager names the profile it
+    is *attempting* before the association completes, so without it a board
+    mid-handshake would read as joined and the wait would end too early."""
+    assert (
+        device.associated_ssid(
+            "GENERAL.CONNECTION:BenchNet\nGENERAL.STATE:70 (config)\n"
+        )
+        is None
+    )
 
 
 def test_an_ssid_with_spaces_survives_intact():
-    assert device.associated_ssid("\tSSID: Bench Net 5G\n") == "Bench Net 5G"
+    assert (
+        device.associated_ssid(
+            "GENERAL.CONNECTION:Bench Net 5G\nGENERAL.STATE:100 (connected)\n"
+        )
+        == "Bench Net 5G"
+    )
+
+
+def test_an_ssid_containing_a_colon_is_unescaped():
+    """`nmcli -t` escapes its field separator, so a colon in an SSID arrives
+    backslashed and would otherwise be truncated or read back wrong."""
+    assert (
+        device.associated_ssid(
+            "GENERAL.CONNECTION:Bench\\:5G\nGENERAL.STATE:100 (connected)\n"
+        )
+        == "Bench:5G"
+    )
+
+
+def test_a_radio_nmcli_knows_nothing_about_reports_nothing():
+    """An error on stderr, or a device nmcli has no row for, is not an SSID."""
+    assert device.associated_ssid("Error: Device 'wld9' not found.\n") is None
 
 
 # --------------------------------------------------------------------------- #
@@ -215,7 +254,7 @@ def test_the_joined_network_is_read_by_asking_the_radio_it_found():
         asked.append(command)
         if command == device.ADDR_COMMAND:
             return "end0  DOWN\nwld0  UP  192.168.178.91/24\n"
-        return "wld0  Connected to aa:bb\n\tSSID: BenchNet\n"
+        return "GENERAL.CONNECTION:BenchNet\nGENERAL.STATE:100 (connected)\n"
 
     assert device.joined_network(run) == "BenchNet"
     assert any("wld0" in command for command in asked[1:]), asked
@@ -248,4 +287,6 @@ def test_the_association_command_asks_about_the_radio_it_was_given():
     its radio something else: `iw` writes "No such device", the SSID reads as
     None, and the wait burns its whole timeout before blaming the access point
     for a harness bug."""
-    assert device.association_command("wlp1s0") == "iw dev wlp1s0 link"
+    assert device.association_command("wlp1s0") == (
+        "nmcli -t -f GENERAL.CONNECTION,GENERAL.STATE device show wlp1s0"
+    )

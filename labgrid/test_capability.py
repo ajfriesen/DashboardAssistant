@@ -218,3 +218,16 @@ def test_the_wifi_reason_never_contains_the_passphrase():
     """This reason lands in a transcript that is not private."""
     reason = capability.missing_wifi_credentials("BenchNet", "")
     assert "hunter2" not in (reason or "")
+
+
+def test_the_credentials_never_carry_the_passphrase_in_their_repr():
+    """pytest prints every fixture argument's repr in a failure report, so a
+    plain namedtuple puts the Bench Wi-Fi passphrase into the output of any
+    test that happens to error — which is how it first got there.
+    """
+    wifi = capability.BenchWifi(ssid="BenchNet", psk="hunter2")
+    assert "hunter2" not in repr(wifi)
+    assert "BenchNet" in repr(wifi)
+    # Still usable as the pair it is: redacting the repr must not redact the value.
+    assert wifi.psk == "hunter2"
+    assert tuple(wifi) == ("BenchNet", "hunter2")
