@@ -118,6 +118,15 @@ in
         enable = true;
         userServices = true;
       };
+      # Resolve .local names too, not only publish our own. Discovery runs
+      # Home-Assistant-to-device (ADR 0002), so nothing here browses for Home
+      # Assistant — but when the integration pairs without pushing a dashboard
+      # URL the kiosk falls back to homeassistant.local, and Avahi on its own
+      # does not touch nsswitch. Without these the device advertises itself
+      # perfectly and still cannot resolve the name it falls back to, which
+      # looks like "the dashboard just never loads".
+      nssmdns4 = true;
+      nssmdns6 = true;
       extraServiceFiles.dashboard-assistant = ''
         <?xml version="1.0" standalone='no'?>
         <!DOCTYPE service-group SYSTEM "avahi-service.dtd">

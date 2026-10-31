@@ -303,7 +303,7 @@ hw-preflight *ARGS:
 #
 # Keep the Wi-Fi passphrase out of shell history and out of this repo — pass it in
 # the environment, ideally via secretspec:
-#   DA_WIFI_PSK=... just hw-seed --ha-url http://192.168.178.73:8123 --wifi-ssid MyNet
+#   DA_WIFI_PSK=... just hw-seed --ha-url $BENCH_HA_URL --wifi-ssid MyNet
 [doc('Provision the bench board from a real seed file')]
 hw-seed *ARGS:
   ./labgrid/with-place.sh \

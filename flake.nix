@@ -274,6 +274,37 @@
               touch "$out"
             '';
 
+        # The kiosk's fallback dashboard URL and the daemon's default page must
+        # name the same Home Assistant. They are written in two languages and
+        # were already out of step once — Nix said `http://homeassistant:8123/`
+        # while Go said `http://homeassistant.local:8123`, so a device the
+        # integration paired without pushing a URL loaded a name that only
+        # resolves where the LAN hands out a search domain. Eval-time rather
+        # than a VM assertion because first-boot.nix disables greetd, so no VM
+        # test ever sees the launcher's fallback branch.
+        one-home-assistant-fallback =
+          pkgs.runCommand "one-home-assistant-fallback"
+            {
+              launcher =
+                self.nixosConfigurations.dashboard-assistant-x86-disk.config.dashboardAssistant.kiosk.launcher;
+              pagesSrc = ./daemon/pages.go;
+              expected = "homeassistant.local:8123";
+            }
+            ''
+              set -euo pipefail
+              fail=0
+              grep -q "$expected" "$launcher" || {
+                echo "FAIL: the kiosk launcher's fallback dashboard URL is not $expected — see defaultUrl in modules/core/kiosk.nix." >&2
+                fail=1
+              }
+              grep -q "$expected" "$pagesSrc" || {
+                echo "FAIL: defaultPages in daemon/pages.go no longer points at $expected, so the page list and the kiosk fallback disagree." >&2
+                fail=1
+              }
+              [ "$fail" = 0 ] || exit 1
+              touch "$out"
+            '';
+
         # Every board on one nixpkgs (docs/adr/0008). The VM tests above only
         # ever evaluate x86, so a board quietly put back on another channel —
         # a second nixpkgs input wired into mkRpi4System, say — would pass every

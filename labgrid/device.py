@@ -18,7 +18,8 @@ Interface = collections.namedtuple("Interface", "name state addresses")
 
 #: How this project's boards name their wire and their radio. The Pi 5 uses the
 #: predictable `end0`, an x86 mini-PC `enp2s0`, and an older image `eth0`;
-#: radios are `wlan0` or `wlp1s0`. Matched by prefix rather than listed exactly,
+#: radios are `wld0` (Pi 5), `wlan0` or `wlp1s0`. Matched by prefix rather than
+#: listed exactly,
 #: because the suffix encodes a PCI path that differs per board.
 WIRED_PREFIXES = ("en", "eth")
 WIRELESS_PREFIXES = ("wl",)

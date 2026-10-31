@@ -17,7 +17,12 @@ let
   vboard = pkgs.callPackage ../../packages/vboard/vboard.nix { };
   # Fallback dashboard target if runtime.env is somehow missing. Normal config
   # lives in /var/lib/dashboard-assistant/runtime.env (HA_URL=...), written by the daemon.
-  defaultUrl = "http://homeassistant:8123/";
+  # The .local name, matching defaultPages in daemon/pages.go — the bare
+  # `homeassistant` this used to be resolves only where the LAN hands out a
+  # search domain, while .local is answered by mDNS (services.avahi.nssmdns4,
+  # modules/core/ha-api.nix). The flake's one-home-assistant-fallback check
+  # keeps the two from drifting apart again.
+  defaultUrl = "http://homeassistant.local:8123/";
   daemonBase = "http://localhost:8080";
   # Long-lived HA token staged by the daemon (config import / seed).
   tokenPath = "/var/lib/dashboard-assistant/token";

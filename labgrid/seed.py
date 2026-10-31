@@ -6,7 +6,7 @@ dashboard-assistant.yaml onto the running board, triggers the first-boot importe
 and reports back what the device did with it, so the result is visible in Home
 Assistant rather than only in an assertion.
 
-    just hw-seed --ha-url http://192.168.178.73:8123
+    just hw-seed --ha-url $BENCH_HA_URL
     DA_WIFI_PSK=... just hw-seed --ha-url http://... --wifi-ssid MyNet
 
 The Wi-Fi passphrase comes from $DA_WIFI_PSK by default so it stays out of shell

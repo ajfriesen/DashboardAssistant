@@ -101,10 +101,11 @@ def test_a_wire_that_is_down_is_still_the_wire():
 
 
 def test_the_interface_names_cover_what_these_boards_actually_use():
-    """A Pi 5 calls its wire end0, an x86 box calls it enp2s0 or eth0."""
+    """A Pi 5 calls its wire end0 and its radio wld0; an x86 box says enp2s0 or
+    eth0, and wlan0 or wlp1s0."""
     for name in ("end0", "enp2s0", "eth0"):
         assert device.is_wired(name), name
-    for name in ("wlan0", "wlp1s0"):
+    for name in ("wld0", "wlan0", "wlp1s0"):
         assert device.is_wireless(name), name
     assert not device.is_wired("wlan0")
 
