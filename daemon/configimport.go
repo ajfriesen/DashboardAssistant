@@ -15,9 +15,9 @@ type importConfig struct {
 	// Named for the glossary (CONTEXT.md): a bare `token` next to `api_token`
 	// does not say which of the two credentials it is.
 	KioskToken string `yaml:"kiosk_token"`
-	// LegacyToken is the key kiosk_token replaced, kept so seed files already
-	// sitting on cards in the field keep provisioning a login. Read only when
-	// kiosk_token is absent; see kioskToken.
+	// LegacyToken is the key kiosk_token replaced, kept so seed files already in
+	// the field keep seeding a kiosk token. Read only when kiosk_token is absent;
+	// see kioskToken.
 	LegacyToken string `yaml:"token"`
 	WiFi        *struct {
 		SSID string `yaml:"ssid"`
@@ -36,8 +36,9 @@ type importConfig struct {
 // kioskToken returns the kiosk token the bundle carries, preferring the current
 // key over the deprecated one so a file mid-rename (carrying both) applies what
 // its author last edited rather than whichever key the parser looked at first.
-// Using the old key is logged, since the file is the only place to fix it and
-// the journal is a headless device's one feedback channel.
+// Using the old key is logged. A release image runs no sshd, so that line only
+// reaches a dev image or the bench — the docs tell users to rename the key
+// rather than promising the device will tell them.
 func (c importConfig) kioskToken() string {
 	if c.KioskToken != "" {
 		return c.KioskToken

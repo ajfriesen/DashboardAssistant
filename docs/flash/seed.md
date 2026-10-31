@@ -30,7 +30,7 @@ ha_url: "https://homeassistant.local:8123"
 
 # Optional kiosk token: the long-lived Home Assistant access token the kiosk
 # logs in with. You normally don't need this — the Dashboard Assistant
-# integration provisions a login for the device automatically. Only set it to
+# integration supplies a login for the device automatically. Only set it to
 # preset a kiosk token yourself.
 kiosk_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiIyZWRlNGE0ZTFjNmQ0ZDY3OTY4ODhmMTk5OGNhNWVjMSIsImlhdCI6MTc4NDcxODk3MywiZXhwIjoyMTAwMDc4OTczfQ.Rd92pdzdYkC8HI3buVO6m9EVVI71Ye-MP_1nwogfOgU"
 
@@ -56,7 +56,7 @@ pages:
 | Key           | Required | Description                                                      |
 | ------------- | -------- | ---------------------------------------------------------------- |
 | `ha_url`      | no       | Home Assistant base URL the dashboard loads on boot.             |
-| `kiosk_token` | no       | Kiosk token the dashboard logs in with; normally provisioned by the integration. |
+| `kiosk_token` | no       | Kiosk token the dashboard logs in with; normally supplied by the integration. |
 | `wifi.ssid`   | no       | Wi-Fi network name to join.                                      |
 | `wifi.psk`    | no       | Wi-Fi pre-shared key (password).                                 |
 | `api_token`   | no       | Device API token for the Home Assistant integration. Generated per device if omitted. |
@@ -69,8 +69,7 @@ key (everything else applies immediately) — editing the file on the boot
 partition always applies it, because that is read during boot anyway. And `pages`
 replaces the list wholesale rather than merging, though importing it does not
 move the display off the page it is showing. Finally, `kiosk_token` used to be
-called `token`: a file using the old name is still applied, and the device notes
-the rename in `journalctl -u dashboard-assistant-boot-import`. Rename the key
+called `token`: a file using the old name is still applied. Rename the key
 anyway — a bare `token` next to `api_token` does not say which credential it is.
 
 ## Apply the Seed File
@@ -127,8 +126,9 @@ file has changed, while a USB stick is applied each time you plug it in.
         if that matters where the device lives.
 
     If a device does not pick the file up, the usual cause is YAML indentation.
-    The device logs what it did, and any parse error, under
-    `journalctl -u dashboard-assistant-boot-import`.
+    The device cannot show you the parse error, so compare your file against the
+    example above: two spaces per level, and every nested key under `wifi`
+    indented below it.
 
 === "`USB stick`"
 

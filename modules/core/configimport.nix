@@ -16,8 +16,9 @@
 #   kiosk_token: "eyJhbGci..."    # long-lived HA access token (stored for injection)
 #   wifi: { ssid: "Net", psk: "secret" }
 #
-# `token` is still accepted for kiosk_token, deprecated: cards in the field
-# carry it, and the daemon logs the rename when it reads one (daemon/configimport.go).
+# `token` is still accepted for kiosk_token, deprecated: seed files already in
+# the field carry it, and the daemon logs the rename when it reads one
+# (daemon/configimport.go).
 {
   config,
   lib,
@@ -131,7 +132,7 @@ let
 
     # Kiosk token: the long-lived Home Assistant access token the dashboard logs
     # in with. You normally do NOT need this: the Dashboard Assistant
-    # integration provisions a login for the device by itself.
+    # integration supplies a login for the device by itself.
     #kiosk_token: "eyJhbGciOi..."
 
     # Device API token, the credential Home Assistant uses to talk to this

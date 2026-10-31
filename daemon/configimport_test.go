@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -29,7 +30,7 @@ func TestImportKioskToken(t *testing.T) {
 	if got := readKioskToken(t); got != "eyJhbGci.kiosk" {
 		t.Errorf("kiosk token = %q, want the seeded one", got)
 	}
-	if !contains(applied, "kiosk_token") {
+	if !slices.Contains(applied, "kiosk_token") {
 		t.Errorf("applied = %v, want it to report kiosk_token", applied)
 	}
 }
@@ -47,7 +48,7 @@ func TestImportLegacyTokenAlias(t *testing.T) {
 	if got := readKioskToken(t); got != "eyJhbGci.legacy" {
 		t.Errorf("kiosk token = %q, want the one from the deprecated key", got)
 	}
-	if !contains(applied, "kiosk_token") {
+	if !slices.Contains(applied, "kiosk_token") {
 		t.Errorf("applied = %v, want the deprecated key reported as kiosk_token", applied)
 	}
 }
@@ -64,13 +65,4 @@ func TestImportKioskTokenWinsOverLegacyAlias(t *testing.T) {
 	if got := readKioskToken(t); got != "new" {
 		t.Errorf("kiosk token = %q, want the kiosk_token value", got)
 	}
-}
-
-func contains(list []string, want string) bool {
-	for _, s := range list {
-		if s == want {
-			return true
-		}
-	}
-	return false
 }
