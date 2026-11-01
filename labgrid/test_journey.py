@@ -98,12 +98,11 @@ def test_the_debugging_port_is_not_exposed_on_the_network(device_ip):
 @pytest.mark.needs_display
 def test_the_gate_reaches_the_debugging_port_through_a_tunnel(device_ip, gate_key):
     """...and the tunnel is how the gate gets to it anyway."""
+    # Asks the browser, not the port: ssh accepts on the local end whether or
+    # not anything listens behind it, so port_is_open passed here even while
+    # the device's sshd was logging `connect_to 127.0.0.1 port 9222: failed`.
     with kiosk.tunnel(device_ip, gate_key) as port:
-        assert kiosk.port_is_open(port), (
-            f"the tunnel to {device_ip} is up but nothing answers on "
-            f"127.0.0.1:{port} — the kiosk browser is not listening on "
-            f"{kiosk.CDP_PORT} inside the device"
-        )
+        kiosk.wait_for_debugger(port)
 
 
 # --------------------------------------------------------------------------- #
@@ -230,18 +229,25 @@ def test_the_kiosk_shows_a_dashboard_and_not_a_login_page(paired, device_ip, gat
     Waits for *either* the dashboard or the login form rather than for the
     dashboard alone, so the interesting failure arrives as "a login form is on
     the screen" instead of as a bare timeout that says nothing about what was
-    there.
+    there. And looks again until RENDER_TIMEOUT: this runs a second after
+    pairing, when a login page is the kiosk's normal first frame — see
+    kiosk.settle.
     """
-    with kiosk.tunnel(device_ip, gate_key) as port:
+
+    def look():
         with kiosk.attached_page(port) as page:
             # Attached rather than visible: Home Assistant renders inside open
             # shadow roots, and Playwright's visibility check on a custom
             # element nested that deep is a worse oracle than its presence.
             page.locator(kiosk.EITHER_SELECTOR).first.wait_for(
-                state="attached", timeout=kiosk.RENDER_TIMEOUT * 1000
+                state="attached", timeout=15_000
             )
             reason = kiosk.page_verdict(
                 has_dashboard=page.locator(kiosk.DASHBOARD_SELECTOR).count() > 0,
                 has_login=page.locator(kiosk.LOGIN_SELECTOR).count() > 0,
             )
-            assert reason is None, f"{reason} (page at {page.url})"
+            return reason and f"{reason} (page at {page.url})"
+
+    with kiosk.tunnel(device_ip, gate_key) as port:
+        reason = kiosk.settle(look)
+    assert reason is None, reason

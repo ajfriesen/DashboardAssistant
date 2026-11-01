@@ -33,9 +33,12 @@ test_kiosk.py.
 """
 
 import contextlib
+import http.client
+import json
 import socket
 import subprocess
 import time
+import urllib.request
 
 #: The device's debugging port, as bound inside the device. modules/core/kiosk.nix
 #: passes `--remote-debugging-port=9222` and nothing else, which binds it to
@@ -172,6 +175,69 @@ def port_is_open(port, host="127.0.0.1", timeout=1):
         return probe.connect_ex((host, port)) == 0
 
 
+def is_debugger_version(body):
+    """Whether `body` is Chromium's /json/version — the one answer that means
+    the browser itself, not merely the tunnel's local end, is there."""
+    try:
+        return "webSocketDebuggerUrl" in json.loads(body)
+    except ValueError:
+        return False
+
+
+def debugger_answers(port, host="127.0.0.1", timeout=2):
+    """Whether Chromium answers /json/version on `port`. Through the tunnel a
+    missing browser shows up as a reset, not a refusal, so any error is a no."""
+    try:
+        with urllib.request.urlopen(
+            f"http://{host}:{port}/json/version", timeout=timeout
+        ) as response:
+            return is_debugger_version(response.read())
+    except (OSError, http.client.HTTPException):
+        return False
+
+
+def wait_for_debugger(port, timeout=30, interval=0.5, probe=debugger_answers):
+    """Block until the kiosk's browser answers through the tunnel.
+
+    ssh accepts on the local port as soon as it is up, so the tunnel being
+    ready says nothing about Chromium. Pairing relaunches the kiosk — once when
+    the login is staged and again when the device turns READY — and an attach
+    that lands between the two gets ECONNRESET rather than a page.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if probe(port):
+            return
+        time.sleep(interval)
+    raise TimeoutError(
+        f"nothing answered /json/version through 127.0.0.1:{port} within "
+        f"{timeout}s — the kiosk browser is not listening on {CDP_PORT} inside "
+        "the device"
+    )
+
+
+def settle(look, timeout=RENDER_TIMEOUT, interval=2, clock=time.monotonic, sleep=time.sleep):
+    """Look at the kiosk until it shows a dashboard, or until `timeout`.
+
+    `look` returns page_verdict's reason, None meaning a dashboard. Right after
+    pairing the kiosk relaunches twice and its first frame is HA's login page
+    until the token injector signs it in, so one look proves nothing: what
+    counts is what is still on the screen at the deadline. Anything `look`
+    raises — the browser going away mid-relaunch, a tab that was not the kiosk
+    still open — counts as one more look, and is the reason given if it is
+    the last.
+    """
+    deadline = clock() + timeout
+    while True:
+        try:
+            reason = look()
+        except Exception as err:  # noqa: BLE001 - every error here is a "not yet"
+            reason = f"{type(err).__name__}: {err}"
+        if reason is None or clock() >= deadline:
+            return reason
+        sleep(interval)
+
+
 @contextlib.contextmanager
 def tunnel(host, key, local_port=LOCAL_CDP_PORT, remote_port=CDP_PORT, timeout=30):
     """An ssh port-forward to the device's debugging port, for the block's life.
@@ -227,21 +293,36 @@ def tunnel(host, key, local_port=LOCAL_CDP_PORT, remote_port=CDP_PORT, timeout=3
 #: inspector against this browser.
 NOT_THE_KIOSK = ("about:blank", "chrome://", "devtools://")
 
+#: Below this in either dimension a page is not on the screen. Chromium's own
+#: omnibox popup pages are open in every kiosk browser; the URL policy blocks
+#: them, so they report as chrome-error://chromewebdata/ — the same URL the
+#: kiosk's own page gets when it fails to load — and only their size (0x0,
+#: 12x10 on the bench) tells them apart.
+OFFSCREEN_BELOW = 100
 
-def kiosk_page(pages):
+
+def kiosk_page(pages, size_of=lambda page: None):
     """The one page that is on the screen, out of what the browser reports.
 
     Raises rather than guessing when there is more than one left: the kiosk
     runs a single page, and asserting against the wrong one would produce a
-    verdict about something nobody is looking at.
+    verdict about something nobody is looking at. `size_of` gives a page's
+    viewport as (width, height), or None when it is not known.
     """
     if not pages:
         raise AssertionError(
             "the kiosk's browser has no page open at all — Chromium is "
             "running and inspectable, and showing nothing"
         )
+
+    def offscreen(page):
+        size = size_of(page)
+        return size is not None and min(size) < OFFSCREEN_BELOW
+
     candidates = [
-        page for page in pages if not page.url.startswith(NOT_THE_KIOSK)
+        page
+        for page in pages
+        if not page.url.startswith(NOT_THE_KIOSK) and not offscreen(page)
     ] or pages
     if len(candidates) > 1:
         raise AssertionError(
@@ -261,13 +342,15 @@ def attached_page(local_port=LOCAL_CDP_PORT, timeout=30):
     """
     from playwright.sync_api import sync_playwright
 
+    wait_for_debugger(local_port, timeout=timeout)
     with sync_playwright() as playwright:
         browser = playwright.chromium.connect_over_cdp(
             f"http://127.0.0.1:{local_port}", timeout=timeout * 1000
         )
         try:
             yield kiosk_page(
-                [page for context in browser.contexts for page in context.pages]
+                [page for context in browser.contexts for page in context.pages],
+                size_of=lambda page: page.evaluate("[innerWidth, innerHeight]"),
             )
         finally:
             # For a browser obtained with connect_over_cdp this *disconnects*
