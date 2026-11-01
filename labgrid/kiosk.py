@@ -78,6 +78,18 @@ SSH_OPTIONS = [
     # whole file is supposed to prevent.
     "-o",
     "ExitOnForwardFailure=yes",
+    # ...and do not let a shared connection make that guarantee moot. With
+    # `ControlMaster auto` and `ControlPersist` in a developer's ~/.ssh/config,
+    # the first ssh here opens a master that outlives the run and owns the
+    # forwarded local port. The next tunnel request then hits the
+    # ExitOnForwardFailure above and exits instantly — and because the bind
+    # failure is logged by the *master*, the client's stderr is empty, so the
+    # failure reads as "the tunnel died immediately:" with nothing after the
+    # colon. A gate must not depend on what is in somebody's ssh config.
+    "-o",
+    "ControlMaster=no",
+    "-o",
+    "ControlPath=none",
 ]
 
 

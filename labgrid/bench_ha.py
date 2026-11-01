@@ -113,13 +113,35 @@ CONFIRM_INPUT = {}
 FlowStep = collections.namedtuple("FlowStep", "action detail")
 
 
+#: The menu branch that enrolls a device without anyone typing anything. The
+#: integration also offers `manual`, which is where a human enters a host and
+#: port — the documented fallback for when discovery fails
+#: (docs/usage/integration.md). Taking that one would pass this gate while
+#: disproving the promise it exists to assert, so the branch is named here
+#: rather than chosen by position.
+TYPING_FREE_STEP = "pair"
+
+
+def menu_options(result):
+    """The step ids a menu result offers, in the order it offers them."""
+    for field in result.get("data_schema") or []:
+        if field.get("name") == "next_step_id":
+            return [option[0] for option in field.get("options") or []]
+    return []
+
+
 def next_flow_action(result):
     """What to do with a config-flow result.
 
     Raises on a result type this does not know. Home Assistant has grown step
-    types since this was written (`menu`, `progress`, `external`), and guessing
-    at one is the expensive kind of wrong: treating it as "keep going" hangs the
-    run, treating it as success passes a gate that paired nothing.
+    types since this was written (`progress`, `external`), and guessing at one
+    is the expensive kind of wrong: treating it as "keep going" hangs the run,
+    treating it as success passes a gate that paired nothing.
+
+    `menu` is known now — the integration serves one offering `pair` or
+    `manual` — but it is stepped down the named typing-free branch only. A menu
+    that does not offer it is refused the same way an unknown type is, because
+    "pick the first option" is exactly the guess this function exists to avoid.
     """
     kind = result.get("type")
     if kind == "form":
@@ -128,6 +150,16 @@ def next_flow_action(result):
         return FlowStep("done", (result.get("result") or {}).get("entry_id"))
     if kind == "abort":
         return FlowStep("aborted", result.get("reason") or "no reason given")
+    if kind == "menu":
+        offered = menu_options(result)
+        if TYPING_FREE_STEP not in offered:
+            raise ValueError(
+                f"the config flow offered a menu without a {TYPING_FREE_STEP!r} "
+                f"step — it offered {offered!r}. Enrollment is supposed to need "
+                "no typing, and picking another branch would pass this gate "
+                "while disproving that"
+            )
+        return FlowStep("menu", TYPING_FREE_STEP)
     raise ValueError(
         f"unknown config-flow result type {kind!r} — this gate does not know "
         "how to step it, and guessing would either hang the run or pass it "
@@ -393,8 +425,14 @@ class BenchHomeAssistant:
         forever is a real failure mode of a half-written integration, and a gate
         that hangs on it is worse than one that fails.
         """
+        user_input = None
         for _ in range(max_steps):
-            step = next_flow_action(self.step_flow(flow_id))
+            step = next_flow_action(self.step_flow(flow_id, user_input))
+            # A menu is answered by naming the next step, not by an empty
+            # confirmation, so the choice is carried into the following POST.
+            user_input = (
+                {"next_step_id": step.detail} if step.action == "menu" else None
+            )
             if step.action == "done":
                 return step.detail
             if step.action == "aborted":

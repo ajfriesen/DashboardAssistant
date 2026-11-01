@@ -154,3 +154,22 @@ def test_a_browser_showing_only_a_blank_page_still_gets_a_verdict():
     page never rendered" rather than erroring out in the fixture."""
     blank = FakePage("about:blank")
     assert kiosk.kiosk_page([blank]) is blank
+
+
+def test_ssh_never_multiplexes_over_a_shared_connection():
+    """The bench must not reuse whatever is in a developer's ~/.ssh/config.
+
+    `ControlMaster auto` plus `ControlPersist` there leaves a master alive after
+    the run that owns the forwarded local port. The next tunnel request then
+    hits ExitOnForwardFailure and dies instantly, and the bind error is logged
+    by the *master*, so the client's stderr is empty and the failure reads as
+    "the tunnel died immediately:" with nothing after the colon. It cost a full
+    hardware run to find. Worse, a shared master is the connection-reuse this
+    file's ExitOnForwardFailure comment exists to prevent.
+    """
+    argv = kiosk.ssh_argv("192.0.2.7", "/tmp/key", ["true"])
+    assert "ControlMaster=no" in argv
+    assert "ControlPath=none" in argv
+    # The tunnel is the one that actually breaks, so assert it carries them too.
+    assert "ControlMaster=no" in kiosk.tunnel_argv("192.0.2.7", "/tmp/key")
+    assert "ControlPath=none" in kiosk.tunnel_argv("192.0.2.7", "/tmp/key")

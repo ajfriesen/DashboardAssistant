@@ -330,3 +330,45 @@ def test_every_unanswering_entity_is_named_not_just_the_first():
         ["a.x", "b.y", "c.z"],
     )
     assert bad == ["a.x=unavailable", "c.z=unavailable"]
+
+
+MENU_RESULT = {
+    "type": "menu",
+    "flow_id": "01M6A6BGBH71Z1D391N3817YE2",
+    "handler": "dashboard_assistant",
+    "data_schema": [
+        {
+            "type": "select",
+            "options": [["pair", "pair"], ["manual", "manual"]],
+            "name": "next_step_id",
+            "required": False,
+        }
+    ],
+}
+
+
+def test_a_menu_is_stepped_down_the_typing_free_branch():
+    """The integration offers `pair` or `manual`. `manual` is where a human
+    types a host and port (docs/usage/integration.md calls it the fallback for
+    when discovery fails), so taking it would pass the gate while disproving
+    the very promise the gate exists to assert.
+    """
+    step = ha.next_flow_action(MENU_RESULT)
+    assert step.action == "menu"
+    assert step.detail == "pair"
+
+
+def test_a_menu_without_the_typing_free_branch_is_refused():
+    """Still no guessing: if `pair` is not on offer the gate says what was,
+    rather than picking whatever is first and calling it enrollment."""
+    renamed = {**MENU_RESULT, "data_schema": [
+        {"name": "next_step_id", "options": [["manual", "manual"]]}
+    ]}
+    with pytest.raises(ValueError, match="manual"):
+        ha.next_flow_action(renamed)
+
+
+def test_an_unknown_step_type_is_still_refused():
+    """`progress` and `external` remain unknown, and must stay that way."""
+    with pytest.raises(ValueError):
+        ha.next_flow_action({"type": "progress"})
