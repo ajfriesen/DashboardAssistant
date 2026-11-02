@@ -65,6 +65,10 @@ let
   # created by the daemon's RuntimeDirectory= (modules/core/daemon.nix).
   screenshotFifo = "/var/lib/dashboard-assistant/screenshot.fifo";
   screenshotFile = "/run/dashboard-assistant/screenshot.jpg";
+
+  # Screen saver: the daemon writes "start <name>" / "stop" to this FIFO (idle
+  # timeout, or the HA "Screen saver" switch). See screensaverAgent below.
+  screensaverFifo = "/var/lib/dashboard-assistant/screensaver.fifo";
   reportDisplayState = pkgs.writeShellScript "ha-report-display-state" ''
     ${pkgs.coreutils}/bin/printf '%s\n' "$*" \
       | ${pkgs.coreutils}/bin/timeout 1 ${pkgs.coreutils}/bin/tee ${displayStateFifo} >/dev/null 2>&1 || true
@@ -340,6 +344,14 @@ let
   # correctness depends on.
   tokenInjector = pkgs.writeShellScript "ha-token-inject" ''
     set -u
+
+    # Same leak as the other agents: Sway does not reap its children, so every
+    # kiosk restart left the previous injector running. On a device whose token
+    # Home Assistant rejects, each one reloads the login page on its own
+    # schedule. Kill any earlier instance so there is one.
+    for pid in $(${pkgs.procps}/bin/pgrep -f ha-token-inject); do
+      [ "$pid" = "$$" ] || kill "$pid" 2>/dev/null || true
+    done
 
     # The HA origin (scheme://host[:port]) from the daemon's runtime state, so we
     # only ever inject into the HA page and not the daemon's setup/waiting pages
@@ -652,6 +664,93 @@ let
           ${pkgs.sway}/bin/swaymsg "[app_id=\"${oskAppId}\"] kill" >/dev/null 2>&1 || true
           ${swayRotate} "$arg" >/dev/null 2>&1 || true
           ${waybarStart} "$arg" >/dev/null 2>&1 &
+          ;;
+      esac
+    done
+  '';
+
+  # Show or hide a screen saver over the live page via Chromium's loopback CDP
+  # port. The saver's HTML comes from the daemon (/screensaver/<name>) and is laid
+  # over the page as a srcdoc iframe in a fixed full-screen div: an overlay, not a
+  # navigation, so the dashboard underneath stays loaded and waking is instant.
+  # srcdoc, not src, because the page fetches nothing: an HA page embedding
+  # localhost would trip Chromium's local-network-access checks.
+  #
+  # The div swallows the waking tap (so it doesn't press whatever is underneath)
+  # and fades itself out; the same tap reaches the daemon over libinput, which
+  # sends "stop" to bring the bar back. Removal is idempotent for that reason.
+  #
+  # "ensure" re-shows the saver on a page that lost it — any reload or navigation
+  # wipes the overlay, and on the HA login screen the token injector reloads every
+  # few seconds. A tap marks the document dismissed, so "ensure" never undoes a
+  # wake in the gap before the daemon's "stop" arrives; a fresh document has no
+  # mark, so a reload does get the saver back.
+  #
+  # A fixed overlay does not cover the page's own scrollbar, so the root's
+  # overflow is set to hidden while the saver is up and the page's previous value
+  # restored when it goes (kept in a data attribute, so a re-start doesn't lose it).
+  #
+  # Chromium also lists its own UI (chrome://omnibox-popup…) as "page" targets,
+  # so those are skipped: an overlay injected there would never be seen.
+  cdpScreensaver = pkgs.writeShellScript "ha-kiosk-screensaver" ''
+    set -u
+    ws=$(${lib.getExe pkgs.curl} -s --max-time 2 http://localhost:9222/json 2>/dev/null \
+      | ${lib.getExe pkgs.jq} -r '[.[] | select(.type=="page" and (.url | test("^(chrome|devtools)") | not))][0].webSocketDebuggerUrl // empty' 2>/dev/null)
+    if [ -z "$ws" ]; then exit 1; fi
+    hide="(function(){window.__daDismissed=1;var o=document.getElementById('da-screensaver');if(o&&!o.dataset.closing){o.dataset.closing=1;o.style.opacity='0';setTimeout(function(){o.remove();var r=document.documentElement;if('daOverflow' in r.dataset){r.style.overflow=r.dataset.daOverflow;delete r.dataset.daOverflow}},400)}})()"
+    case "''${1:-}" in
+      start | ensure)
+        html=$(${lib.getExe pkgs.curl} -sf --max-time 2 "${daemonBase}/screensaver/''${2:-}") || exit 1
+        htmljson=$(printf '%s' "$html" | ${lib.getExe pkgs.jq} -Rs .)
+        show="function(h){window.__daDismissed=0;var o=document.getElementById('da-screensaver');if(o)o.remove();o=document.createElement('div');o.id='da-screensaver';o.style.cssText='position:fixed;inset:0;z-index:2147483647;background:#000;opacity:0;transition:opacity .4s';var f=document.createElement('iframe');f.srcdoc=h;f.style.cssText='border:0;width:100%;height:100%;display:block;pointer-events:none';o.appendChild(f);var hide=function(e){e.preventDefault();e.stopPropagation();$hide};['pointerdown','touchstart','mousedown','click'].forEach(function(t){o.addEventListener(t,hide,{capture:true,passive:false})});var r=document.documentElement;if(!('daOverflow' in r.dataset))r.dataset.daOverflow=r.style.overflow;r.style.overflow='hidden';r.appendChild(o);requestAnimationFrame(function(){o.style.opacity='1'})}"
+        if [ "$1" = start ]; then
+          expr="($show)($htmljson)"
+        else
+          expr="if(!document.getElementById('da-screensaver')&&!window.__daDismissed)($show)($htmljson)"
+        fi
+        ;;
+      stop) expr="$hide" ;;
+      *) exit 0 ;;
+    esac
+    ${lib.getExe pkgs.jq} -cn --arg e "$expr" \
+      '{id:1,method:"Runtime.evaluate",params:{expression:$e}}' \
+      | ${pkgs.coreutils}/bin/timeout 5 ${pkgs.websocat}/bin/websocat "$ws" >/dev/null 2>&1 || true
+  '';
+
+  # Screen saver agent: the daemon writes "start <name>" / "stop" to the screen
+  # saver FIFO and this in-session loop applies it, hiding the bottom bar while a
+  # saver is up (the overlay lives inside Chromium and can't cover the bar) and
+  # bringing it back after. While a saver is up, a background loop re-shows it
+  # every 2s if a reload took it away (see "ensure" above), so it holds over the
+  # HA login screen too. A session start means no overlay, so it reports that to
+  # the daemon first. De-orphaned and held open read-write exactly like the other
+  # agents (the pgrep also catches a previous session's ensure loop).
+  screensaverAgent = pkgs.writeShellScript "ha-screensaver-agent" ''
+    for pid in $(${pkgs.procps}/bin/pgrep -f ha-screensaver-agent); do
+      [ "$pid" = "$$" ] || kill "$pid" 2>/dev/null || true
+    done
+    ${reportDisplayState} saver off
+    pidfile="''${XDG_RUNTIME_DIR:-/tmp}/ha-kiosk-waybar.pid"
+    keep=""
+    exec 3<> ${screensaverFifo}
+    while IFS=' ' read -r cmd arg <&3; do
+      [ -n "$keep" ] && kill "$keep" 2>/dev/null
+      keep=""
+      case "$cmd" in
+        start)
+          ${cdpScreensaver} start "$arg" >/dev/null 2>&1 || true
+          old=$(${pkgs.coreutils}/bin/cat "$pidfile" 2>/dev/null)
+          [ -n "$old" ] && kill "$old" 2>/dev/null || true
+          (
+            while ${pkgs.coreutils}/bin/sleep 2; do
+              ${cdpScreensaver} ensure "$arg" >/dev/null 2>&1 || true
+            done
+          ) &
+          keep=$!
+          ;;
+        stop)
+          ${cdpScreensaver} stop >/dev/null 2>&1 || true
+          ${waybarStart} >/dev/null 2>&1 &
           ;;
       esac
     done
@@ -1141,6 +1240,9 @@ let
     exec ${rotationAgent}
     exec ${rotationRestore}
 
+    # Shows/hides the screen saver (idle timeout or the HA "Screen saver" switch).
+    exec ${screensaverAgent}
+
     # Re-powers the display on the next input event after the Off button blanks it.
     exec ${wakeAgent}
 
@@ -1354,6 +1456,9 @@ in
       # /run/dashboard-assistant/screenshot.jpg (tmpfs), created by the daemon's
       # RuntimeDirectory=, because an HA automation sets how often it is taken.
       "p ${screenshotFifo} 0660 dashboard-assistant dashboard-assistant - -"
+      # Screen saver FIFO: the daemon writes "start <name>"/"stop"; the in-session
+      # agent overlays the saver on the page over Chromium's CDP port.
+      "p /var/lib/dashboard-assistant/screensaver.fifo 0660 dashboard-assistant dashboard-assistant - -"
     ];
 
     hardware.graphics.enable = true;
