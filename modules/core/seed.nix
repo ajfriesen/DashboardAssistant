@@ -30,7 +30,7 @@ in
     # would quietly undo any later change — the card's seed file is applied
     # only when its content hash changes (modules/core/configimport.nix), so
     # from the second boot onward a sysinit-time truncation back to the baked
-    # URL would win over the card, the admin page and Home Assistant alike.
+    # URL would win over the card and Home Assistant alike.
     # The flip side is accepted: rebuilding with a *new* baked URL does not
     # update an already-initialised device — reconfigure those via the seed
     # file or the API, which is the documented path anyway.

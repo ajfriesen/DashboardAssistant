@@ -7,8 +7,8 @@
 // seed file waits on the splash, which points at the seed-file documentation.
 //
 // Nothing on the device screen reconfigures the device: the kiosk is a wall panel
-// that guests touch. Recovery (rollback, factory reset) lives on a separate LAN
-// listener instead — see admin.go.
+// that guests touch. Recovery (rollback, factory reset) runs from Home Assistant,
+// behind the device token — see handleRollback and handleReset in ha.go.
 package main
 
 import (
@@ -115,7 +115,7 @@ func main() {
 
 	// Home Assistant API: an authenticated LAN listener the first-party HACS
 	// integration polls and subscribes to (SSE). Runs on its own port, separate
-	// from the loopback :8080 admin surface below.
+	// from the loopback :8080 surface below.
 	go serveHAAPI(hub)
 	// The same API over TLS, on its own port. This is what a current integration
 	// connects to; the cleartext listener above stays one release for older ones.
@@ -160,7 +160,7 @@ func main() {
 
 	// Waiting splash — loopback only (the kiosk browser is local). Provisioning is
 	// seed-only (see /api/import), and there is deliberately no on-screen panel
-	// that can re-point or recover the kiosk; that lives on the admin listener.
+	// that can re-point or recover the kiosk; that runs from Home Assistant.
 	mux.Handle("/waiting", loopbackOnly(http.HandlerFunc(srv.handleWaitingPage)))
 	mux.Handle("/waiting/qr.png", loopbackOnly(http.HandlerFunc(srv.handleWaitingQR)))
 	// Sponsor splash — reached from the ❤ button on the kiosk bar. Static page
@@ -175,13 +175,9 @@ func main() {
 	// Page navigation (waybar Prev/Next buttons). The page list itself is managed
 	// through the HA integration (the pages in its options), not the web UI.
 	mux.Handle("/api/nav", loopbackOnly(http.HandlerFunc(srv.handleNav)))
-	// Read-only device info, shown behind the sponsor page's info button and
-	// re-served verbatim on the admin listener. Carries no secret.
+	// Read-only device info, shown behind the sponsor page's info button.
+	// Carries no secret.
 	mux.Handle("/api/info", loopbackOnly(http.HandlerFunc(srv.handleInfo)))
-
-	// Recovery over the LAN: the screen has no way to roll back or reset, so this
-	// is the only one. Unauthenticated by design — see admin.go.
-	go serveAdmin(srv)
 
 	mux.HandleFunc("/", srv.handleRoot)
 
@@ -198,7 +194,7 @@ func (s *server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	}
 	// Point a human who hits the daemon directly at the waiting splash. Fresh
 	// devices are provisioned from a seed file, not an on-screen wizard, so there
-	// is nothing interactive to send them to. Recovery is on the admin listener.
+	// is nothing interactive to send them to.
 	http.Redirect(w, r, "/waiting", http.StatusFound)
 }
 

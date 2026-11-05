@@ -59,7 +59,7 @@ func pairAutoConfirm() bool {
 // device has never been paired. A kiosk that has not been added to Home Assistant
 // yet pairs with no on-device step, whether it was set up by hand or seeded from a
 // USB stick. Once Home Assistant has used the token the device locks, and the way
-// back is a factory reset from the admin page.
+// back is a factory reset from Home Assistant, or reflashing.
 func (p *Pairing) open() bool {
 	return p.auto || !Paired()
 }

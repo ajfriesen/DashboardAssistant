@@ -9,8 +9,9 @@ package main
 //
 // The API runs on its own listener (DASHBOARD_ASSISTANT_API_ADDR, default :8081,
 // opened on the LAN by modules/core/ha-api.nix). Every request carries a bearer
-// token; the primary :8080 surface stays loopback-only. See daemon/admin.go for
-// the sibling pattern — that one is deliberately unauthenticated.
+// token; the primary :8080 surface stays loopback-only. Recovery (rollback,
+// factory reset) runs here too, behind the same token: nothing unauthenticated
+// on the network can change the device (docs/adr/0014).
 
 import (
 	"context"
@@ -439,6 +440,7 @@ func (h *HAHub) routes() http.Handler {
 	mux.HandleFunc("/api/ha/sendspin", h.auth(h.handleSendspin))
 	mux.HandleFunc("/api/ha/power", h.auth(h.handlePower))
 	mux.HandleFunc("/api/ha/reset", h.auth(h.handleReset))
+	mux.HandleFunc("/api/ha/rollback", h.auth(h.handleRollback))
 	mux.HandleFunc("/api/ha/update", h.auth(h.handleUpdate))
 	mux.HandleFunc("/api/ha/install_version", h.auth(h.handleInstallVersion))
 	mux.HandleFunc("/api/ha/check_updates", h.auth(h.handleCheckUpdates))
@@ -448,7 +450,7 @@ func (h *HAHub) routes() http.Handler {
 }
 
 // serveHAAPI runs the LAN HA API listener. Mirrors serveDiag: its own address,
-// its own mux, separate from the loopback :8080 admin surface.
+// its own mux, separate from the loopback :8080 surface.
 func serveHAAPI(hub *HAHub) {
 	addr := envOr("DASHBOARD_ASSISTANT_API_ADDR", ":8081")
 	log.Printf("ha api listening on %s (node %s)", addr, hub.nodeID)
@@ -541,7 +543,7 @@ func (h *HAHub) handlePair(w http.ResponseWriter, r *http.Request) {
 	tok, ok := h.pair.Claim()
 	if !ok {
 		writeJSON(w, http.StatusForbidden, map[string]string{
-			"error": "already paired with Home Assistant; factory-reset the device from its admin page to pair again",
+			"error": "already paired with Home Assistant; factory-reset it from Home Assistant, or reflash it, to pair again",
 		})
 		return
 	}
@@ -949,6 +951,33 @@ func (h *HAHub) handleReset(w http.ResponseWriter, r *http.Request) {
 			log.Printf("ha: reboot after reset: %v", err)
 		}
 	}()
+}
+
+// handleRollback boots an earlier generation: it switches the system profile and
+// reboots, via the privileged dashboard-assistant-rollback@ unit. POST
+// {"generation": N}. The generation is validated here and again inside the root
+// unit script (modules/core/daemon.nix) — keep both.
+func (h *HAHub) handleRollback(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Generation int `json:"generation"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if !generationExists(req.Generation) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "no such generation"})
+		return
+	}
+	if req.Generation == currentGeneration() {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "already the current generation"})
+		return
+	}
+	if err := bootGeneration(req.Generation); err != nil {
+		writeErr(w, err)
+		return
+	}
+	log.Printf("ha: rollback — booting generation %d", req.Generation)
+	writeJSON(w, http.StatusOK, map[string]any{"status": "rebooting", "generation": req.Generation})
 }
 
 // handleUpdate applies the latest release (reuses the update state machine). It

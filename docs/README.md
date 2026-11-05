@@ -10,10 +10,10 @@ For working on Dashboard Assistant OS. Everything in this directory is for contr
 | Path | What |
 |---|---|
 | `flake.nix` | Boards, images, checks and the version release-please bumps |
-| `modules/core/` | The OS: kiosk, daemon service, seeding, updates, flash wear, admin page |
+| `modules/core/` | The OS: kiosk, daemon service, seeding, updates, flash wear |
 | `modules/hardware/` | Per-board config and the shared disk layout (`disk-layout.nix`) |
 | `modules/dev.nix` | What makes a dev image: root SSH and a root password |
-| `daemon/` | Go daemon: the Home Assistant API, pairing, admin page, updates, screenshots |
+| `daemon/` | Go daemon: the Home Assistant API, pairing, recovery, updates, screenshots |
 | `tests/` | NixOS VM tests |
 | `labgrid/` | The bench: flash and test a real Raspberry Pi 5 ([README](../labgrid/README.md)) |
 | `ops/` | R2 image bucket, release channels, secrets ([README](../ops/README.md)) |

@@ -522,8 +522,7 @@ def test_screenshot_lands_on_tmpfs(shell):
     the directory exists; only hardware can assert the handoff happens.
 
     Poked through the FIFO directly rather than over the HTTP API because the
-    HA screenshot endpoint is authenticated and the admin listener has no
-    screenshot route — this is the same poke the daemon makes.
+    HA screenshot endpoint is authenticated — this is the same poke the daemon makes.
     """
     shell.run("rm -f /run/dashboard-assistant/screenshot.jpg")
     shell.run_check(
