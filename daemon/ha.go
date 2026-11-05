@@ -128,7 +128,7 @@ type stateSnapshot struct {
 	Page struct {
 		Current string   `json:"current"`
 		Options []string `json:"options"`
-		Slots   []string `json:"slots"`
+		List    []Page   `json:"list"`
 	} `json:"page"`
 	TouchSeconds int `json:"touch_seconds"`
 	Memory       struct {
@@ -331,11 +331,7 @@ func (h *HAHub) snapshot() stateSnapshot {
 
 	s.Page.Current = h.pages.CurrentLabel()
 	s.Page.Options = h.pages.Labels()
-	slots := make([]string, pageSlots)
-	for i := range slots {
-		slots[i] = h.pages.Slot(i)
-	}
-	s.Page.Slots = slots
+	s.Page.List = h.pages.List()
 
 	s.TouchSeconds = h.act.SecondsSince()
 
@@ -436,7 +432,7 @@ func (h *HAHub) routes() http.Handler {
 	mux.HandleFunc("/api/ha/events", h.auth(h.handleEvents))
 	mux.HandleFunc("/api/ha/display", h.auth(h.handleDisplay))
 	mux.HandleFunc("/api/ha/page", h.auth(h.handlePage))
-	mux.HandleFunc("/api/ha/page_slot", h.auth(h.handlePageSlot))
+	mux.HandleFunc("/api/ha/pages", h.auth(h.handlePages))
 	mux.HandleFunc("/api/ha/zoom", h.auth(h.handleZoom))
 	mux.HandleFunc("/api/ha/theme", h.auth(h.handleTheme))
 	mux.HandleFunc("/api/ha/rotation", h.auth(h.handleRotation))
@@ -773,17 +769,18 @@ func (h *HAHub) handlePage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, h.snapshot())
 }
 
-// handlePageSlot edits one "Page N" slot ({"index": i, "value": "Name | URL"}).
-func (h *HAHub) handlePageSlot(w http.ResponseWriter, r *http.Request) {
+// handlePages replaces the page list ({"pages": [{"name", "url"}, ...]}), which
+// Home Assistant edits in the integration's options. It does not navigate:
+// editing the list should not move the display.
+func (h *HAHub) handlePages(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Index int    `json:"index"`
-		Value string `json:"value"`
+		Pages []Page `json:"pages"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if err := h.pages.SetSlot(req.Index, req.Value); err != nil {
-		writeErr(w, err)
+	if err := h.pages.Replace(req.Pages); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 	writeJSON(w, http.StatusOK, h.snapshot())

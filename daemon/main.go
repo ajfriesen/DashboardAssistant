@@ -174,7 +174,7 @@ func main() {
 	// by the USB and ESP importers. Loopback only. This is the sole config path.
 	mux.Handle("/api/import", loopbackOnly(http.HandlerFunc(srv.handleImport)))
 	// Page navigation (waybar Prev/Next buttons). The page list itself is managed
-	// through the HA integration (the "Page N" text slots), not the web UI.
+	// through the HA integration (the pages in its options), not the web UI.
 	mux.Handle("/api/nav", loopbackOnly(http.HandlerFunc(srv.handleNav)))
 	// Read-only device info, shown behind the sponsor page's info button and
 	// re-served verbatim on the admin listener. Carries no secret.
