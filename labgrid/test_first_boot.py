@@ -346,13 +346,19 @@ def test_root_filesystem_grew(shell, image):
         'lsblk -bndo SIZE "/dev/$(lsblk -no PKNAME "$src" | head -1)"'
     )
     device_bytes = int(shell.run_check(size_cmd)[0])
+    esp_bytes = int(
+        shell.run_check("lsblk -bno SIZE $(findmnt -no SOURCE /boot)")[0]
+    )
     fs_bytes = int(shell.run_check("findmnt -bno SIZE /")[0])
 
-    # 90%: the ESP, the GPT and btrfs' own metadata are not available to the
-    # filesystem, and that overhead is a few hundred MB on any medium we ship on.
-    assert fs_bytes > device_bytes * 0.9, (
-        f"root filesystem is {fs_bytes} B on a {device_bytes} B medium — "
-        "first-boot growth did not finish (check growpart.service)"
+    # The ESP is a fixed 1 GiB (512 MiB on older flashes), which on QEMU's
+    # 8 GiB disk is already more than 10% of the medium, so it comes off first.
+    # 90% of the rest: the GPT and btrfs' own metadata are not available to the
+    # filesystem either.
+    assert fs_bytes > (device_bytes - esp_bytes) * 0.9, (
+        f"root filesystem is {fs_bytes} B on a {device_bytes} B medium with a "
+        f"{esp_bytes} B ESP — first-boot growth did not finish "
+        "(check growpart.service)"
     )
     if image is not None:
         assert fs_bytes > os.path.getsize(image), "filesystem smaller than the image"
@@ -609,12 +615,13 @@ def test_firmware_dropzone_files(shell):
         assert out == ["0"], f"example has uncommented keys: {out}"
 
         # The ESP must stay big enough for the firmware *plus* a kernel and
-        # initrd per retained generation (~70 MiB each, configurationLimit 3).
-        # dashboardAssistant.diskLayout.espSize is 512 MiB for that reason, and
-        # a silent revert to the old 64 MiB would not fail until the third
-        # update.
+        # initrd per retained generation (~70 MiB each, configurationLimit 3),
+        # with room for unified kernel images later.
+        # dashboardAssistant.diskLayout.espSize is 1 GiB for that reason, and
+        # a silent revert to a smaller ESP would not fail until an update ran
+        # out of space. Devices flashed before the bump keep 512 MiB.
         size = shell.run_check("lsblk -bno SIZE $(findmnt -no SOURCE /boot)")
-        assert int(size[0]) > 400 * 1024 * 1024, f"ESP is only {size[0]} B"
+        assert int(size[0]) >= 1024 * 1024 * 1024, f"ESP is only {size[0]} B"
     finally:
         umount_fat(shell)
 

@@ -63,13 +63,14 @@ in
 
     imageSize = lib.mkOption {
       type = lib.types.strMatching "[0-9]+[KMGTP]?";
-      default = "4G";
+      default = "5G";
       description = ''
         Size of the *built* image, not of the medium. Kept just big enough for
         the initial closure: the root partition is grown to fill the real disk
         on first boot (`boot.growPartition` plus the `x-systemd.growfs` mount
         option on `/`), so one image fits a 16 GB SD card and a 500 GB SSD
-        alike.
+        alike. It includes the {option}`espSize` ESP, so the two move together:
+        5G is the ESP plus a 4 GiB root.
 
         disko has no auto-sizing (see its docs: "The auto-resizing feature is
         currently not available in Disko"), so this is a hand-maintained number
@@ -79,15 +80,20 @@ in
 
     espSize = lib.mkOption {
       type = lib.types.str;
-      default = "512M";
+      default = "1G";
       description = ''
         Size of the EFI system partition mounted at `/boot`.
 
-        512 MiB is sized for the Pi, which is the demanding case: ~25 MiB of
-        Raspberry Pi firmware plus a kernel (~37 MiB) and initrd (~30 MiB) per
-        retained generation. With {option}`boot.loader.systemd-boot.configurationLimit`
-        at 3 that is roughly 230 MiB, and the x86 target has been on 512 MiB
-        since the beginning — so one number covers both.
+        The Pi is the demanding case: ~25 MiB of Raspberry Pi firmware plus a
+        kernel (~37 MiB) and initrd (~30 MiB) per retained generation. With
+        {option}`boot.loader.systemd-boot.configurationLimit` at 3 that is
+        roughly 230 MiB. 1 GiB is the size distributions now recommend for an
+        ESP that doubles as `/boot`, and leaves room for unified kernel images
+        or more generations.
+
+        Devices flashed before the bump keep their 512 MiB ESP: an update
+        cannot resize it, because the root partition follows it. Until those
+        devices are reflashed, what lands on `/boot` must still fit 512 MiB.
       '';
     };
   };
