@@ -45,23 +45,15 @@ show up in HACS like any other integration.
 
 ## 3. Add the device
 
-After the restart, Home Assistant **discovers the kiosk on its own** over
-mDNS — a "Dashboard Assistant" discovered card appears under **Settings →
-Devices & services**. Click **Configure** and choose **Pair automatically
-(recommended)**: a device that has not been paired yet hands over its API
-token by itself, so there is no PIN and nothing to type.
+After the restart, Home Assistant **discovers the device on its own** over
+mDNS — a "Dashboard Assistant" card appears under **Settings → Devices &
+services → Discovered**. Click **Add** and confirm: a device that has not been
+paired yet hands over its API token by itself, so there is no PIN and nothing
+to type.
 
-If the card doesn't appear, or you preset a token, add it manually:
-
-1. Go to **Settings → Devices & services → Add integration**.
-2. Search for **Dashboard Assistant** and select it.
-3. Enter the connection details:
-    - **Host / port** — the device's IP or hostname; enter port **8081** and Home
-      Assistant will move itself to the encrypted port automatically.
-    - **API token** — the device's token, from
-      `/var/lib/dashboard-assistant/api-token` on the device. The device never
-      displays it, so normally use the automatic discovery path instead and let
-      it pair.
+Discovery is the only way to add a device. If the card does not appear, Home
+Assistant cannot see the device's mDNS announcement, usually because the two
+are on different networks or VLANs.
 
 !!! note "A device only pairs once"
     An already-paired device refuses to hand out its token again — that is what
@@ -77,9 +69,10 @@ If the card doesn't appear, or you preset a token, add it manually:
     Assistant.
 
     The certificate is the display's own, so there is nothing to buy, install or
-    renew. If you factory-reset the display it generates a new one, and Home
-    Assistant will ask you to re-authenticate — that prompt is expected after a
-    reset, and worth a second look if you have not just done one.
+    renew. If you factory-reset the display it generates a new one, and its
+    Home Assistant entry stops with an error. That is expected after a reset:
+    delete the entry, and the display is discovered again and pairs. If you
+    have not just reset it, take a second look.
 
 ## What you get
 
