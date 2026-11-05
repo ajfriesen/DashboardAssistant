@@ -81,7 +81,7 @@ nav = [
         "usage/integration.md",
         "usage/usage.md",
         "usage/audio.md",
-        "usage/admin.md",
+        "usage/recovery.md",
      ]},
   ]},
   { "In Action" = "in-action.md" },

@@ -51,11 +51,3 @@ A few looks at Dashboard Assistant running on real hardware.
   <figcaption>The on-screen keyboard for text entry on touch-only devices (experimental).</figcaption>
 </figure>
 
-<figure class="da-tablet-figure">
-  <div class="da-tablet">
-    <div class="da-tablet__screen">
-      <img class="da-shot" src="img/recovery.jpeg" alt="The recovery generation picker">
-    </div>
-  </div>
-  <figcaption>Recovery — boot into an older NixOS generation if an update misbehaves. Today this lives on the LAN-only admin page, off the touchscreen.</figcaption>
-</figure>

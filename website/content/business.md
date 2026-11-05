@@ -33,7 +33,6 @@ point of needing a partner for.
   <div class="da-tablet__screen">
     <img class="da-slide" src="img/home-assistant-light.jpeg" alt="A Home Assistant dashboard in light mode">
     <img class="da-slide" src="img/home-assistant-dark.jpeg" alt="A Home Assistant dashboard in dark mode">
-    <img class="da-slide" src="img/recovery.jpeg" alt="Recovery: pick an older, known-good version to boot">
     <img class="da-slide" src="img/keyboard.jpeg" alt="The on-screen keyboard">
     <img class="da-slide" src="img/random-website.jpeg" alt="Any website on the panel">
   </div>

@@ -50,15 +50,14 @@ you can roll back from the device (see below).
 
 ## Recovery
 
-If an update or configuration change misbehaves, open the
-[admin page](admin.md) at `http://<device-ip>:8099/` from another machine on the
-network and pick an older, known-good generation to boot into. There is no
-recovery option on the tablet itself: the screen is read-only so that nobody
-walking past it can roll the device back or reset it.
+If an update misbehaves, press the device's **Roll back** button in Home
+Assistant to boot the previous generation. There is no recovery option on the
+device's screen: it is read-only so that nobody walking past it can roll the
+device back or reset it. [Recovery](recovery.md) covers the rest.
 
 !!! note "Automatic rollback isn't available yet"
     Booting into the previous generation *automatically* after a failed boot
     relies on boot-counting support, which comes from **systemd-boot**. Every
     image boots through it now, so the mechanism is available — switching it on
-    is tracked separately. Until then recovery is manual, using the admin
-    page.
+    is tracked separately. Until then recovery is manual, from Home
+    Assistant.

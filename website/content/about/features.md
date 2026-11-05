@@ -28,9 +28,9 @@ icon: lucide/sparkles
 **Stays alive**
 
 - Atomic OS updates surfaced as a Home Assistant `update` entity.
-- Recovery built in: if an update misbehaves, roll back to a previous
-  generation from the [admin page](../usage/admin.md) — LAN-only, off the
-  touchscreen. (Automatic rollback on a failed boot isn't switched on yet,
+- Recovery built in: if an update misbehaves, roll back to the previous
+  generation with one button in Home Assistant — off the touchscreen, and
+  behind the device token ([Recovery](../usage/recovery.md)). (Automatic rollback on a failed boot isn't switched on yet,
   though every image now boots through systemd-boot, which provides it.)
 
 **Hands-off provisioning**
@@ -42,8 +42,7 @@ icon: lucide/sparkles
   no screen needed. Home Assistant sets up everything else when it pairs.
 - Nothing on the tablet screen reconfigures the device. The bar carries
   navigation and the keyboard only, and the ⓘ view is read-only. Recovery
-  (rollback, factory reset) lives on a separate [admin page](../usage/admin.md)
-  you open from another machine on the network.
+  (rollback, factory reset) runs from Home Assistant.
 
 ## Home Assistant integration
 
@@ -69,6 +68,8 @@ press on the tablet. It appears as a single device with these entities:
 | Next / Previous page | `button` | Cycle through the dashboard URLs |
 | Sendspin player | `switch` | Turn the device's multi-room audio player on/off; carries a `status` attribute. Only on builds with the audio stack |
 | Reboot / Shut down | `button` | Power-cycle the device |
+| Roll back | `button` | Boot the previous system generation. Refused when there is only one |
+| Factory reset | `button` | Forget the pairing, the settings and the Wi-Fi, reboot, and remove the entry. See [Recovery](../usage/recovery.md) |
 | System update | `update` | Installed vs. latest release, with one-tap install |
 
 ### Sensors

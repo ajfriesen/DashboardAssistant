@@ -134,7 +134,7 @@
    percentages to match (each slide gets a 100% / --da-slides window).
    -------------------------------------------------------------------------- */
 .da-tablet {
-  --da-slides: 5;
+  --da-slides: 4;
   --da-slide-time: 6s;          /* seconds each slide stays on screen */
   position: relative;
   width: 100%;
@@ -228,13 +228,12 @@
 .da-slide:nth-child(2) { animation-delay: calc(var(--da-slide-time) * 1); }
 .da-slide:nth-child(3) { animation-delay: calc(var(--da-slide-time) * 2); }
 .da-slide:nth-child(4) { animation-delay: calc(var(--da-slide-time) * 3); }
-.da-slide:nth-child(5) { animation-delay: calc(var(--da-slide-time) * 4); }
 
 @keyframes da-fade {
   0%   { opacity: 0; }
-  3%   { opacity: 1; }
-  17%  { opacity: 1; }
-  20%  { opacity: 0; }
+  4%   { opacity: 1; }
+  21%  { opacity: 1; }
+  25%  { opacity: 0; }
   100% { opacity: 0; }
 }
 
