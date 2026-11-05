@@ -512,7 +512,7 @@ def on_the_wifi(shell, _bench, bench_wifi):
     the seed is assembled in memory, never written to disk here, and removed
     from the card afterwards.
     """
-    seed = device.wifi_only_seed(bench_wifi.ssid, bench_wifi.psk)
+    seed = device.wifi_seed(bench_wifi.ssid, bench_wifi.psk)
 
     shell.run_check("mountpoint -q /boot")
     # Re-arm the importer: re-import is gated on the seed file's content hash,

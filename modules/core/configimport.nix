@@ -1,4 +1,4 @@
-# Seeding: apply dashboard config (HA URL, tokens, Wi-Fi) from the seed file, the
+# Seeding: apply dashboard config (Wi-Fi, tokens, pages) from the seed file, the
 # only way to configure a device (docs/adr/0001). Two triggers, both feeding
 # the daemon's loopback /api/import:
 #
@@ -12,9 +12,13 @@
 #      single code path; see bootImport below.
 #
 # YAML schema (all keys optional):
-#   ha_url: "https://homeassistant.local:8123"
-#   kiosk_token: "eyJhbGci..."    # long-lived HA access token (stored for injection)
 #   wifi: { ssid: "Net", psk: "secret" }
+#   kiosk_token: "eyJhbGci..."    # long-lived HA access token (stored for injection)
+#   api_token: "..."
+#   pages: [ { name: "Home", url: "..." } ]
+#
+# No Home Assistant URL: Home Assistant discovers the device and hands over its
+# URL when it pairs. An `ha_url` left in an old file is ignored and logged.
 #
 # `token` is still accepted for kiosk_token, deprecated: seed files already in
 # the field carry it, and the daemon logs the rename when it reads one
@@ -112,7 +116,7 @@ let
   # Deliberately NOT named ${seedFileName}: shipping this file must not be able
   # to provision anything. Every key is commented out for the same reason — a
   # user who renames it without editing it gets a clean no-op rather than a
-  # device silently pointing at homeassistant.local.
+  # device silently joining a Wi-Fi called MyNetwork.
   dropzoneExample = pkgs.writeText "dashboard-assistant.yaml.example" ''
     # Dashboard Assistant seed file.
     #
@@ -122,8 +126,8 @@ let
     #
     # Every key is optional. Delete the ones you do not need.
 
-    # Home Assistant base URL the dashboard should open.
-    #ha_url: "http://homeassistant.local:8123"
+    # No Home Assistant URL goes here: Home Assistant finds this device on the
+    # network and hands it the URL when you add it.
 
     # Wi-Fi credentials. Delete this whole block on a wired device.
     #wifi:

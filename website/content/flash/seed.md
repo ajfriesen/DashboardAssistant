@@ -1,13 +1,17 @@
 # Seed File
 
 A **seed file** preconfigures a device before it ever boots. Drop a
-`dashboard-assistant.yaml` next to the image and the device picks up its Home
-Assistant URL and Wi-Fi on first boot, which is what you want for field deploys or
-for flashing several tablets at once.
+`dashboard-assistant.yaml` next to the image and the device picks up its Wi-Fi
+on first boot, which is what you want for field deploys or for flashing several
+devices at once.
 
 It also works after the fact: edit the file on the card later and the device
-applies the change on its next boot, so a device can be moved to a new network or
-pointed at a new Home Assistant without reflashing it.
+applies the change on its next boot, so a device can be moved to a new network
+without reflashing it.
+
+The seed file does not say which Home Assistant to use. Once the device is on
+your network, Home Assistant discovers it, and adding it there hands the device
+its Home Assistant URL (see [Pairing still works](#pairing-still-works)).
 
 You need one for any device that is not on Ethernet: the display has no way to ask
 for Wi-Fi credentials on screen, so the seed file is how they reach it. A device
@@ -25,19 +29,16 @@ Create a file named exactly `dashboard-assistant.yaml`. Every key is optional �
 only what you want to provision:
 
 ```yaml
-# Home Assistant base URL the kiosk should open.
-ha_url: "https://homeassistant.local:8123"
+# Optional Wi-Fi credentials. Omit the whole block on a wired device.
+wifi:
+  ssid: "MyNetwork"
+  psk: "supersecret"
 
 # Optional kiosk token: the long-lived Home Assistant access token the kiosk
 # logs in with. You normally don't need this — the Dashboard Assistant
 # integration supplies a login for the device automatically. Only set it to
 # preset a kiosk token yourself.
 kiosk_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiIyZWRlNGE0ZTFjNmQ0ZDY3OTY4ODhmMTk5OGNhNWVjMSIsImlhdCI6MTc4NDcxODk3MywiZXhwIjoyMTAwMDc4OTczfQ.Rd92pdzdYkC8HI3buVO6m9EVVI71Ye-MP_1nwogfOgU"
-
-# Optional Wi-Fi credentials. Omit the whole block on a wired device.
-wifi:
-  ssid: "MyNetwork"
-  psk: "supersecret"
 
 # Optional device API token, the credential Home Assistant uses to talk to this
 # device. Leave it out and the device generates its own, which Home Assistant
@@ -55,13 +56,13 @@ pages:
 
 | Key           | Required | Description                                                      |
 | ------------- | -------- | ---------------------------------------------------------------- |
-| `ha_url`      | no       | Home Assistant base URL the dashboard loads on boot.             |
-| `kiosk_token` | no       | Kiosk token the dashboard logs in with; normally supplied by the integration. |
 | `wifi.ssid`   | no       | Wi-Fi network name to join.                                      |
 | `wifi.psk`    | no       | Wi-Fi pre-shared key (password).                                 |
+| `kiosk_token` | no       | Kiosk token the dashboard logs in with; normally supplied by the integration. |
 | `api_token`   | no       | Device API token for the Home Assistant integration. Generated per device if omitted. |
 | `pages`       | no       | List of `name` + `url` entries replacing the device's page list. `url` is required per entry. |
 | `token`       | no       | Deprecated name for `kiosk_token`, still applied. Ignored when `kiosk_token` is also present. |
+| `ha_url`      | no       | No longer used, and ignored if present: Home Assistant sets its URL when it pairs with the device. |
 
 Three notes on the optional keys. `api_token` only takes effect when the daemon
 next starts, so a stick plugged into a running device needs a reboot for that one
@@ -125,9 +126,9 @@ file has changed, while a USB stick is applied each time you plug it in.
     !!! warning "An edit applies the whole file"
 
         Not just the line you changed. That matters for `pages`, which replaces
-        the device's page list outright — so if you edit `ha_url` on a device
-        whose pages you have since reordered in Home Assistant, the file's page
-        list wins. Delete the `pages` block to manage pages from Home Assistant
+        the device's page list outright — so if you edit the Wi-Fi block on a
+        device whose pages you have since reordered in Home Assistant, the
+        file's page list wins. Delete the `pages` block to manage pages from Home Assistant
         instead.
 
     !!! note "The file stays on the partition"
@@ -152,8 +153,8 @@ file has changed, while a USB stick is applied each time you plug it in.
     Unlike the boot partition, this applies **every time you plug the stick in**,
     changed or not. There is no checksum involved.
 
-Once the file is applied, the device goes straight to your Home Assistant
-dashboard.
+Once the file is applied, the device joins your network and waits for Home
+Assistant to add it. After that it shows your dashboard.
 
 ## Pairing still works
 

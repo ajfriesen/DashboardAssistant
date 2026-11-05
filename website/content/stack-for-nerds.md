@@ -125,8 +125,8 @@ full list.
 
 On Ethernet a device gets online by itself and Home Assistant discovers it from
 there. Everything else — Wi-Fi credentials included — comes from a small
-**YAML seed file** (Home Assistant URL, token, Wi-Fi, dashboard URLs, optional
-integration token) dropped on a USB stick or the boot partition configures the
+**YAML seed file** (Wi-Fi, kiosk token, dashboard URLs, optional integration
+token; the Home Assistant URL arrives when Home Assistant pairs with the device) dropped on a USB stick or the boot partition configures the
 device before it ever boots. Either way, nothing on the running panel can
 re-point the device: the screen shows a read-only info view and nothing else;
 rollback and factory reset live on a LAN-only admin page.
