@@ -15,9 +15,15 @@
     # max *uncompressed* data = 50% of RAM (actual RAM used is the compressed
     # size). Raise toward 100 for 2 GB-class tablets since the data is compressed.
     memoryPercent = 50;
+    # Above the swap file on @swap (modules/hardware/disk-layout.nix), so the
+    # kernel fills compressed RAM first and only writes to flash once zram is
+    # full. NixOS' default of 5 would already win against a file left at the
+    # kernel's negative default; explicit, because the order is the point.
+    priority = 100;
   };
 
-  # Reclaim tuning for a system whose only swap is compressed RAM. NixOS'
+  # Reclaim tuning for a system whose swap is compressed RAM first, with the
+  # swap file on flash behind it only for when zram is full. NixOS'
   # zramSwap module writes zram-generator.conf and nothing else; Fedora ships
   # these two sysctls separately (zram-generator-defaults), so this fills a gap
   # upstream fills elsewhere rather than deviating from it.
@@ -59,4 +65,11 @@
     enable = true;
     enableUserSlices = true;
   };
+
+  # oomd acts on pressure stall information, and its unit is skipped outright
+  # ("unmet condition check ConditionPathExists=/proc/pressure/memory") when
+  # the kernel does not track it. The Raspberry Pi kernel builds PSI in but
+  # switches it off by default (CONFIG_PSI_DEFAULT_DISABLED), so without this
+  # oomd never ran on a Pi at all. Harmless where it is already on (x86).
+  boot.kernelParams = [ "psi=1" ];
 }
