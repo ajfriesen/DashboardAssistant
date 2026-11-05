@@ -31,7 +31,7 @@ dashboard — no login screen, ever.
   Tablet mockup. The screen crossfades through the <img> slides below — swap
   these for your own screenshots any time. The crossfade is tuned for THREE
   slides; if you add/remove images, update `--da-slides` and the `:nth-child`
-  delays in docs/stylesheets/extra.css.
+  delays in website/content/stylesheets/extra.css.
 -->
 <div class="da-tablet">
   <div class="da-tablet__screen">

@@ -552,8 +552,8 @@ Kept as a record of what hardware testing bought, and as context for the tests
 that now guard each one.
 
 **Seed provisioning was broken on both Pi images** — the one that reached users.
-`docs/flash/seed.md` said *"The /boot partition is FAT and readable on any
-computer"*. True on x86, where `/boot` is the ESP. On the Pi, `/boot` was a
+`website/content/flash/seed.md` said *"The /boot partition is FAT and readable
+on any computer"*. True on x86, where `/boot` is the ESP. On the Pi, `/boot` was a
 directory on the btrfs root, and the partition a user can actually write to was
 `FIRMWARE` — declared `noauto`, never mounted, with no mount point. So the file
 landed where the importer never looked, `ConditionPathExists` skipped the unit,

@@ -1,9 +1,9 @@
 # Developer Documentation
 
-For working on Dashboard Assistant OS. User-facing docs live in `docs/` and are published with Zensical.
+For working on Dashboard Assistant OS. Everything in this directory is for contributors and is read on GitHub; none of it is published. The public website is a separate tree, [`website/`](../website/), built with Zensical — `just website-serve` to preview it, `just website-build` to build it.
 
 - **[`CONTEXT.md`](../CONTEXT.md)**: the project's vocabulary. Use these terms in code, commits and docs.
-- **[`docs/adr/`](../docs/adr/)**: architecture decisions and why they were made. Read the relevant one before changing something it covers.
+- **[`adr/`](adr/)**: architecture decisions and why they were made. Read the relevant one before changing something it covers.
 
 ## Layout
 
@@ -17,6 +17,7 @@ For working on Dashboard Assistant OS. User-facing docs live in `docs/` and are 
 | `tests/` | NixOS VM tests |
 | `labgrid/` | The bench: flash and test a real Raspberry Pi 5 ([README](../labgrid/README.md)) |
 | `ops/` | R2 image bucket, release channels, secrets ([README](../ops/README.md)) |
+| `website/` | The public site at dashboardassistant.org: Zensical config, theme overrides and the pages in `website/content/` |
 
 ## Building and running
 
@@ -31,11 +32,11 @@ For working on Dashboard Assistant OS. User-facing docs live in `docs/` and are 
 ## Testing
 
 - **VM tests** run in CI (`.github/workflows/vm-tests.yml`); locally with `nix build .#checks.x86_64-linux.<name>`.
-- **Bench**: `just hw-test` flashes the Pi 5 dev image to the bench board and asserts first boot. The hardware hangs off the bench host and is reached through a labgrid coordinator ([ADR 0010](../docs/adr/0010-the-bench-is-driven-through-a-labgrid-coordinator.md)), so this needs non-interactive ssh to it; `just hw-status` shows the place and who holds it. There is no x86 hardware on the bench yet.
+- **Bench**: `just hw-test` flashes the Pi 5 dev image to the bench board and asserts first boot. The hardware hangs off the bench host and is reached through a labgrid coordinator ([ADR 0010](adr/0010-the-bench-is-driven-through-a-labgrid-coordinator.md)), so this needs non-interactive ssh to it; `just hw-status` shows the place and who holds it. There is no x86 hardware on the bench yet.
 
 ## Bumping nixpkgs
 
-Every board builds from a pinned `nixos-unstable` ([ADR 0008](../docs/adr/0008-every-board-builds-from-pinned-nixos-unstable.md)). Bump it about once a month, on purpose:
+Every board builds from a pinned `nixos-unstable` ([ADR 0008](adr/0008-every-board-builds-from-pinned-nixos-unstable.md)). Bump it about once a month, on purpose:
 
 1. On a branch: `nix flake update nixpkgs-unstable`
 2. VM tests green in CI, and `just hw-test` green on the bench
@@ -53,7 +54,7 @@ The commit type decides the version bump:
 - `fix:` / `docs:` / `chore:` / `refactor:` / … → patch
 - `feat!:` or a `BREAKING CHANGE:` footer → major
 
-**To cut a release:** release-please keeps one release PR open (e.g. `chore(main): release 1.1.0`). It bumps the version in `flake.nix` and updates `CHANGELOG.md`. Merging it tags the release, publishes the GitHub Release and uploads the x86_64 image to the R2 `release/` channel ([ADR 0007](../docs/adr/0007-releases-come-from-commits-and-images-live-in-r2.md), [ops/README.md](../ops/README.md)).
+**To cut a release:** release-please keeps one release PR open (e.g. `chore(main): release 1.1.0`). It bumps the version in `flake.nix` and updates `CHANGELOG.md`. Merging it tags the release, publishes the GitHub Release and uploads the x86_64 image to the R2 `release/` channel ([ADR 0007](adr/0007-releases-come-from-commits-and-images-live-in-r2.md), [ops/README.md](../ops/README.md)).
 
 **To cut a pre-release:**
 
