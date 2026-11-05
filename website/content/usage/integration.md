@@ -58,10 +58,10 @@ If the card doesn't appear, or you preset a token, add it manually:
 3. Enter the connection details:
     - **Host / port** — the device's IP or hostname; enter port **8081** and Home
       Assistant will move itself to the encrypted port automatically.
-    - **API token** — the `api_token` from the device's
-      [seed file](../flash/seed.md). The device never displays its token, so
-      if you did not preset one, use the automatic discovery path instead and
-      let it pair.
+    - **API token** — the device's token, from
+      `/var/lib/dashboard-assistant/api-token` on the device. The device never
+      displays it, so normally use the automatic discovery path instead and let
+      it pair.
 
 !!! note "A device only pairs once"
     An already-paired device refuses to hand out its token again — that is what
@@ -98,7 +98,7 @@ Open **Settings → Devices & services → Dashboard Assistant** and click
   in as a regular user.
 - **Pages** — any number of pages, each a name and the address of any website. The
   **Page** select and the next/previous buttons switch between them, in this
-  order. A [seed file](../flash/seed.md) with a `pages` list replaces them too.
+  order.
 
 Saving sends both to the device straight away.
 

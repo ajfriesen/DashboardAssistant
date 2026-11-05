@@ -32,8 +32,7 @@ import (
 
 // loadAPIToken returns the device's HA API token: the environment
 // (DASHBOARD_ASSISTANT_API_TOKEN, from a Nix EnvironmentFile) wins, then the
-// runtime state file written by config import, then a freshly generated token
-// persisted on first start. Auto-generation makes the device usable out of the
+// state file, which holds the token generated and persisted on first start. Auto-generation makes the device usable out of the
 // box: the token never has to be read or typed, it is handed to Home Assistant by
 // /api/ha/pair. Nothing on the device displays it (see handleInfo).
 func loadAPIToken() string {
@@ -569,10 +568,8 @@ func (h *HAHub) notePaired() {
 // handleKioskLogin stages a Home Assistant login for the kiosk so no one has to
 // type credentials on the device. The integration creates a dedicated HA user
 // and a long-lived token, then posts it here; the daemon persists the token (and
-// the dashboard URL, if given) exactly as a seed import would and relaunches the
-// kiosk, whose autologin injector signs the browser in on the next start. It
-// reuses the same staging the loopback /api/import uses, so no new kiosk plumbing
-// is needed. Authenticated with the device token like every other command.
+// the dashboard URL, if given) and relaunches the kiosk, whose autologin
+// injector signs the browser in on the next start. Authenticated with the device token like every other command.
 func (h *HAHub) handleKioskLogin(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Token string `json:"token"`

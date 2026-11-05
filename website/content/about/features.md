@@ -37,9 +37,9 @@ icon: lucide/sparkles
 
 - On Ethernet a device sets itself up with no input at all: it gets online and
   Home Assistant discovers it from there.
-- For fleets or field deploys, a small YAML seed file (HA URL, token, Wi-Fi,
-  dashboard URLs, optional integration token) dropped on a USB stick or the
-  boot partition configures the device before it ever boots — no screen needed.
+- On Wi-Fi, a small YAML seed file with the credentials, dropped on a USB
+  stick or the boot partition, gets the device online before it ever boots —
+  no screen needed. Home Assistant sets up everything else when it pairs.
 - Nothing on the tablet screen reconfigures the device. The bar carries
   navigation and the keyboard only, and the ⓘ view is read-only. Recovery
   (rollback, factory reset) lives on a separate [admin page](../usage/admin.md)
