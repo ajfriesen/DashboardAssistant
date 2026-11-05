@@ -69,8 +69,10 @@ services.journald.storage = "persistent";
 
 **What is on the card, and tuned for it.** The root filesystem is **btrfs** with
 `zstd` compression and `noatime`, so reads never cause writes and everything
-written is compressed first. Swap is **compressed RAM** (zram), never a swap file
-— so swapping costs no writes at all. Partitions are aligned to 1 MiB and the
+written is compressed first. Swap is **compressed RAM** (zram) first, so ordinary
+swapping costs no writes at all; a swap file on its own btrfs subvolume takes over
+only once zram is full, so a device short of memory slows down instead of
+restarting its browser. Home Assistant shows how much of each is in use. Partitions are aligned to 1 MiB and the
 root filesystem grows to fill the card on first boot, which avoids the
 write-amplification that comes from misaligned partitions. TRIM runs weekly.
 
