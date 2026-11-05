@@ -28,7 +28,8 @@ can:
   waits without a touch before it starts (10 minutes by default; 0 turns it
   off). A tap dismisses it.
 - Take a **screenshot** of the current view on demand.
-- Switch the active **page**, or edit the list of dashboard URLs.
+- Switch the active **page**, and choose the dashboard and pages (any website)
+  under **Configure** on the integration card.
 - Turn the **Sendspin player** on or off — see [Multi-room audio](audio.md).
 - **Reboot** or **shut down** the device.
 - Install an **OS update** when one is available.

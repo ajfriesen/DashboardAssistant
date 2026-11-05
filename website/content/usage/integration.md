@@ -88,6 +88,22 @@ list is in the [entity reference](../about/features.md#home-assistant-integratio
 and the [Usage](usage.md#from-home-assistant) guide shows what day-to-day
 control looks like.
 
+## Choose the dashboard and pages
+
+Open **Settings → Devices & services → Dashboard Assistant** and click
+**Configure**:
+
+- **Dashboard** — the device shows Home Assistant's default dashboard until you
+  pick another. Admin-only dashboards are not listed, because the device signs
+  in as a regular user.
+- **Pages** — any number of pages, each a name and the address of any website. The
+  **Page** select and the next/previous buttons switch between them, in this
+  order. A [seed file](../flash/seed.md) with a `pages` list replaces them too.
+
+Saving sends both to the device straight away.
+
+## Behind the scenes
+
 Two things happen behind the scenes that are worth knowing about:
 
 - The integration creates a dedicated **non-admin Home Assistant user** for the

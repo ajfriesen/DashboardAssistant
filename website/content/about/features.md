@@ -65,9 +65,8 @@ press on the tablet. It appears as a single device with these entities:
 | Screen saver style | `select` | Which screen saver to show (clock, logo) |
 | Screen saver timeout | `number` | Minutes without a touch before the screen saver starts, 0–240; 0 turns the idle trigger off |
 | Screenshot | `button` + `image` | Capture the current web view on demand; the latest shot shows as an image you can click to enlarge |
-| Page | `select` | Jump to one of your configured dashboard URLs |
+| Page | `select` | Jump to one of your pages (edit the list under **Configure**, see [Home Assistant integration](../usage/integration.md#choose-the-dashboard-and-pages)) |
 | Next / Previous page | `button` | Cycle through the dashboard URLs |
-| Page 1 … N | `text` | Edit the dashboard URL list from HA |
 | Sendspin player | `switch` | Turn the device's multi-room audio player on/off; carries a `status` attribute. Only on builds with the audio stack |
 | Reboot / Shut down | `button` | Power-cycle the device |
 | System update | `update` | Installed vs. latest release, with one-tap install |
