@@ -66,30 +66,29 @@ let
     Dashboard Assistant - seed file drop zone
     =========================================
 
-    This partition is the one place you can configure this device from another
-    computer, including before it has ever booted.
+    This partition is where you give this device its Wi-Fi, from any computer,
+    before it has ever booted. A wired device needs nothing here.
 
       1. Copy dashboard-assistant.yaml.example to ${seedFileName}
          (same folder, right next to this README).
-      2. Open it in a plain text editor, remove the leading # from the lines you
-         need, and fill them in.
+      2. Open it in a plain text editor, remove the leading # from the wifi
+         lines, and fill in your network name and password.
       3. Eject the card and boot the device.
+
+    The file only carries Wi-Fi. Everything else - which Home Assistant, which
+    dashboard, which pages - is set from Home Assistant once the device is on
+    your network.
 
     The device re-reads this file whenever its contents change, not only on the
     first boot:
 
-      * edit it and reboot  -> the new values are applied
-      * leave it alone      -> the device keeps whatever it has, including
-                               changes you made on the device itself or from
-                               Home Assistant
-      * delete it           -> same thing; nothing is applied from here again
+      * edit it and reboot  -> it joins the new network
+      * leave it alone      -> nothing happens
+      * delete it           -> nothing happens either; the device keeps its Wi-Fi
 
-    It only carries Wi-Fi. Everything else - which Home Assistant, which
-    dashboard, which pages - is set from Home Assistant once the device is on
-    your network.
-
-    Anyone who can pull this card can read your Wi-Fi password in plain text. Delete ${seedFileName} once setup is done if that matters
-    where this device lives.
+    Anyone who can pull this card can read your Wi-Fi password in plain text.
+    Delete ${seedFileName} once setup is done if that matters where
+    this device lives.
 
     If the device does not pick the file up, the most likely cause is YAML
     indentation. The device logs what it did, and any parse error, under
