@@ -94,3 +94,20 @@ func TestScreensaverPrefsPersistAndValidate(t *testing.T) {
 		t.Fatalf("persisted = %+v", p)
 	}
 }
+
+// A restarted daemon starts inactive, so Reset must still send "stop": a saver
+// left over in the running session would otherwise never be taken down.
+func TestScreensaverResetStopsLeftoverSaver(t *testing.T) {
+	s, sc := newTestScreensaver(t)
+	s.Reset()
+	expectCmd(t, sc, "stop")
+	if s.Active() {
+		t.Fatal("active after Reset")
+	}
+}
+
+// With no session reading the FIFO (boot), Reset must not block or panic.
+func TestScreensaverResetWithoutSession(t *testing.T) {
+	t.Setenv("DASHBOARD_ASSISTANT_SCREENSAVER_FIFO", filepath.Join(t.TempDir(), "missing.fifo"))
+	NewScreensaver().Reset()
+}

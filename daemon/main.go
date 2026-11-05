@@ -100,6 +100,11 @@ func main() {
 	hub.SetNetwork(nm)
 	scr := NewScreensaver()
 	hub.SetScreensaver(scr)
+	// A fresh daemon thinks no saver is showing, but a running kiosk session can
+	// still have one up from before this restart. Tell the agent to drop it so
+	// the two agree; otherwise HA shows "off", taps no longer send "stop" and the
+	// bar stays hidden. Fails harmlessly at boot, before the session is up.
+	scr.Reset()
 	srv := &server{nm: nm, ha: hub, pages: pages}
 
 	// The Sendspin player's unit has no install target — this daemon owns its
