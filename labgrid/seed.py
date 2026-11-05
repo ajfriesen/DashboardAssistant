@@ -6,7 +6,7 @@ dashboard-assistant.yaml onto the running board, triggers the first-boot importe
 and reports back what the device did with it, so the result is visible in Home
 Assistant rather than only in an assertion.
 
-    just hw-seed --ha-url http://192.168.178.73:8123
+    just hw-seed --ha-url $BENCH_HA_URL
     DA_WIFI_PSK=... just hw-seed --ha-url http://... --wifi-ssid MyNet
 
 The Wi-Fi passphrase comes from $DA_WIFI_PSK by default so it stays out of shell
@@ -70,8 +70,8 @@ def build_seed(args):
         if not psk:
             sys.exit("--wifi-ssid given but no passphrase: set $DA_WIFI_PSK")
         lines += ["wifi:", f"  ssid: {yaml_str(args.wifi_ssid)}", f"  psk: {yaml_str(psk)}"]
-    if args.token:
-        lines.append(f"token: {yaml_str(args.token)}")
+    if args.kiosk_token:
+        lines.append(f"kiosk_token: {yaml_str(args.kiosk_token)}")
     return "\n".join(lines) + "\n"
 
 
@@ -85,7 +85,7 @@ def main():
     ap.add_argument("--ha-url", help="Home Assistant base URL (required unless --file)")
     ap.add_argument("--wifi-ssid", help="Wi-Fi SSID (omit on a wired board)")
     ap.add_argument("--wifi-psk", help="Wi-Fi passphrase (default: $DA_WIFI_PSK)")
-    ap.add_argument("--token", help="optional long-lived HA token for auto-login")
+    ap.add_argument("--kiosk-token", help="optional kiosk token for auto-login")
     ap.add_argument(
         "--reflash",
         action="store_true",

@@ -154,3 +154,122 @@ def test_a_browser_showing_only_a_blank_page_still_gets_a_verdict():
     page never rendered" rather than erroring out in the fixture."""
     blank = FakePage("about:blank")
     assert kiosk.kiosk_page([blank]) is blank
+
+
+def test_ssh_never_multiplexes_over_a_shared_connection():
+    """The bench must not reuse whatever is in a developer's ~/.ssh/config.
+
+    `ControlMaster auto` plus `ControlPersist` there leaves a master alive after
+    the run that owns the forwarded local port. The next tunnel request then
+    hits ExitOnForwardFailure and dies instantly, and the bind error is logged
+    by the *master*, so the client's stderr is empty and the failure reads as
+    "the tunnel died immediately:" with nothing after the colon. It cost a full
+    hardware run to find. Worse, a shared master is the connection-reuse this
+    file's ExitOnForwardFailure comment exists to prevent.
+    """
+    argv = kiosk.ssh_argv("192.0.2.7", "/tmp/key", ["true"])
+    assert "ControlMaster=no" in argv
+    assert "ControlPath=none" in argv
+    # The tunnel is the one that actually breaks, so assert it carries them too.
+    assert "ControlMaster=no" in kiosk.tunnel_argv("192.0.2.7", "/tmp/key")
+    assert "ControlPath=none" in kiosk.tunnel_argv("192.0.2.7", "/tmp/key")
+
+
+# --------------------------------------------------------------------------- #
+# Waiting for the browser, not for ssh
+# --------------------------------------------------------------------------- #
+
+
+def test_a_debugger_that_answers_is_one_that_names_its_websocket():
+    body = b'{"Browser": "Chrome/154", "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/browser/x"}'
+    assert kiosk.is_debugger_version(body)
+
+
+def test_an_empty_or_foreign_answer_is_not_the_debugger():
+    assert not kiosk.is_debugger_version(b"")
+    assert not kiosk.is_debugger_version(b"<html>not chromium</html>")
+    assert not kiosk.is_debugger_version(b'{"Browser": "Chrome/154"}')
+
+
+def test_the_wait_rides_out_a_kiosk_relaunch():
+    """The tunnel's local end accepts the moment ssh is up, whether or not
+    Chromium is listening behind it — and pairing relaunches the kiosk twice.
+    Seen on the bench: the dashboard assertion attached one second before the
+    new Chromium started, and got ECONNRESET."""
+    answers = iter([False, False, True])
+    kiosk.wait_for_debugger(19222, timeout=5, interval=0, probe=lambda port: next(answers))
+
+
+def test_a_debugger_that_never_answers_says_where_it_looked():
+    with pytest.raises(TimeoutError, match="9222"):
+        kiosk.wait_for_debugger(19222, timeout=0, interval=0, probe=lambda port: False)
+
+
+class FakeClock:
+    def __init__(self):
+        self.now = 0.0
+
+    def __call__(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.now += seconds
+
+
+def test_a_login_page_right_after_pairing_is_given_time_to_turn_into_a_dashboard():
+    """Seen on the bench: attached a second after the login was staged, the
+    kiosk was on /auth/authorize because the injector had not run yet. That is
+    the normal first frame, not the missing-token failure."""
+    looks = iter(["a login form is on the kiosk's screen", None])
+    clock = FakeClock()
+    assert kiosk.settle(lambda: next(looks), timeout=60, interval=2,
+                        clock=clock, sleep=clock.sleep) is None
+
+
+def test_a_browser_that_vanishes_mid_look_is_a_relaunch_not_a_verdict():
+    def look():
+        if clock.now == 0:
+            raise ConnectionResetError("the kiosk relaunched under us")
+        return None
+
+    clock = FakeClock()
+    assert kiosk.settle(look, timeout=60, interval=2,
+                        clock=clock, sleep=clock.sleep) is None
+
+
+def test_a_login_page_that_never_goes_away_is_still_the_failure():
+    clock = FakeClock()
+    reason = kiosk.settle(lambda: "a login form is on the kiosk's screen",
+                          timeout=10, interval=2, clock=clock, sleep=clock.sleep)
+    assert "login form" in reason
+    assert clock.now >= 10
+
+
+def test_an_error_that_outlasts_the_deadline_is_reported_not_swallowed():
+    def look():
+        raise ConnectionResetError("ECONNRESET")
+
+    clock = FakeClock()
+    assert "ECONNRESET" in kiosk.settle(look, timeout=4, interval=2,
+                                        clock=clock, sleep=clock.sleep)
+
+
+def test_a_blocked_omnibox_popup_is_not_the_kiosk_even_under_an_error_url():
+    """Seen on the bench: Chromium's own omnibox popup pages, blocked by the
+    kiosk's URL policy, report as chrome-error://chromewebdata/ next to the
+    real dashboard — at 0x0 and 12x10, so not on any screen."""
+    sizes = {
+        "chrome-error://chromewebdata/#a": (0, 0),
+        "http://ha:8123/lovelace/bench": (1200, 1920),
+        "chrome-error://chromewebdata/#b": (12, 10),
+    }
+    pages = [FakePage(url) for url in sizes]
+    assert kiosk.kiosk_page(pages, size_of=lambda p: sizes[p.url]) is pages[1]
+
+
+def test_a_kiosk_page_that_failed_to_load_is_still_the_one_on_screen():
+    """chrome-error:// is also what the kiosk's *own* page becomes when Home
+    Assistant cannot be reached, so the URL alone must not rule it out."""
+    sizes = {"chrome-error://chromewebdata/": (1200, 1920), "chrome-error://chromewebdata/#p": (0, 0)}
+    pages = [FakePage(url) for url in sizes]
+    assert kiosk.kiosk_page(pages, size_of=lambda p: sizes[p.url]) is pages[0]

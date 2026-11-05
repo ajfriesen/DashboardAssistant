@@ -131,6 +131,21 @@ pkgs.testers.runNixOSTest {
         "grep -q _dashboard-assistant._tcp /etc/avahi/services/dashboard-assistant.service"
     )
 
+    # mDNS *resolution*, the other half. Publishing is how Home Assistant finds
+    # the device; resolving is how the device reaches Home Assistant when the
+    # integration paired but pushed no dashboard URL, because both fallbacks are
+    # a .local name. Avahi alone does not wire nsswitch, so without nss-mdns a
+    # device can advertise itself and still not resolve homeassistant.local.
+    # Matched loosely because the module's name encodes the address families:
+    # nssmdns4 alone is mdns4_minimal, nssmdns6 alone mdns6_minimal, and both
+    # together the combined mdns_minimal. Any of the three is the wiring this
+    # cares about; none of them means nsswitch was never touched. `_minimal`
+    # matters though — it is what confines mDNS lookups to .local.
+    machine.succeed("grep -qE '^hosts:.*mdns[46]?_minimal' /etc/nsswitch.conf")
+    # ...and the resolver reaches a daemon that answers: the device's own name is
+    # the one .local record guaranteed to exist on an isolated test network.
+    machine.succeed('getent hosts "$(hostname).local"')
+
     # The HA API answers on the LAN port with the device identity.
     ident = json.loads(machine.succeed("curl -fsS http://localhost:8081/api/ha/identify"))
     assert ident["node_id"].startswith("da_"), ident

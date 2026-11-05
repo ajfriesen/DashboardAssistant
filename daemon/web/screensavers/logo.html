@@ -1,0 +1,83 @@
+<!doctype html>
+<!-- Bouncing logo screen saver: the Dashboard Assistant mark drifts diagonally,
+     bounces off the edges and changes colour on every bounce, after the old DVD
+     player idle screen. Rendered inside a srcdoc iframe over the dashboard by the
+     kiosk's screen saver agent, so it must be self-contained: the mark is the
+     website/README logo (docs/brand/mark-wide.svg) inlined, with the wordmark
+     styled as in docs/brand/colors.css. Only the mark's frame changes colour (the
+     brand frame, #23211D, is invisible on black); the tiles and the wordmark keep
+     their brand colours. Always moving, so it needs no burn-in drift. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  #logo {
+    position: absolute; left: 0; top: 0;
+    display: flex; flex-direction: column; align-items: center;
+    /* As wide as the wider of mark and name, so the bounce (which measures this
+       box) keeps the name on screen too. */
+    width: max-content;
+    color: #5E82A8;
+    will-change: transform;
+  }
+  #logo svg { width: min(32vw, 32vh); height: auto; display: block; }
+  /* Wordmark on dark: "Dashboard" in text colour, "Assistant" in amber light. */
+  #logo span {
+    margin-top: 0.5em;
+    font-family: Outfit, "Helvetica Neue", Helvetica, sans-serif;
+    font-size: min(4.2vw, 4.2vh); font-weight: 600; letter-spacing: -0.025em;
+    color: #F0EDE6;
+    white-space: nowrap;
+  }
+  #logo b { font-weight: 600; color: #F5B95C; }
+</style>
+</head>
+<body>
+<div id="logo">
+  <svg viewBox="0 0 64 40" aria-hidden="true">
+    <rect x="2" y="2" width="60" height="36" rx="8" fill="currentColor"/>
+    <rect x="8" y="8" width="22" height="24" rx="3.5" fill="#FFFFFF"/>
+    <rect x="34" y="8" width="22" height="10.5" rx="3.5" fill="#FFFFFF"/>
+    <rect x="34" y="21.5" width="22" height="10.5" rx="3.5" fill="#E8A33D"/>
+  </svg>
+  <span>Dashboard <b>Assistant</b></span>
+</div>
+<script>
+  var el = document.getElementById("logo");
+  // Brand accents and muted tones that read on black next to the white and
+  // amber tiles; amber itself is left out so the amber tile never disappears.
+  var colors = ["#5E82A8", "#6FA287", "#C8654A", "#5C574F", "#8F5F14", "#7B6FA8"];
+  var ci = 0;
+  // Speed in viewport-heights per second, so it looks the same on any panel.
+  var speed = 0.12;
+  var x = Math.random() * 0.5, y = Math.random() * 0.5; // fraction of the free space
+  var dx = Math.random() < 0.5 ? 1 : -1, dy = Math.random() < 0.5 ? 1 : -1;
+  var last = performance.now();
+
+  function bounce() {
+    ci = (ci + 1 + Math.floor(Math.random() * (colors.length - 1))) % colors.length;
+    el.style.color = colors[ci];
+  }
+
+  function frame(now) {
+    // Clamp the step so a stalled tab (or a slow Pi frame) doesn't teleport it.
+    var dt = Math.min((now - last) / 1000, 0.1);
+    last = now;
+    var freeW = Math.max(1, innerWidth - el.offsetWidth);
+    var freeH = Math.max(1, innerHeight - el.offsetHeight);
+    var step = speed * innerHeight * dt;
+    x += dx * step / freeW;
+    y += dy * step / freeH;
+    // Two flips in one frame is the famous corner hit; it just changes colour once.
+    var hit = false;
+    if (x <= 0) { x = 0; dx = 1; hit = true; } else if (x >= 1) { x = 1; dx = -1; hit = true; }
+    if (y <= 0) { y = 0; dy = 1; hit = true; } else if (y >= 1) { y = 1; dy = -1; hit = true; }
+    if (hit) bounce();
+    el.style.transform = "translate(" + (x * freeW) + "px," + (y * freeH) + "px)";
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+</script>
+</body>
+</html>

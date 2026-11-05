@@ -1,0 +1,40 @@
+<!doctype html>
+<!-- Clock screen saver. Rendered inside a srcdoc iframe over the dashboard by the
+     kiosk's screen saver agent, so it must be self-contained: no external
+     fetches. The clock drifts a little every minute (less sideways, where portrait panels have no room) to spare OLED/LCD panels from
+     burn-in. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  body {
+    color: #e8ecf2;
+    font-family: system-ui, sans-serif;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #clock { text-align: center; transition: transform 2s ease; }
+  #time { font-size: min(22vmin, 15vw); font-weight: 200; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+  #date { font-size: min(5vmin, 4vw); font-weight: 300; opacity: 0.6; margin-top: 2vmin; }
+</style>
+</head>
+<body>
+<div id="clock"><div id="time"></div><div id="date"></div></div>
+<script>
+  var t = document.getElementById("time"), d = document.getElementById("date"),
+      c = document.getElementById("clock"), lastMin = -1;
+  function tick() {
+    var now = new Date();
+    t.textContent = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    d.textContent = now.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" });
+    if (now.getMinutes() !== lastMin) {
+      lastMin = now.getMinutes();
+      var x = (Math.random() - 0.5) * 8, y = (Math.random() - 0.5) * 16;
+      c.style.transform = "translate(" + x + "vw," + y + "vh)";
+    }
+    setTimeout(tick, 1000 - now.getMilliseconds());
+  }
+  tick();
+</script>
+</body>
+</html>

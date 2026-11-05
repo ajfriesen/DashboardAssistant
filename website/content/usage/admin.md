@@ -26,7 +26,7 @@ the top-right corner.
 
 **Device.** Read-only identity and network details: name, hostname, MAC, IP,
 machine ID, model, serial, installed version and the Home Assistant URL. The same
-view the **ⓘ** button shows on the tablet.
+view the **ⓘ** button shows on the device.
 
 **Recovery.** Pick an earlier system generation and boot into it. Use this when
 an update broke something. The device switches generation and reboots, and keeps
@@ -36,11 +36,12 @@ booting that one until you deploy again.
 API token, your display preferences **and saved Wi-Fi networks**, then reboots
 onto the onboarding screen. You have to type `RESET` to arm the button.
 
-Because it clears Wi-Fi, a reset display comes back broadcasting its own setup
-network, which is what lets you move one to a different house. It also means a
-reset knocks the display off your network, and this page has no password: anyone
-who can reach it can put a display into a state that needs a phone and a walk over
-to it.
+Because it clears Wi-Fi, a reset device comes back needing a seed file, which is
+what lets you move one to a different house — write a new
+`dashboard-assistant.yaml` with the new network's credentials and apply it the
+way [Seed a device](../flash/seed.md) describes. It also means a reset knocks the
+device off your network, and this page has no password: anyone who can reach it
+can put a device into a state that needs a card and a walk over to it.
 
 Factory reset is also how you **re-pair** a device with Home Assistant. A device
 hands its API token to Home Assistant automatically until Home Assistant has used

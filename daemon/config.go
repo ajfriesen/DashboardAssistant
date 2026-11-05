@@ -57,11 +57,13 @@ var (
 	// Assistant automation rather than by us — one grab per 30s is ~860 MB/day, so
 	// on flash this is unbounded wear for a file nothing persists. Must match the
 	// path the in-session agent writes (modules/core/kiosk.nix).
-	screenshotFile = runtimeDir + "/screenshot.jpg"
-	dmiFile        = stateDir + "/dmi.env"      // hardware serial, written by the daemon's root ExecStartPre (DMI is root-only)
-	sendspinFile   = stateDir + "/sendspin"     // persisted on/off for the Sendspin audio player, reapplied to its unit at daemon start
-	tlsCertFile    = stateDir + "/tls-cert.pem" // self-signed cert for the LAN HA API; the integration pins its fingerprint
-	tlsKeyFile     = stateDir + "/tls-key.pem"  // its private key (0600 — nothing else on the device reads this)
+	screenshotFile  = runtimeDir + "/screenshot.jpg"
+	dmiFile         = stateDir + "/dmi.env"          // hardware serial, written by the daemon's root ExecStartPre (DMI is root-only)
+	sendspinFile    = stateDir + "/sendspin"         // persisted on/off for the Sendspin audio player, reapplied to its unit at daemon start
+	tlsCertFile     = stateDir + "/tls-cert.pem"     // self-signed cert for the LAN HA API; the integration pins its fingerprint
+	tlsKeyFile      = stateDir + "/tls-key.pem"      // its private key (0600 — nothing else on the device reads this)
+	screensaverFifo = stateDir + "/screensaver.fifo" // daemon writes "start <name>"/"stop"; in-session agent overlays the saver over CDP
+	screensaverFile = stateDir + "/screensaver.json" // persisted screen saver choice + idle timeout (minutes)
 )
 
 const sessionUnit = "greetd.service" // the Sway kiosk session; restart relaunches it
@@ -211,7 +213,7 @@ func markOnline() {
 func provisioningStatePaths() []string {
 	return []string{
 		markerFile, runtimeEnv, tokenFile, apiTokenFile, pairedMarker,
-		onlineMarker, urlsFile, zoomFile, themeFile, rotationFile,
+		onlineMarker, urlsFile, zoomFile, themeFile, rotationFile, screensaverFile,
 		// The recorded seed-file hash goes too, so a reset device re-imports
 		// the card it is sitting on instead of ignoring it. Without this a
 		// factory reset would appear to work and then come back unprovisioned

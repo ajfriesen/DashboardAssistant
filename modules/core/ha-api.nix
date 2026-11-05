@@ -118,6 +118,15 @@ in
         enable = true;
         userServices = true;
       };
+      # Resolve .local names too, not only publish our own. Discovery runs
+      # Home-Assistant-to-device (ADR 0002), so nothing here browses for Home
+      # Assistant — but when the integration pairs without pushing a dashboard
+      # URL the kiosk falls back to homeassistant.local, and Avahi on its own
+      # does not touch nsswitch. Without these the device advertises itself
+      # perfectly and still cannot resolve the name it falls back to, which
+      # looks like "the dashboard just never loads".
+      nssmdns4 = true;
+      nssmdns6 = true;
       extraServiceFiles.dashboard-assistant = ''
         <?xml version="1.0" standalone='no'?>
         <!DOCTYPE service-group SYSTEM "avahi-service.dtd">
@@ -130,5 +139,16 @@ in
         </service-group>
       '';
     };
+
+    # Start Avahi only once resolvconf.service has run. openresolv's libc
+    # subscriber ends with a hook, libc.d/avahi-daemon, that sends SIGHUP to
+    # whatever pid /run/avahi-daemon/pid names. At boot the two units start
+    # unordered; caught with a kernel signal trace, the hook's HUP landed 141 ms
+    # after Avahi exec'd — pidfile written, SIGHUP handler not yet installed —
+    # and killed it. systemd counts SIGHUP as a clean exit, so nothing restarted
+    # it, and the stale pidfile it left made every manual start fail too: a
+    # device on the network that Home Assistant never discovers. Once Avahi is
+    # up, the same hook (NetworkManager re-runs it on DNS changes) is a reload.
+    systemd.services.avahi-daemon.after = [ "resolvconf.service" ];
   };
 }

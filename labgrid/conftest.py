@@ -26,7 +26,6 @@ the place has to be acquired before any of this works. `just hw-test` does that
 for you.
 """
 
-import collections
 import os
 import shlex
 import shutil
@@ -477,20 +476,94 @@ def bench_home_assistant(bench_host, bench_ha_url):
         yield client
 
 
+#: How long to wait for the radio to associate after a boot carrying its
+#: credentials. Covers the boot itself, the importer, and wpa_supplicant's
+#: first association plus DHCP.
+ASSOCIATION_TIMEOUT = 120
+
+#: Where the importer reads a seed file from on the board.
+SEED_PATH = "/boot/dashboard-assistant.yaml"
+
+
 @pytest.fixture(scope="session")
-def device_ip(shell):
-    """The board's address on the wire, asked of the board itself.
+def on_the_wifi(shell, _bench, bench_wifi):
+    """The board on the Bench Wi-Fi, which is the only network it has.
+
+    The bench board is Wi-Fi-only — there is no wire in it — so this is bench
+    bring-up rather than a Wi-Fi test: everything that needs an address needs
+    this first, which is why `device_ip` depends on it.
+
+    The credentials are written onto the FIRMWARE partition and applied by a
+    *reboot*, the way a user delivers them, rather than poked into a running
+    system. The seed carries Wi-Fi and nothing else: Home Assistant hands over
+    the dashboard URL itself when it pairs, and seeding `ha_url` here would
+    mark the device provisioned before anything paired it.
+
+    The file and the importer's content hash are removed on the way out, so a
+    later run on this card cannot find itself already associated and pass
+    without having done anything.
+
+    The passphrase does cross the board's serial console, because the console
+    is the only channel to a board that has no network yet — so it lands in
+    `labgrid/logs/`, which is gitignored but is a real file on the machine
+    running this. Nothing short of writing the card from the bench host fixes
+    that, and saying so is better than implying otherwise: **do not attach a
+    bench transcript to a public issue.** What is avoided is a *second* copy:
+    the seed is assembled in memory, never written to disk here, and removed
+    from the card afterwards.
+    """
+    seed = device.wifi_only_seed(bench_wifi.ssid, bench_wifi.psk)
+
+    shell.run_check("mountpoint -q /boot")
+    # Re-arm the importer: re-import is gated on the seed file's content hash,
+    # so a board that has seen this exact file before would ignore it.
+    shell.run("rm -f /var/lib/dashboard-assistant/seed-hash")
+    shell.run_check(f"cat > {SEED_PATH} <<'EOF'\n{seed}EOF")
+    try:
+        # The same ShellDriver instance comes back — reboot() deactivates and
+        # reactivates it rather than building a new one.
+        _bench.reboot()
+        bench_ha.wait_until(
+            lambda: joined_network(shell) == bench_wifi.ssid,
+            bench_ha.device_side(
+                f"association with the Bench Wi-Fi after a boot that carried "
+                f"its credentials on {SEED_PATH}"
+            ),
+            ASSOCIATION_TIMEOUT,
+        )
+        yield shell
+    finally:
+        shell.run(f"rm -f {SEED_PATH}")
+        shell.run("rm -f /var/lib/dashboard-assistant/seed-hash")
+
+
+def joined_network(shell):
+    """The network the board's radio has joined, or None."""
+    return device.joined_network(
+        lambda command: "\n".join(shell.run(command)[0])
+    )
+
+
+@pytest.fixture(scope="session")
+def device_ip(shell, on_the_wifi):
+    """The board's address on the Bench Wi-Fi, asked of the board itself.
 
     Not read from a lease table or an environment file: the board is reflashed
     on most runs and its address is whatever DHCP just gave it, so anything
     written down here would be a second copy waiting to go stale.
+
+    The radio, not the wire. The bench board has no wire in it, and a wired
+    address is therefore not something to fall back to: if one appears, the
+    board is not in the state this bench is meant to assert against, and the
+    Wi-Fi-only claim in test_wifi.py would be passing over a wired path.
     """
     output = "\n".join(shell.run(device.ADDR_COMMAND)[0])
-    address = device.wired_address(output)
+    address = device.wireless_address(output)
     if not address:
         pytest.fail(
             bench_ha.device_side(
-                f"the board has no address on its wire:\n{output}"
+                f"the board has no address on its radio, though it reported "
+                f"joining {joined_network(shell)!r}:\n{output}"
             )
         )
     return address
@@ -550,11 +623,6 @@ def paired(bench_home_assistant, shell, device_ip):
             print(f"could not remove config entry {entry_id}: {err!r}")
 
 
-#: Never logged, never put in an assertion message: `psk` is a passphrase
-#: and the console transcript is not private.
-BenchWifi = collections.namedtuple("BenchWifi", "ssid psk")
-
-
 @pytest.fixture(scope="session")
 def bench_wifi():
     """The Bench Wi-Fi's SSID and passphrase, from the secret declarations.
@@ -570,7 +638,7 @@ def bench_wifi():
     unmet = capability.missing_wifi_credentials(ssid, psk)
     if unmet:
         pytest.skip(unmet)
-    return BenchWifi(ssid=ssid, psk=psk)
+    return capability.BenchWifi(ssid=ssid, psk=psk)
 
 
 @pytest.fixture

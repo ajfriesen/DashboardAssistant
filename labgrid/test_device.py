@@ -101,10 +101,11 @@ def test_a_wire_that_is_down_is_still_the_wire():
 
 
 def test_the_interface_names_cover_what_these_boards_actually_use():
-    """A Pi 5 calls its wire end0, an x86 box calls it enp2s0 or eth0."""
+    """A Pi 5 calls its wire end0 and its radio wld0; an x86 box says enp2s0 or
+    eth0, and wlan0 or wlp1s0."""
     for name in ("end0", "enp2s0", "eth0"):
         assert device.is_wired(name), name
-    for name in ("wlan0", "wlp1s0"):
+    for name in ("wld0", "wlan0", "wlp1s0"):
         assert device.is_wireless(name), name
     assert not device.is_wired("wlan0")
 
@@ -113,24 +114,63 @@ def test_the_interface_names_cover_what_these_boards_actually_use():
 # Whether the radio actually joined the Bench Wi-Fi
 # --------------------------------------------------------------------------- #
 
-IW_ASSOCIATED = """\
-Connected to aa:bb:cc:dd:ee:ff (on wlan0)
-\tSSID: BenchNet
-\tfreq: 5180
-\tsignal: -47 dBm
+#: `nmcli -t` on a joined radio. The connection's name is the SSID because the
+#: daemon names the profile it creates after the network (daemon/network.go:248).
+NMCLI_ASSOCIATED = """\
+GENERAL.CONNECTION:BenchNet
+GENERAL.STATE:100 (connected)
 """
 
 
 def test_an_associated_radio_reports_the_network_it_joined():
-    assert device.associated_ssid(IW_ASSOCIATED) == "BenchNet"
+    assert device.associated_ssid(NMCLI_ASSOCIATED) == "BenchNet"
 
 
 def test_an_unassociated_radio_reports_nothing():
-    assert device.associated_ssid("Not connected.\n") is None
+    """Disconnected is a state NetworkManager reports, not an absence."""
+    assert (
+        device.associated_ssid(
+            "GENERAL.CONNECTION:\nGENERAL.STATE:30 (disconnected)\n"
+        )
+        is None
+    )
+
+
+def test_a_radio_still_connecting_has_joined_nothing_yet():
+    """The state gate earns its place here: NetworkManager names the profile it
+    is *attempting* before the association completes, so without it a board
+    mid-handshake would read as joined and the wait would end too early."""
+    assert (
+        device.associated_ssid(
+            "GENERAL.CONNECTION:BenchNet\nGENERAL.STATE:70 (config)\n"
+        )
+        is None
+    )
 
 
 def test_an_ssid_with_spaces_survives_intact():
-    assert device.associated_ssid("\tSSID: Bench Net 5G\n") == "Bench Net 5G"
+    assert (
+        device.associated_ssid(
+            "GENERAL.CONNECTION:Bench Net 5G\nGENERAL.STATE:100 (connected)\n"
+        )
+        == "Bench Net 5G"
+    )
+
+
+def test_an_ssid_containing_a_colon_is_unescaped():
+    """`nmcli -t` escapes its field separator, so a colon in an SSID arrives
+    backslashed and would otherwise be truncated or read back wrong."""
+    assert (
+        device.associated_ssid(
+            "GENERAL.CONNECTION:Bench\\:5G\nGENERAL.STATE:100 (connected)\n"
+        )
+        == "Bench:5G"
+    )
+
+
+def test_a_radio_nmcli_knows_nothing_about_reports_nothing():
+    """An error on stderr, or a device nmcli has no row for, is not an SSID."""
+    assert device.associated_ssid("Error: Device 'wld9' not found.\n") is None
 
 
 # --------------------------------------------------------------------------- #
@@ -178,6 +218,54 @@ def test_a_passphrase_with_quotes_and_backslashes_round_trips():
     assert seeded["wifi"]["psk"] == nasty
 
 
+def test_a_wifi_only_seed_carries_no_home_assistant_url():
+    """What the bench seeds now: credentials and nothing else.
+
+    The journey the suite asserts has Home Assistant hand the device its
+    dashboard URL over /api/ha/kiosk_login, so seeding one here would mark the
+    device provisioned before pairing and skip the path being tested.
+    """
+    import yaml
+
+    seeded = yaml.safe_load(device.wifi_only_seed("BenchNet", "p@ss"))
+    assert seeded == {"wifi": {"ssid": "BenchNet", "psk": "p@ss"}}, seeded
+
+
+def test_a_wifi_only_seed_escapes_the_passphrase_the_same_way():
+    """The escaping is the shared half, so it must not regress in one of them."""
+    import yaml
+
+    nasty = 'a"b\\c d'
+    assert yaml.safe_load(device.wifi_only_seed("n", nasty))["wifi"]["psk"] == nasty
+
+
+def test_a_wifi_only_seed_without_a_passphrase_is_refused():
+    """Same refusal as wifi_seed — an open network is not what the bench has."""
+    with pytest.raises(ValueError):
+        device.wifi_only_seed("BenchNet", "")
+
+
+def test_the_joined_network_is_read_by_asking_the_radio_it_found():
+    """joined_network composes three steps; the interesting failure is the
+    middle one asking about the wrong interface."""
+    asked = []
+
+    def run(command):
+        asked.append(command)
+        if command == device.ADDR_COMMAND:
+            return "end0  DOWN\nwld0  UP  192.168.178.91/24\n"
+        return "GENERAL.CONNECTION:BenchNet\nGENERAL.STATE:100 (connected)\n"
+
+    assert device.joined_network(run) == "BenchNet"
+    assert any("wld0" in command for command in asked[1:]), asked
+
+
+def test_a_board_whose_radio_is_absent_has_joined_no_network():
+    """No radio at all reads as None rather than raising, so a wired-only board
+    reports "not on Wi-Fi" instead of taking the run down."""
+    assert device.joined_network(lambda _: "end0  UP  192.168.178.90/24\n") is None
+
+
 def test_building_a_seed_without_a_passphrase_is_refused():
     """An open network is not what the bench has, and silently writing a seed
     with no `psk` would produce a device that never associates and a failure
@@ -199,4 +287,6 @@ def test_the_association_command_asks_about_the_radio_it_was_given():
     its radio something else: `iw` writes "No such device", the SSID reads as
     None, and the wait burns its whole timeout before blaming the access point
     for a harness bug."""
-    assert device.association_command("wlp1s0") == "iw dev wlp1s0 link"
+    assert device.association_command("wlp1s0") == (
+        "nmcli -t -f GENERAL.CONNECTION,GENERAL.STATE device show wlp1s0"
+    )

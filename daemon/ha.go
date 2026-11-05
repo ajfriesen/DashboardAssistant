@@ -101,6 +101,13 @@ func deviceName() string {
 // and because a wired-only host legitimately has none.
 func (h *HAHub) SetNetwork(nm *NetworkManager) { h.nm = nm }
 
+// SetScreensaver gives the hub the screen saver, set after construction like
+// SetNetwork, and wires its observer to the SSE broadcast.
+func (h *HAHub) SetScreensaver(s *Screensaver) {
+	h.scr = s
+	s.SetObserver(func() { h.broadcast() })
+}
+
 // stateSnapshot is the full device state the API serves (GET /state) and pushes
 // over SSE. It folds in every value the MQTT bridge used to publish as separate
 // topics; the integration maps each field to an HA entity.
@@ -154,6 +161,12 @@ type stateSnapshot struct {
 		Current int   `json:"current"`
 		Options []int `json:"options"`
 	} `json:"rotation"`
+	Screensaver struct {
+		Active  bool     `json:"active"`
+		Current string   `json:"current"`
+		Options []string `json:"options"`
+		Timeout int      `json:"timeout"` // idle minutes before it starts; 0 = never
+	} `json:"screensaver"`
 	// Omitted entirely on builds without the Sendspin player, so the
 	// integration creates no audio entity there (same pattern as the
 	// Present flags on battery/temperature).
@@ -219,7 +232,8 @@ type HAHub struct {
 	snd   *Sendspin
 	// Set after construction (SetNetwork): factory reset needs to drop saved Wi-Fi
 	// profiles, and the two reset paths must not drift apart on that.
-	nm *NetworkManager
+	nm  *NetworkManager
+	scr *Screensaver
 
 	mu   sync.Mutex
 	subs map[chan []byte]struct{}
@@ -357,6 +371,10 @@ func (h *HAHub) snapshot() stateSnapshot {
 	s.Theme.Dark = h.theme.Dark()
 	s.Rotation.Current = h.rot.Degrees()
 	s.Rotation.Options = h.rot.Options()
+	s.Screensaver.Active = h.scr.Active()
+	s.Screensaver.Current = h.scr.Name()
+	s.Screensaver.Options = h.scr.Options()
+	s.Screensaver.Timeout = h.scr.Timeout()
 
 	if h.snd.Available() {
 		s.Sendspin = &sendspinState{On: h.snd.On(), State: h.snd.Actual()}
@@ -422,6 +440,7 @@ func (h *HAHub) routes() http.Handler {
 	mux.HandleFunc("/api/ha/zoom", h.auth(h.handleZoom))
 	mux.HandleFunc("/api/ha/theme", h.auth(h.handleTheme))
 	mux.HandleFunc("/api/ha/rotation", h.auth(h.handleRotation))
+	mux.HandleFunc("/api/ha/screensaver", h.auth(h.handleScreensaver))
 	mux.HandleFunc("/api/ha/sendspin", h.auth(h.handleSendspin))
 	mux.HandleFunc("/api/ha/power", h.auth(h.handlePower))
 	mux.HandleFunc("/api/ha/reset", h.auth(h.handleReset))
@@ -735,6 +754,11 @@ func (h *HAHub) handlePage(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
+	// Navigating replaces the page the overlay lives on, so take the saver down
+	// properly (bar back, HA told) rather than leave its state stale.
+	if err := h.scr.Stop(); err != nil {
+		log.Printf("ha: stop screensaver for page change: %v", err)
+	}
 	switch {
 	case req.Select != "":
 		h.pages.Select(req.Select)
@@ -835,6 +859,43 @@ func (h *HAHub) handleRotation(w http.ResponseWriter, r *http.Request) {
 	if err := h.rot.Set(req.Degrees); err != nil {
 		writeErr(w, err)
 		return
+	}
+	writeJSON(w, http.StatusOK, h.snapshot())
+}
+
+// handleScreensaver picks the saver ({"name": "clock"}), sets the idle timeout in
+// minutes ({"timeout": 10}, 0 = never) and/or starts or stops it now
+// ({"active": true}). Any combination; applied in that order, so one request can
+// pick a saver and show it.
+func (h *HAHub) handleScreensaver(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name    *string `json:"name"`
+		Timeout *int    `json:"timeout"`
+		Active  *bool   `json:"active"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if req.Name != nil {
+		if err := h.scr.SetName(*req.Name); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+	}
+	if req.Timeout != nil {
+		h.scr.SetTimeout(*req.Timeout)
+	}
+	if req.Active != nil {
+		var err error
+		if *req.Active {
+			err = h.scr.Start()
+		} else {
+			err = h.scr.Stop()
+		}
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, h.snapshot())
 }

@@ -16,12 +16,15 @@ The Bench Wi-Fi itself is provisioned on the site's access point, outside this
 repository, and its credentials are declared in `secretspec.toml` rather than
 committed — so a bench without them skips rather than fails. The passphrase
 still crosses the board's serial console on its way onto the card, and so
-appears in `labgrid/logs/`; see `seeded_wifi` below.
+appears in `labgrid/logs/`; see conftest's `on_the_wifi`, which does the seeding.
 
-Runs last in the suite, and the ordering is not incidental: this reboots the
-board and takes its network away, which is a poor state to hand to anything
-else. The wire is restored whatever happens (see the `wired_link_down`
-fixture), but a reboot is not something to make every other assertion pay for.
+The seeding and its reboot are no longer this module's to pay for. The bench
+board is Wi-Fi-only, so getting it onto the Bench Wi-Fi is bring-up that
+anything needing an address already triggers — `device_ip` depends on it. What
+is left here is the claim itself, which is why this still runs last: it takes
+the wire down and asserts the device keeps answering, and a board whose only
+remaining path has just been cut is a poor state to hand to anything else. The
+wire is restored whatever happens (see the `wired_link_down` fixture).
 """
 
 import json
@@ -32,6 +35,11 @@ import pytest
 
 import bench_ha
 import device
+
+# The seeding, the association read and its timeout are bench bring-up and live
+# beside the fixture that does them; imported rather than copied so there is one
+# answer to "is the board on the Bench Wi-Fi".
+from conftest import ASSOCIATION_TIMEOUT, joined_network
 
 #: Every assertion in this file needs a board on the bench's own network
 #: segment. The x86_64 QEMU target has none, so the whole file skips there
@@ -45,28 +53,6 @@ pytestmark = pytest.mark.usefixtures("on_the_bench")
 API_PORT = 8081
 IDENTIFY_PATH = "/api/ha/identify"
 
-#: How long to let the radio associate and DHCP answer after the boot that
-#: applies the seed. An access point on another floor is slow; a gate that
-#: fails for being early teaches people to re-run it.
-ASSOCIATION_TIMEOUT = 120
-
-
-def joined_network(shell):
-    """The network the board's radio has joined, or None.
-
-    Asks the board which interface its radio is before asking `iw` about it:
-    a Pi 5 calls it wlan0 and an x86 box something derived from its PCI path,
-    and a hardcoded name would turn a harness bug into "the Wi-Fi never came
-    up".
-    """
-    radio = device.wireless_interface("\n".join(shell.run(device.ADDR_COMMAND)[0]))
-    if not radio:
-        return None
-    return device.associated_ssid(
-        "\n".join(shell.run(device.association_command(radio))[0])
-    )
-
-
 def identify(address, timeout=10):
     """Ask the device who it is, over the network, from off the board."""
     with urllib.request.urlopen(
@@ -76,48 +62,16 @@ def identify(address, timeout=10):
 
 
 @pytest.fixture(scope="session")
-def seeded_wifi(shell, _bench, bench_wifi, bench_ha_url):
-    """The board rebooted with Wi-Fi credentials on its FIRMWARE partition.
+def seeded_wifi(on_the_wifi):
+    """The board associated with the Bench Wi-Fi from a seed file.
 
-    The file is written to the partition and then the board is *rebooted*, so
-    the credentials are delivered the way a user delivers them rather than
-    poked into a running system. The file and the importer's content hash are
-    removed on the way out, so a later run on this card cannot find itself
-    already on the Bench Wi-Fi and pass without having done anything.
-
-    The passphrase does cross the board's serial console, because the console
-    is the only channel to a board that has not got a network yet — so it lands
-    in `labgrid/logs/`, which is gitignored but is a real file on the machine
-    running this. Nothing can fix that short of writing the card from the bench
-    host, and saying so is better than implying otherwise: **do not attach a
-    bench transcript to a public issue.** What is avoided is a *second* copy —
-    the seed is assembled in memory and never written to disk here, and it is
-    removed from the card afterwards.
+    The seeding itself is bench bring-up and lives in conftest's `on_the_wifi`:
+    the board is Wi-Fi-only, so anything that needs an address has already paid
+    for it, and seeding again here would re-import the same credentials. Kept
+    under a name of its own because what these tests assert *about* that
+    bring-up is a claim in its own right.
     """
-    seed = device.wifi_seed(bench_ha_url, bench_wifi.ssid, bench_wifi.psk)
-    path = "/boot/dashboard-assistant.yaml"
-
-    shell.run_check("mountpoint -q /boot")
-    # Re-arm the importer: re-import is gated on the seed file's content hash,
-    # so a board that has seen this exact file before would ignore it.
-    shell.run("rm -f /var/lib/dashboard-assistant/seed-hash")
-    shell.run_check(f"cat > {path} <<'EOF'\n{seed}EOF")
-    try:
-        # The same ShellDriver instance comes back — reboot() deactivates and
-        # reactivates it rather than building a new one.
-        _bench.reboot()
-        bench_ha.wait_until(
-            lambda: joined_network(shell) == bench_wifi.ssid,
-            bench_ha.device_side(
-                f"association with the Bench Wi-Fi after a boot that carried "
-                f"its credentials on {path}"
-            ),
-            ASSOCIATION_TIMEOUT,
-        )
-        yield shell
-    finally:
-        shell.run(f"rm -f {path}")
-        shell.run("rm -f /var/lib/dashboard-assistant/seed-hash")
+    return on_the_wifi
 
 
 def test_the_credentials_arrived_by_seed_file_on_the_firmware_partition(seeded_wifi):

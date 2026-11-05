@@ -98,6 +98,8 @@ func main() {
 	snd := NewSendspin()
 	hub := NewHAHub(loadAPIToken(), disp, pages, act, upd, zoom, theme, rot, snd)
 	hub.SetNetwork(nm)
+	scr := NewScreensaver()
+	hub.SetScreensaver(scr)
 	srv := &server{nm: nm, ha: hub, pages: pages}
 
 	// The Sendspin player's unit has no install target — this daemon owns its
@@ -117,7 +119,7 @@ func main() {
 	// Reverse channel: the in-session agents report the real display power state
 	// and touch activity here, keeping HA in sync with changes that never went
 	// through an API command (the hub observers broadcast them over SSE).
-	go watchDisplayState(disp, act)
+	go watchDisplayState(disp, act, scr)
 
 	// Move the kiosk off the "Reconnecting…" splash once the device becomes READY.
 	// The launcher only reads state once at session start, so a box that booted
@@ -137,6 +139,14 @@ func main() {
 		}
 	}()
 
+	// Idle screen saver: only over a live dashboard with the panel on — never over
+	// the setup/reconnect splash, whose instructions it would hide.
+	go func() {
+		for range time.Tick(5 * time.Second) {
+			scr.Tick(act.SecondsSince(), disp.On() && srv.deriveState() == StateReady)
+		}
+	}()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeText(w, http.StatusOK, "ok")
@@ -152,6 +162,9 @@ func main() {
 	// (importance of sponsoring + a QR to GitHub Sponsors); loopback only like the
 	// rest of the on-device UI.
 	mux.Handle("/sponsor", loopbackOnly(http.HandlerFunc(srv.handleSponsorPage)))
+	// Screen saver pages (web/screensavers/<name>.html), fetched by the in-session
+	// screen saver agent to overlay on the dashboard. Loopback only.
+	mux.Handle("/screensaver/", loopbackOnly(http.HandlerFunc(srv.handleScreensaverPage)))
 	// Import a YAML config bundle (HA URL / token / Wi-Fi / API token / pages), fed
 	// by the USB and ESP importers. Loopback only. This is the sole config path.
 	mux.Handle("/api/import", loopbackOnly(http.HandlerFunc(srv.handleImport)))
@@ -332,7 +345,7 @@ func portOf(addr string) string {
 // FIFO is opened O_RDWR so the daemon always keeps a writer fd of its own —
 // reads then block for data instead of hitting EOF each time a writer closes,
 // and writers never get ENXIO for a missing reader. Reopens on any error.
-func watchDisplayState(disp *Display, act *Activity) {
+func watchDisplayState(disp *Display, act *Activity, scr *Screensaver) {
 	for {
 		f, err := os.OpenFile(displayStateFifo, os.O_RDWR, 0)
 		if err != nil {
@@ -350,6 +363,13 @@ func watchDisplayState(disp *Display, act *Activity) {
 				disp.Report(false)
 			case line == "touch":
 				act.Touch()
+				// The overlay already fades itself out on the tap; this brings
+				// the bar back and tells HA.
+				if err := scr.Stop(); err != nil {
+					log.Printf("screensaver: stop on touch: %v", err)
+				}
+			case line == "saver off":
+				scr.ReportOff()
 			case strings.HasPrefix(line, "bright "):
 				if n, err := strconv.Atoi(strings.TrimSpace(line[len("bright "):])); err == nil {
 					disp.ReportBrightness(n)
