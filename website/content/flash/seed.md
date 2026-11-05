@@ -86,8 +86,19 @@ file has changed, while a USB stick is applied each time you plug it in.
 
     It is the same partition on every image — x86 and both Raspberry Pis: the
     EFI system partition, labelled **`ESP`** and mounted as `/boot` on the
-    device. Your file manager shows exactly one readable partition; the other
-    one is btrfs, which Windows and macOS cannot read.
+    device. On Windows and macOS your file manager shows exactly one readable
+    partition, this one; the other one is btrfs, which they cannot read.
+
+    Linux desktops do the opposite: they mount the btrfs root and leave the
+    `ESP` unmounted, because they treat an EFI system partition as part of the
+    system. Mount it yourself — it is the first partition, the 1 GiB one:
+
+    ```sh
+    udisksctl mount -b /dev/sdX1
+    ```
+
+    Replace `sdX` with the card or disk (`lsblk` lists it), and run
+    `udisksctl unmount -b /dev/sdX1` before you pull it.
 
     That partition is not empty: alongside the boot files it carries a
     **`README.txt`** and a **`dashboard-assistant.yaml.example`** that say all

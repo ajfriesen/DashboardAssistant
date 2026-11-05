@@ -96,11 +96,13 @@ internal disk, a Raspberry Pi image goes to the SD card (usually
 Once the flash finishes, move the disk into the target machine (or leave it in
 place) and boot it. On Ethernet the device gets online by itself. For Wi-Fi, or to
 configure a device before it ever boots, write a [seed file](seed.md) — that is
-also how you set up several tablets or do a headless install.
+also how you set up several devices or do a headless install.
 
-On a freshly flashed card or disk, the small `ESP` partition your file manager
-shows carries a `README.txt` and an example seed file. That is where the seed
-file goes, and the README on the card repeats the instructions.
+On a freshly flashed card or disk, the small `ESP` partition carries a
+`README.txt` and an example seed file. That is where the seed file goes, and the
+README on the card repeats the instructions. Windows and macOS show it in the
+file manager; a Linux desktop leaves it unmounted, so mount it yourself (see
+[Seed File](seed.md#apply-the-seed-file)).
 
 ## Raspberry Pi 4: check your bootloader EEPROM
 
