@@ -9,6 +9,8 @@ icon: lucide/sparkles
 - Full-screen Chromium locked to your Home Assistant dashboard.
 - Configure multiple dashboard URLs or any web site and cycle between them (from HA or on-screen).
 - Wake the display by touch.
+- Screen saver after a period without a touch (10 minutes by default): a
+  drifting clock or the bouncing logo over the dashboard, dismissed with a tap.
 - On-screen keyboard for text fields on touch-only devices. (Experimental)
 - Automatic login using a long-lived HA token — no tapping through the login screen.
 
@@ -59,6 +61,9 @@ press on the tablet. It appears as a single device with these entities:
 | Zoom | `number` | Browser zoom, 25–400 % |
 | Dark mode | `switch` | Flip the Home Assistant frontend dark/light |
 | Rotation | `select` | Rotate the display 0 / 90 / 180 / 270° |
+| Screen saver | `switch` | Show the screen saver now, or dismiss it. Also turns on by itself after the idle timeout and off on a touch |
+| Screen saver style | `select` | Which screen saver to show (clock, logo) |
+| Screen saver timeout | `number` | Minutes without a touch before the screen saver starts, 0–240; 0 turns the idle trigger off |
 | Screenshot | `button` + `image` | Capture the current web view on demand; the latest shot shows as an image you can click to enlarge |
 | Page | `select` | Jump to one of your configured dashboard URLs |
 | Next / Previous page | `button` | Cycle through the dashboard URLs |
