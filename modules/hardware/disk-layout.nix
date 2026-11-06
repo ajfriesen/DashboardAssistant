@@ -12,9 +12,12 @@
 # install onto someone else's board overrides it, e.g.
 #   disko-install --flake .#dashboard-x86-disk --disk main /dev/nvme0n1
 #
-# Two subvolumes: @ (root, incl. /var/lib/dashboard-assistant state) and @nix
-# (the store). Splitting them keeps the door open for the
-# impermanence/erase-your-darlings plan later without a reformat.
+# Three subvolumes: @ (root, incl. /var/lib/dashboard-assistant state), @nix
+# (the store) and @swap (a swap file behind zram). Splitting @ and @nix keeps
+# the door open for the impermanence/erase-your-darlings plan later without a
+# reformat; @swap is its own because btrfs refuses to swap to a file in a
+# subvolume that is snapshotted, and keeping it out of @ keeps it out of any
+# snapshot of the root.
 #
 # Partition 1 is an EFI system partition (EF00) on every target, including the
 # Pi. That is not cosmetic uniformity — `bootctl` refuses to install into
@@ -122,6 +125,26 @@ in
   # which should either order itself before tmp.mount or stop using /tmp.
   config.systemd.services.growpart.environment.TMPDIR = "/run";
 
+  # The swap file behind zram, on its own @swap subvolume (see the header).
+  # NixOS creates it on first boot with `btrfs filesystem mkswapfile`, which
+  # makes it NOCOW and so uncompressed, as btrfs requires of a swap file. Its
+  # priority is below zram's (modules/core/memory.nix), so the kernel writes
+  # here only once compressed RAM is full: a last resort that costs flash
+  # writes, in exchange for not killing the browser on a 2 GB board.
+  config.swapDevices = [
+    {
+      device = "/swap/swapfile";
+      size = 1024; # MiB
+      priority = 10;
+    }
+  ];
+  # The built image has well under a gigabyte free on its root; the file only
+  # fits once growpart and growfs have expanded it to the real medium.
+  config.systemd.services.mkswap-swap-swapfile.after = [
+    "growpart.service"
+    "systemd-growfs-root.service"
+  ];
+
   config.disko.devices.disk.main = {
     type = "disk";
     inherit (cfg) device imageName imageSize;
@@ -166,6 +189,14 @@ in
                   "compress=zstd"
                   "noatime"
                 ];
+              };
+              # Only the subvolume is made here, not the file: disko's own
+              # `swap.swapfile` would allocate it at image build time and put a
+              # gigabyte of zeros into every image. swapDevices below creates
+              # it on first boot instead.
+              "/@swap" = {
+                mountpoint = "/swap";
+                mountOptions = [ "noatime" ];
               };
             };
           };

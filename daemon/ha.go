@@ -135,6 +135,7 @@ type stateSnapshot struct {
 		TotalMiB int `json:"total_mib"`
 		UsedMiB  int `json:"used_mib"`
 	} `json:"memory"`
+	Swap Swap `json:"swap"`
 	Disk struct {
 		TotalGiB float64 `json:"total_gib"`
 		UsedGiB  float64 `json:"used_gib"`
@@ -338,6 +339,7 @@ func (h *HAHub) snapshot() stateSnapshot {
 	if total, used, err := readMem(); err == nil {
 		s.Memory.TotalMiB, s.Memory.UsedMiB = total, used
 	}
+	s.Swap = readSwap()
 	if total, used, err := readDisk(); err == nil {
 		s.Disk.TotalGiB, s.Disk.UsedGiB = total, used
 	}
