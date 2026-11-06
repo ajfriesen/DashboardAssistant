@@ -194,9 +194,12 @@ def zoom_level(output):
     except (TypeError, ValueError):
         return None
 
+def wifi_seed(ssid, psk):
+    """A seed file that carries the Bench Wi-Fi and nothing else.
 
-def wifi_seed(ha_url, ssid, psk):
-    """A seed file that provisions Home Assistant *and* the Bench Wi-Fi.
+    What the bench seeds to get a board onto the network. Home Assistant hands
+    over its own URL when it pairs (POST /api/ha/kiosk_login), so there is
+    nothing else for the seed file to say.
 
     JSON, which is a subset of YAML with the same string-escape rules, so
     `json.dumps` is a correct YAML escaper and the passphrase survives whatever
@@ -208,20 +211,6 @@ def wifi_seed(ha_url, ssid, psk):
     Refuses an empty passphrase rather than writing a seed without one: the
     bench's network is not open, and a device that silently never associates
     produces a failure that blames the radio.
-    """
-    return f"ha_url: {json.dumps(ha_url)}\n" + wifi_only_seed(ssid, psk)
-
-
-def wifi_only_seed(ssid, psk):
-    """A seed file that carries the Bench Wi-Fi and nothing else.
-
-    What the bench seeds to get a board onto the network, because the journey
-    being asserted has Home Assistant hand over the dashboard URL itself
-    (POST /api/ha/kiosk_login). Seeding `ha_url` here would mark the device
-    provisioned before anything paired it and skip that path entirely.
-
-    Escaping and the empty-passphrase refusal live here, so wifi_seed above
-    cannot drift away from them.
     """
     if not psk:
         raise ValueError(

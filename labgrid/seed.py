@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Provision the bench board from a seed file — `just hw-seed`.
 
-Does for real what test_seed_file_provisioning does with a dummy URL: writes a
+Does for real what test_seed_file_provisioning does with a dummy page: writes a
 dashboard-assistant.yaml onto the running board, triggers the first-boot importer
 and reports back what the device did with it, so the result is visible in Home
 Assistant rather than only in an assertion.
 
-    just hw-seed --ha-url $BENCH_HA_URL
-    DA_WIFI_PSK=... just hw-seed --ha-url http://... --wifi-ssid MyNet
+    DA_WIFI_PSK=... just hw-seed --wifi-ssid MyNet --ha-url $BENCH_HA_URL
+
+The seed file carries no Home Assistant URL: Home Assistant discovers the device
+and hands over its URL when it pairs. --ha-url only checks that the device can
+reach it.
 
 The Wi-Fi passphrase comes from $DA_WIFI_PSK by default so it stays out of shell
 history and out of this repo. Nothing is written to disk here: the YAML is
@@ -64,7 +67,7 @@ def yaml_str(value):
 
 
 def build_seed(args):
-    lines = [f"ha_url: {yaml_str(args.ha_url)}"]
+    lines = []
     if args.wifi_ssid:
         psk = args.wifi_psk or os.environ.get("DA_WIFI_PSK")
         if not psk:
@@ -82,7 +85,11 @@ def main():
         help="copy this seed file to the device verbatim instead of building one. "
         "Its contents are never printed — it usually holds a Wi-Fi passphrase.",
     )
-    ap.add_argument("--ha-url", help="Home Assistant base URL (required unless --file)")
+    ap.add_argument(
+        "--ha-url",
+        help="Home Assistant base URL to check the device can reach. Not seeded: "
+        "Home Assistant sets it when it pairs",
+    )
     ap.add_argument("--wifi-ssid", help="Wi-Fi SSID (omit on a wired board)")
     ap.add_argument("--wifi-psk", help="Wi-Fi passphrase (default: $DA_WIFI_PSK)")
     ap.add_argument("--kiosk-token", help="optional kiosk token for auto-login")
@@ -93,8 +100,8 @@ def main():
     )
     ap.add_argument("--timeout", type=int, default=180, help="seconds to wait for HA")
     args = ap.parse_args()
-    if not args.file and not args.ha_url:
-        ap.error("either --file or --ha-url is required")
+    if not (args.file or args.wifi_ssid or args.kiosk_token):
+        ap.error("nothing to seed: give --file, --wifi-ssid or --kiosk-token")
 
     seed = None if args.file else build_seed(args)
 
@@ -149,7 +156,7 @@ def main():
     print("\nwaiting for the device to apply it...")
     deadline = time.time() + args.timeout
     while time.time() < deadline:
-        out, _, _ = sh.run(f"grep -c HA_URL {STATE}/runtime.env || true", timeout=30)
+        out, _, _ = sh.run(f"test -s {STATE}/seed-hash && echo 1 || true", timeout=30)
         up, _, _ = sh.run("ip route | grep -c '^default' || true", timeout=30)
         if out == ["1"] and up == ["1"]:
             break
@@ -157,7 +164,7 @@ def main():
 
     print("\n--- device state " + "-" * 50)
     for label, cmd in [
-        ("runtime.env", f"grep -v TOKEN {STATE}/runtime.env"),
+        ("runtime.env", f"grep -v TOKEN {STATE}/runtime.env || echo none"),
         ("provisioned", f"test -e {STATE}/provisioned && echo yes || echo no"),
         ("addresses", "ip -brief addr | grep -v '^lo'"),
         ("default route", "ip route | grep '^default' || echo none"),

@@ -46,9 +46,10 @@ func TestPairingOpenOnFreshDevice(t *testing.T) {
 	}
 }
 
-// The regression this gate was rewritten for: a seed file carrying ha_url marks
-// the device provisioned before Home Assistant has ever seen it, and that used to
-// close pairing on a device nobody had paired.
+// The regression this gate was rewritten for: a device provisioned before Home
+// Assistant has ever seen it (by the flash-time dashboardAssistant.seed.haUrl,
+// or back then by a seed file's ha_url) used to have pairing closed although
+// nobody had paired it.
 func TestPairingOpenOnSeededDevice(t *testing.T) {
 	tempState(t)
 	if err := markProvisioned(); err != nil {

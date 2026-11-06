@@ -10,7 +10,10 @@ import (
 // importConfig is the schema of the dashboard-assistant.yaml bundle imported from a USB
 // stick or the ESP. Every field is optional; only the ones present are applied.
 type importConfig struct {
-	HAURL string `yaml:"ha_url"`
+	// RetiredHAURL is read only to say it is ignored. Pairing hands the device
+	// its Home Assistant URL (POST /api/ha/kiosk_login), and a seed file that
+	// set one marked the device provisioned before anything had paired it.
+	RetiredHAURL string `yaml:"ha_url"`
 	// KioskToken is the long-lived Home Assistant token the kiosk logs in with.
 	// Named for the glossary (CONTEXT.md): a bare `token` next to `api_token`
 	// does not say which of the two credentials it is.
@@ -50,8 +53,7 @@ func (c importConfig) kioskToken() string {
 }
 
 // applyImport parses a YAML bundle and applies whatever it carries: Wi-Fi first
-// (so the box is online), then the kiosk token, then the HA URL (which also marks the
-// device provisioned). It returns a short summary of what it applied, so the
+// (so the box is online), then the kiosk token. It returns a short summary of what it applied, so the
 // caller can decide whether to restart the kiosk.
 //
 // Note the asymmetry: only the Wi-Fi entry reflects an actual *change*, because
@@ -92,14 +94,8 @@ func (s *server) applyImport(data []byte) ([]string, error) {
 		applied = append(applied, "kiosk_token")
 	}
 
-	if cfg.HAURL != "" {
-		if err := writeHAURL(cfg.HAURL); err != nil {
-			return applied, fmt.Errorf("write ha_url: %w", err)
-		}
-		if err := markProvisioned(); err != nil {
-			return applied, fmt.Errorf("mark provisioned: %w", err)
-		}
-		applied = append(applied, "ha_url:"+cfg.HAURL)
+	if cfg.RetiredHAURL != "" {
+		log.Printf("import: ignoring `ha_url`; Home Assistant sets its URL when it pairs with the device")
 	}
 
 	if cfg.APIToken != "" {

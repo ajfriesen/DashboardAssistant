@@ -39,7 +39,7 @@ _Avoid_: arch, board token, platform
 ### Getting a device onto Home Assistant
 
 **Seed file**:
-The `dashboard-assistant.yaml` file a user places on the device's FIRMWARE partition or a USB stick to give it its Home Assistant URL, Wi-Fi and, optionally, its kiosk token and device API token.
+The `dashboard-assistant.yaml` file a user places on the device's FIRMWARE partition or a USB stick to give it its Wi-Fi and, optionally, its kiosk token, device API token and pages. It carries no Home Assistant URL: Home Assistant hands that over when it pairs.
 _Avoid_: seed data, config file
 
 **Seeding**:
