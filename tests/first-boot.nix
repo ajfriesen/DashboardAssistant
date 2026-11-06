@@ -196,23 +196,23 @@ pkgs.testers.runNixOSTest {
     # node has no disk layout, so create the directory the importer reads —
     # what is under test is the import, not where the partition came from.
     machine.succeed("mkdir -p /boot")
-    machine.succeed(
-        "printf 'ha_url: \"http://198.51.100.7:8123\"\\n' > /boot/dashboard-assistant.yaml"
-    )
-    machine.succeed("systemctl restart dashboard-assistant-boot-import.service")
-    # Read it back from the admin listener's info payload, which is where the
-    # daemon surfaces the HA URL. (Not /api/state — that returns only the
-    # splash state machine's current state, never the URL.)
-    machine.wait_until_succeeds(
-        "curl -fsS http://localhost:8099/api/admin/info | grep -q 198.51.100.7", timeout=30
-    )
-    # ...and that it was persisted, not just held in memory.
-    machine.succeed("grep -q 198.51.100.7 /var/lib/dashboard-assistant/runtime.env")
 
-    # The import also marks the device provisioned, which is what skips the
-    # waiting splash. It no longer stops the importer from running again --
-    # that is the content hash's job, asserted across the reboots below.
-    machine.wait_until_succeeds("test -e /var/lib/dashboard-assistant/provisioned", timeout=30)
+    # `pages` is the witness: it lands in urls.json, where it can be read back.
+    # The seed file no longer carries `ha_url` (pairing sets the URL), and a
+    # file that still has one must neither set it nor mark the device
+    # provisioned, which would skip the add screen on an unpaired device.
+    def seed(path):
+        machine.succeed(
+            "printf 'ha_url: \"http://198.51.100.1:8123\"\\npages:\\n  - url: \"http://198.51.100.7:8123/%s\"\\n' "
+            f"{path} > /boot/dashboard-assistant.yaml"
+        )
+
+    urls = "/var/lib/dashboard-assistant/urls.json"
+    seed("lovelace/seeded")
+    machine.succeed("systemctl restart dashboard-assistant-boot-import.service")
+    machine.wait_until_succeeds(f"grep -q lovelace/seeded {urls}", timeout=30)
+    machine.fail("grep -q 198.51.100.1 /var/lib/dashboard-assistant/runtime.env")
+    machine.fail("test -e /var/lib/dashboard-assistant/provisioned")
 
     # ...and the hash of what was imported is recorded, since that is what makes
     # the next boot a no-op.
@@ -223,7 +223,7 @@ pkgs.testers.runNixOSTest {
     # otherwise a typo is swallowed once and the device silently never picks the
     # file up again, which is the bug class this whole mechanism exists to kill.
     machine.succeed("cp /boot/dashboard-assistant.yaml /tmp/good.yaml")
-    machine.succeed("printf 'ha_url: \"unterminated\\n' > /boot/dashboard-assistant.yaml")
+    machine.succeed("printf 'pages: \"unterminated\\n' > /boot/dashboard-assistant.yaml")
     machine.fail("systemctl restart dashboard-assistant-boot-import.service")
     assert machine.succeed("cat /var/lib/dashboard-assistant/seed-hash").strip() == first_hash
     machine.succeed("cp /tmp/good.yaml /boot/dashboard-assistant.yaml")
@@ -248,23 +248,17 @@ pkgs.testers.runNixOSTest {
     # Boot 2: the file is untouched, so nothing may be imported — and a change
     # made on the device in the meantime has to survive. This is the whole point
     # of hashing the contents instead of re-applying unconditionally.
-    machine.succeed(
-        "sed -i s/198.51.100.7/198.51.100.8/ /var/lib/dashboard-assistant/runtime.env"
-    )
+    machine.succeed(f"sed -i s,lovelace/seeded,lovelace/changed, {urls}")
     reboot()
     machine.succeed("journalctl -b -u dashboard-assistant-boot-import | grep -q unchanged")
-    machine.succeed("grep -q 198.51.100.8 /var/lib/dashboard-assistant/runtime.env")
+    machine.succeed(f"grep -q lovelace/changed {urls}")
 
     # Boot 3: edit the file on the boot medium. The edit wins — this is
     # re-provisioning in place, which the old provisioned-marker gate made
     # impossible (and silently so).
-    machine.succeed(
-        "printf 'ha_url: \"http://198.51.100.9:8123\"\\n' > /boot/dashboard-assistant.yaml"
-    )
+    seed("lovelace/edited")
     reboot()
-    machine.wait_until_succeeds(
-        "grep -q 198.51.100.9 /var/lib/dashboard-assistant/runtime.env", timeout=30
-    )
+    machine.wait_until_succeeds(f"grep -q lovelace/edited {urls}", timeout=30)
     assert machine.succeed("cat /var/lib/dashboard-assistant/seed-hash").strip() != first_hash
 
     # Boot 4: delete the file. Nothing is applied and the device keeps what it
@@ -272,7 +266,7 @@ pkgs.testers.runNixOSTest {
     machine.succeed("rm -f /boot/dashboard-assistant.yaml")
     reboot()
     machine.fail("journalctl -b -u dashboard-assistant-boot-import | grep -q importing")
-    machine.succeed("grep -q 198.51.100.9 /var/lib/dashboard-assistant/runtime.env")
+    machine.succeed(f"grep -q lovelace/edited {urls}")
 
     # ------------------------------------------------------------------
     # The journal survives a reboot despite living in RAM. This is the half of

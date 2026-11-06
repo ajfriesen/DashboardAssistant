@@ -66,3 +66,32 @@ func TestImportKioskTokenWinsOverLegacyAlias(t *testing.T) {
 		t.Errorf("kiosk token = %q, want the kiosk_token value", got)
 	}
 }
+
+// Pairing hands the device its Home Assistant URL (POST /api/ha/kiosk_login),
+// so the seed file no longer carries one. A file from before the change still
+// has `ha_url`; it must not set the URL or mark the device provisioned, which
+// would skip the add screen on a device nothing has paired, and the rest of
+// the file must still apply.
+func TestImportIgnoresHAURL(t *testing.T) {
+	tempState(t)
+	s := &server{}
+
+	applied, err := s.applyImport([]byte("ha_url: \"http://198.51.100.7:8123\"\nkiosk_token: \"eyJhbGci.kiosk\"\n"))
+	if err != nil {
+		t.Fatalf("applyImport: %v", err)
+	}
+	if u, _ := readHAURL(); u != "" {
+		t.Errorf("HA URL = %q, want none: the seed file no longer sets it", u)
+	}
+	if Provisioned() {
+		t.Error("device marked provisioned by a seed file's ha_url")
+	}
+	for _, a := range applied {
+		if strings.HasPrefix(a, "ha_url") {
+			t.Errorf("applied = %v, want no ha_url entry", applied)
+		}
+	}
+	if got := readKioskToken(t); got != "eyJhbGci.kiosk" {
+		t.Errorf("kiosk token = %q, want the rest of the file applied", got)
+	}
+}

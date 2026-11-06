@@ -31,6 +31,24 @@ import pytest
 #: first, because nothing created it).
 BOOT_MNT = "/boot"
 
+#: Where the daemon keeps the page list a seed file's `pages` replaces.
+URLS_FILE = "/var/lib/dashboard-assistant/urls.json"
+
+
+def write_seed(shell, path, tag):
+    """Write a seed file whose one page carries `tag`, the witness these tests
+    read back from URLS_FILE.
+
+    `pages` is the witness because it is persisted where a shell can read it.
+    The seed file used to carry `ha_url` and these tests read that back; the
+    key is gone (pairing sets the URL), so it is no longer something a seed
+    file can prove.
+    """
+    shell.run_check(
+        f"printf 'pages:\\n  - url: \"http://198.51.100.7:8123/{tag}\"\\n' "
+        f"> {path}/dashboard-assistant.yaml"
+    )
+
 
 def kiosk_uid(shell):
     """The kiosk user's uid, for the paths under its logind runtime dir.
@@ -287,25 +305,10 @@ def test_seed_file_provisioning(shell):
     test_seed_file_from_flashed_partition below.
     """
     fat = "/boot"
-    shell.run_check(
-        'printf \'ha_url: "http://198.51.100.7:8123"\\n\' '
-        f"> {fat}/dashboard-assistant.yaml"
-    )
+    write_seed(shell, fat, "lovelace/provisioning")
     try:
         shell.run_check("systemctl restart dashboard-assistant-boot-import.service")
-
-        # Read it back from the admin listener's info payload, which is where the
-        # daemon surfaces the HA URL. (Not /api/state — that returns only the
-        # splash state machine's current state, never the URL.)
-        info = shell.run_check("curl -fsS http://localhost:8099/api/admin/info")
-        assert "198.51.100.7" in "".join(info), info
-
-        # ...and that it was persisted, not just held in memory.
-        shell.run_check("grep -q 198.51.100.7 /var/lib/dashboard-assistant/runtime.env")
-
-        # The import must also mark the device provisioned, so the boot importer
-        # never re-runs.
-        shell.run_check("test -e /var/lib/dashboard-assistant/provisioned")
+        shell.run_check(f"grep -q lovelace/provisioning {URLS_FILE}")
     finally:
         # The card is reflashed next run anyway, but leaving a seed file behind
         # makes a --lg-initial-state session lie to the next one.
@@ -346,13 +349,19 @@ def test_root_filesystem_grew(shell, image):
         'lsblk -bndo SIZE "/dev/$(lsblk -no PKNAME "$src" | head -1)"'
     )
     device_bytes = int(shell.run_check(size_cmd)[0])
+    esp_bytes = int(
+        shell.run_check("lsblk -bno SIZE $(findmnt -no SOURCE /boot)")[0]
+    )
     fs_bytes = int(shell.run_check("findmnt -bno SIZE /")[0])
 
-    # 90%: the ESP, the GPT and btrfs' own metadata are not available to the
-    # filesystem, and that overhead is a few hundred MB on any medium we ship on.
-    assert fs_bytes > device_bytes * 0.9, (
-        f"root filesystem is {fs_bytes} B on a {device_bytes} B medium — "
-        "first-boot growth did not finish (check growpart.service)"
+    # The ESP is a fixed 1 GiB (512 MiB on older flashes), which on QEMU's
+    # 8 GiB disk is already more than 10% of the medium, so it comes off first.
+    # 90% of the rest: the GPT and btrfs' own metadata are not available to the
+    # filesystem either.
+    assert fs_bytes > (device_bytes - esp_bytes) * 0.9, (
+        f"root filesystem is {fs_bytes} B on a {device_bytes} B medium with a "
+        f"{esp_bytes} B ESP — first-boot growth did not finish "
+        "(check growpart.service)"
     )
     if image is not None:
         assert fs_bytes > os.path.getsize(image), "filesystem smaller than the image"
@@ -553,18 +562,13 @@ def test_seed_file_from_flashed_partition(shell):
     """
     fat = mount_fat(shell)
     try:
-        shell.run_check(
-            'printf \'ha_url: "http://198.51.100.42:8123"\\n\' '
-            f"> {fat}/dashboard-assistant.yaml"
-        )
+        write_seed(shell, fat, "lovelace/from-partition")
     finally:
         umount_fat(shell)
 
     try:
         shell.run_check("systemctl restart dashboard-assistant-boot-import.service")
-        info = shell.run_check("curl -fsS http://localhost:8099/api/admin/info")
-        assert "198.51.100.42" in "".join(info), info
-        shell.run_check("test -e /var/lib/dashboard-assistant/provisioned")
+        shell.run_check(f"grep -q lovelace/from-partition {URLS_FILE}")
         # The hash of what was imported is recorded; that is what makes the next
         # boot a no-op instead of a re-import.
         shell.run_check("test -s /var/lib/dashboard-assistant/seed-hash")
@@ -609,12 +613,13 @@ def test_firmware_dropzone_files(shell):
         assert out == ["0"], f"example has uncommented keys: {out}"
 
         # The ESP must stay big enough for the firmware *plus* a kernel and
-        # initrd per retained generation (~70 MiB each, configurationLimit 3).
-        # dashboardAssistant.diskLayout.espSize is 512 MiB for that reason, and
-        # a silent revert to the old 64 MiB would not fail until the third
-        # update.
+        # initrd per retained generation (~70 MiB each, configurationLimit 3),
+        # with room for unified kernel images later.
+        # dashboardAssistant.diskLayout.espSize is 1 GiB for that reason, and
+        # a silent revert to a smaller ESP would not fail until an update ran
+        # out of space. Devices flashed before the bump keep 512 MiB.
         size = shell.run_check("lsblk -bno SIZE $(findmnt -no SOURCE /boot)")
-        assert int(size[0]) > 400 * 1024 * 1024, f"ESP is only {size[0]} B"
+        assert int(size[0]) >= 1024 * 1024 * 1024, f"ESP is only {size[0]} B"
     finally:
         umount_fat(shell)
 
@@ -640,10 +645,7 @@ def test_kiosk_not_restarted_by_unchanged_seed(shell):
     """
     fat = mount_fat(shell)
     try:
-        shell.run_check(
-            'printf \'ha_url: "http://198.51.100.42:8123"\\n\' '
-            f"> {fat}/dashboard-assistant.yaml"
-        )
+        write_seed(shell, fat, "lovelace/no-restart")
     finally:
         umount_fat(shell)
 
@@ -699,10 +701,7 @@ def test_seed_file_reimported_after_edit(shell, _bench):
     """
     fat = mount_fat(shell)
     try:
-        shell.run_check(
-            'printf \'ha_url: "http://198.51.100.55:8123"\\n\' '
-            f"> {fat}/dashboard-assistant.yaml"
-        )
+        write_seed(shell, fat, "lovelace/edited")
     finally:
         umount_fat(shell)
 
@@ -710,11 +709,7 @@ def test_seed_file_reimported_after_edit(shell, _bench):
         # The same ShellDriver instance comes back: reboot() deactivates and
         # re-activates it rather than rebuilding it, so `shell` stays valid.
         _bench.reboot()
-        shell.run_check(
-            "grep -q 198.51.100.55 /var/lib/dashboard-assistant/runtime.env"
-        )
-        info = shell.run_check("curl -fsS http://localhost:8099/api/admin/info")
-        assert "198.51.100.55" in "".join(info), info
+        shell.run_check(f"grep -q lovelace/edited {URLS_FILE}")
     finally:
         fat = mount_fat(shell)
         shell.run(f"rm -f {fat}/dashboard-assistant.yaml")

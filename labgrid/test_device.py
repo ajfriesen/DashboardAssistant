@@ -198,51 +198,36 @@ def test_a_zoom_file_full_of_nonsense_reads_as_none():
 # --------------------------------------------------------------------------- #
 
 
-def test_a_seed_file_with_wifi_is_valid_yaml():
+
+
+
+
+def test_a_wifi_seed_carries_only_the_credentials():
+    """What the bench seeds: credentials and nothing else. Home Assistant hands
+    the device its URL over /api/ha/kiosk_login when it pairs."""
     import yaml
 
-    seeded = yaml.safe_load(device.wifi_seed("http://ha:8123", "BenchNet", "p@ss\"w\\d"))
-    assert seeded["wifi"] == {"ssid": "BenchNet", "psk": 'p@ss"w\\d'}
-    assert seeded["ha_url"] == "http://ha:8123"
+    seeded = yaml.safe_load(device.wifi_seed("BenchNet", "p@ss"))
+    assert seeded == {"wifi": {"ssid": "BenchNet", "psk": "p@ss"}}, seeded
 
 
-def test_a_passphrase_with_quotes_and_backslashes_round_trips():
+def test_a_wifi_seed_escapes_the_passphrase():
     """Bare interpolation was not an escaper: a passphrase with a double quote
     broke the file outright, and one with a backslash escape was silently
     *reinterpreted*, so the device joined with a different passphrase than the
     one supplied. See labgrid/seed.py."""
     import yaml
 
-    nasty = 'a"b\\nc\\'
-    seeded = yaml.safe_load(device.wifi_seed("http://ha:8123", "n", nasty))
-    assert seeded["wifi"]["psk"] == nasty
-
-
-def test_a_wifi_only_seed_carries_no_home_assistant_url():
-    """What the bench seeds now: credentials and nothing else.
-
-    The journey the suite asserts has Home Assistant hand the device its
-    dashboard URL over /api/ha/kiosk_login, so seeding one here would mark the
-    device provisioned before pairing and skip the path being tested.
-    """
-    import yaml
-
-    seeded = yaml.safe_load(device.wifi_only_seed("BenchNet", "p@ss"))
-    assert seeded == {"wifi": {"ssid": "BenchNet", "psk": "p@ss"}}, seeded
-
-
-def test_a_wifi_only_seed_escapes_the_passphrase_the_same_way():
-    """The escaping is the shared half, so it must not regress in one of them."""
-    import yaml
-
     nasty = 'a"b\\c d'
-    assert yaml.safe_load(device.wifi_only_seed("n", nasty))["wifi"]["psk"] == nasty
+    assert yaml.safe_load(device.wifi_seed("n", nasty))["wifi"]["psk"] == nasty
 
 
-def test_a_wifi_only_seed_without_a_passphrase_is_refused():
-    """Same refusal as wifi_seed — an open network is not what the bench has."""
+def test_a_wifi_seed_without_a_passphrase_is_refused():
+    """An open network is not what the bench has, and silently writing a seed
+    with no `psk` would produce a device that never associates and a failure
+    that blames the radio."""
     with pytest.raises(ValueError):
-        device.wifi_only_seed("BenchNet", "")
+        device.wifi_seed("BenchNet", "")
 
 
 def test_the_joined_network_is_read_by_asking_the_radio_it_found():
@@ -266,12 +251,6 @@ def test_a_board_whose_radio_is_absent_has_joined_no_network():
     assert device.joined_network(lambda _: "end0  UP  192.168.178.90/24\n") is None
 
 
-def test_building_a_seed_without_a_passphrase_is_refused():
-    """An open network is not what the bench has, and silently writing a seed
-    with no `psk` would produce a device that never associates and a failure
-    that blames the radio."""
-    with pytest.raises(ValueError, match="passphrase"):
-        device.wifi_seed("http://ha:8123", "BenchNet", "")
 
 
 def test_the_wireless_interface_is_named_so_iw_can_be_asked_about_it():

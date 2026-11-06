@@ -11,3 +11,4 @@ Every board, the Raspberry Pis included, uses the same disko GPT layout: a FAT F
 
 - Existing Pi installs had to reflash; updates refuse to move `/boot` (447d65c).
 - The Pi 4 needs EEPROM firmware from 2020-09-14 or later (ed2a55e).
+- The ESP grew from 512 MiB to 1 GiB, the size distributions now recommend for an ESP that doubles as `/boot`. Devices flashed earlier keep 512 MiB until they reflash, so `/boot` contents must still fit there.

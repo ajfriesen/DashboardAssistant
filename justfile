@@ -21,7 +21,7 @@ help:
   @echo
   @echo "Hardware bench (labgrid — see labgrid/README.md):"
   @echo "  hw-status              Show the place, its resources and who holds it"
-  @echo "  hw-seed --ha-url URL   Provision the bench board from a real seed file"
+  @echo "  hw-seed --wifi-ssid S  Provision the bench board from a real seed file"
   @echo "  hw-preflight           Check the bench is healthy before trusting a run"
   @echo "  qemu-test              Run the suite against the x86_64 image under QEMU"
   @echo "  hw-test                Flash the Pi 5 dev image to the bench board and assert first boot"
@@ -299,15 +299,16 @@ hw-preflight *ARGS:
     "${LABGRID_PYTHON:?not set — enter the dev shell with 'nix develop' or 'direnv allow'}" \
     labgrid/preflight.py {{ARGS}}
 
-# Provision the bench board for real: write a seed file with an actual Home
-# Assistant URL (and optionally Wi-Fi) onto the running board, trigger the
-# first-boot importer, and report what the device did with it. Unlike the test,
-# which uses a documentation-range URL and asserts, this is for seeing the result
-# in Home Assistant.
+# Provision the bench board for real: write a seed file with real Wi-Fi
+# credentials onto the running board, trigger the first-boot importer, and report
+# what the device did with it. Unlike the test, which seeds a dummy page and
+# asserts, this is for seeing the device turn up in Home Assistant, which
+# discovers it and hands over its own URL when it pairs. --ha-url only checks the
+# device can reach Home Assistant.
 #
 # Keep the Wi-Fi passphrase out of shell history and out of this repo — pass it in
 # the environment, ideally via secretspec:
-#   DA_WIFI_PSK=... just hw-seed --ha-url $BENCH_HA_URL --wifi-ssid MyNet
+#   DA_WIFI_PSK=... just hw-seed --wifi-ssid MyNet --ha-url $BENCH_HA_URL
 [doc('Provision the bench board from a real seed file')]
 hw-seed *ARGS:
   ./labgrid/with-place.sh \
