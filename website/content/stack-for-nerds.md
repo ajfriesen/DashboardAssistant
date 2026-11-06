@@ -25,11 +25,11 @@ Dashboard Assistant OS is a minimal, **declarative NixOS** system.
 
 Because every version is retained as a generation, you can always go back.
 
-- **Manual rollback (available today).** The LAN-only
-  [admin page](usage/admin.md) lets you boot an older, known-good generation
-  from any machine on your network — useful if a configuration change
-  misbehaves but the system still boots. The touchscreen itself is read-only,
-  so nobody at the panel can roll the device back.
+- **Manual rollback (available today).** The **Roll back** button in Home
+  Assistant boots the previous generation — useful if an update misbehaves but
+  the system still boots and reaches the network. It runs behind the device
+  token; the touchscreen itself is read-only, so nobody at the panel can roll
+  the device back. See [Recovery](usage/recovery.md).
 - **Automatic rollback (in progress).** Booting into the previous generation
   *automatically* after a failed boot relies on boot-counting support, which
   comes from **systemd-boot**. Every target boots through it now — on the
@@ -129,7 +129,7 @@ on a USB stick or the boot partition, gets it online the same way, before it
 ever boots. Everything else (the Home Assistant URL, the kiosk login, the
 pages) arrives when Home Assistant pairs with the device. Either way, nothing on the running panel can
 re-point the device: the screen shows a read-only info view and nothing else;
-rollback and factory reset live on a LAN-only admin page.
+rollback and factory reset run from Home Assistant.
 
 ## Hardware
 

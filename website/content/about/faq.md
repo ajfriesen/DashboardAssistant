@@ -15,10 +15,9 @@ a reboot. Dashboard Assistant takes the opposite approach:
 - **Declarative and reproducible.** The whole system is defined in NixOS. The
   image you flash is the system you run — there is no hand-configuration to drift.
 - **Recoverable by design.** Updates are atomic and every version is kept as a
-  NixOS generation. If one misbehaves, the device's LAN-only
-  [admin page](../usage/admin.md) lets you roll back to an older, known-good
-  generation from any machine on your network — the touchscreen itself stays
-  read-only. (Automatic rollback on a failed boot isn't switched on yet,
+  NixOS generation. If one misbehaves, the **Roll back** button in Home
+  Assistant boots the previous one — the touchscreen itself stays read-only.
+  See [Recovery](../usage/recovery.md). (Automatic rollback on a failed boot isn't switched on yet,
   though every image now boots through systemd-boot, which provides it.)
 - **A first-class Home Assistant citizen.** The panel doesn't just *show* Home
   Assistant — a native integration (installable

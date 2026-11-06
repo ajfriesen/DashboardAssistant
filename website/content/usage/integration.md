@@ -58,8 +58,9 @@ are on different networks or VLANs.
 !!! note "A device only pairs once"
     An already-paired device refuses to hand out its token again — that is what
     keeps a stranger on your network from adopting your panel. To pair it with
-    a new Home Assistant instance, factory-reset it from its
-    [admin page](admin.md) first.
+    a new Home Assistant instance, press its **Factory reset** button first,
+    which also removes its entry. A device whose entry was deleted without a
+    reset has to be reflashed before it pairs again. See [Recovery](recovery.md).
 
 !!! info "The connection is encrypted"
     Home Assistant talks to the display over TLS, and remembers the display's

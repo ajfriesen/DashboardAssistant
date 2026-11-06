@@ -37,7 +37,6 @@ dashboard — no login screen, ever.
   <div class="da-tablet__screen">
     <img class="da-slide" src="img/home-assistant-light.jpeg" alt="A Home Assistant running in light mode">
     <img class="da-slide" src="img/home-assistant-dark.jpeg" alt="A Home Assistant running in dark mode.">
-    <img class="da-slide" src="img/recovery.jpeg" alt="Recovery: pick an older, known-good version to boot.">
     <img class="da-slide" src="img/keyboard.jpeg" alt="Use a touch keyboard if needed.">
     <img class="da-slide" src="img/random-website.jpeg" alt="Shows any website.">
   </div>
@@ -88,8 +87,7 @@ Home Assistant as a device you can automate.
 It boots to your dashboard and stays there — no login screen, ever. Guests, kids
 and housemates tap the wall to turn on a lamp or nudge the heating, without an
 app on their phone or an account of their own. Nothing on that screen can
-re-point the device or roll it back; that lives on an admin page on your own
-network.
+re-point the device or roll it back; that runs from Home Assistant.
 </p>
 </div>
 
@@ -179,8 +177,8 @@ terminal, nothing to re-flash.
 <div class="da-card" markdown>
 <div class="da-card__icon" markdown="span">:lucide-history:</div>
 ### Easy to undo
-If an update ever misbehaves, go back to a version that worked — from a simple
-admin page on your own network, no re-flash, no site visit.
+If an update ever misbehaves, go back to a version that worked with one button
+in Home Assistant — no re-flash, no site visit.
 </div>
 
 </div>

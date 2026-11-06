@@ -8,7 +8,6 @@
     ./ha-api.nix
     ./update.nix
     ./configimport.nix
-    ./admin.nix
     ./seed.nix
     ./sendspin.nix
     ./debug.nix

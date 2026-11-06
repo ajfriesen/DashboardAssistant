@@ -47,8 +47,8 @@ The [Connect to Home Assistant](usage/integration.md) guide walks through it.
 Once it's up, you control it in two places: on the screen itself and
 from Home Assistant. The [Usage](usage/usage.md) guide covers the on-device
 controls, the integration's entities, one-tap OS updates and rolling back if an
-update ever misbehaves. If something looks off, the
-[admin page](usage/admin.md) is where you roll back or reset the device.
+update ever misbehaves. If something looks off, [Recovery](usage/recovery.md)
+covers rolling back and resetting the device.
 
 [Read the usage guide&nbsp;→](usage/usage.md){ .da-btn .da-btn--ghost }
 
