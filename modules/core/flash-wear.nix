@@ -13,7 +13,7 @@
 # journald will happily use 10% of the filesystem (4 GiB on the x86 SSD target).
 #
 # What this module does NOT need to do, because it is already done elsewhere:
-# zram swap instead of swap-on-flash (memory.nix), noatime and compress=zstd on
+# zram swap ahead of the swap file on flash (memory.nix), noatime and compress=zstd on
 # a btrfs root (hardware/disk-layout.nix), 1 MiB-aligned partitions and a
 # first-boot growfs (same), and weekly fstrim (NixOS default, already on).
 #

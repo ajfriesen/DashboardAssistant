@@ -101,6 +101,18 @@ pkgs.testers.runNixOSTest {
     assert machine.succeed("sysctl -n vm.swappiness").strip() == "180"
     assert machine.succeed("sysctl -n vm.page-cluster").strip() == "0"
 
+    # systemd-oomd only starts where the kernel tracks memory pressure; without
+    # /proc/pressure it is skipped, and a runaway browser freezes the screen
+    # instead of restarting the kiosk session (modules/core/memory.nix).
+    machine.succeed("test -e /proc/pressure/memory")
+    machine.wait_for_unit("systemd-oomd.service")
+
+    # zram is swapped to before anything on flash. This VM has no swap file
+    # (that lives on the disk layout's @swap; labgrid covers it), so the
+    # assertion here is zram's explicit priority, which the file is set below.
+    zram_prio = machine.succeed("awk '$1 ~ /zram/ {print $5}' /proc/swaps").split()
+    assert zram_prio == ["100"], zram_prio
+
     # The screenshot handoff buffer's directory must be the daemon's tmpfs
     # RuntimeDirectory, group-writable so the in-session grim agent (user
     # `kiosk`) can drop a frame into it. The grim write itself needs a Wayland

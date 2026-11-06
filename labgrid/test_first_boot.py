@@ -418,7 +418,7 @@ def test_boot_partition_carries_the_pi_firmware(shell):
 
 
 def test_root_has_subvolumes(shell):
-    """The root is btrfs with the same @ / @nix split as the x86 image.
+    """The root is btrfs with the same @ / @nix / @swap split as the x86 image.
 
     Under the sd-image builder the Pi root was a flat btrfs — make-btrfs-fs
     could not emit subvolumes — so this is the assertion that the Pi really is
@@ -429,6 +429,39 @@ def test_root_has_subvolumes(shell):
     subvols = shell.run_check("btrfs subvolume list / | awk '{print $NF}'")
     assert "@" in subvols, subvols
     assert "@nix" in subvols, subvols
+    assert "@swap" in subvols, subvols
+
+
+def test_memory_pressure_is_tracked_so_oomd_runs(shell):
+    """The Raspberry Pi kernel ships pressure tracking switched off.
+
+    Without /proc/pressure/memory systemd skips oomd at boot ("unmet condition
+    check"), so a browser that runs out of memory freezes the screen instead of
+    the kiosk session restarting. The VM's kernel has it on by default, so only
+    a board can catch this.
+    """
+    shell.run_check("test -e /proc/pressure/memory")
+    assert shell.run_check("systemctl is-active systemd-oomd") == ["active"]
+
+
+def test_the_swap_file_backs_zram_from_its_own_subvolume(shell):
+    """A swap file on @swap catches what zram cannot hold, and only that.
+
+    zram must keep the higher priority, or the kernel writes to flash first.
+    The file must be NOCOW (which also leaves it uncompressed), or btrfs
+    refuses to swap to it.
+    """
+    source = shell.run_check("findmnt -no SOURCE /swap")
+    assert source and source[0].endswith("[/@swap]"), source
+    swaps = {
+        line.split()[0]: int(line.split()[4])
+        for line in shell.run_check("tail -n +2 /proc/swaps")
+    }
+    zram = [prio for name, prio in swaps.items() if "zram" in name]
+    assert "/swap/swapfile" in swaps, swaps
+    assert zram and min(zram) > swaps["/swap/swapfile"], swaps
+    attrs = shell.run_check("lsattr /swap/swapfile")
+    assert "C" in attrs[0].split()[0], attrs
 
 
 def test_journal_is_in_ram(shell):
