@@ -24,6 +24,9 @@ can:
 - Turn the **display** on/off and set **brightness**.
 - Adjust **zoom** and flip **dark mode**.
 - **Rotate** the display to 0, 90, 180 or 270°.
+- Show the **screen saver** now, pick its style, or set how long the panel
+  waits without a touch before it starts (10 minutes by default; 0 turns it
+  off). A tap dismisses it.
 - Take a **screenshot** of the current view on demand.
 - Switch the active **page**, or edit the list of dashboard URLs.
 - Turn the **Sendspin player** on or off — see [Multi-room audio](audio.md).
