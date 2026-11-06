@@ -34,7 +34,7 @@ var (
 	// Reverse channel: in-session agents write the *actual* power state here and
 	// the daemon publishes it, so HA stays in sync with out-of-band changes.
 	displayStateFifo = stateDir + "/display-state.fifo"
-	apiTokenFile     = stateDir + "/api-token" // device HA API token, generated on first boot / written by config import
+	apiTokenFile     = stateDir + "/api-token" // device HA API token, generated on first boot
 	pairedMarker     = stateDir + "/paired"    // set the first time Home Assistant actually uses the device token; closes the pairing window
 	// sha256 of the last seed file the boot importer applied; re-import is gated
 	// on this changing. The path is owned by modules/core/configimport.nix and
@@ -42,7 +42,7 @@ var (
 	// factory reset deletes cannot drift apart; the fallback only covers tests
 	// and direct runs.
 	seedHashFile   = envOr("DASHBOARD_ASSISTANT_SEED_HASH_FILE", stateDir+"/seed-hash")
-	urlsFile       = stateDir + "/urls.json"       // pushable page list (name+url), web UI / config import
+	urlsFile       = stateDir + "/urls.json"       // page list (name+url), set from Home Assistant
 	navFifo        = stateDir + "/nav.fifo"        // daemon writes a URL; in-session agent navigates Chromium there
 	zoomFifo       = stateDir + "/zoom.fifo"       // daemon writes "zoom <pct>"; in-session agent applies CSS zoom over CDP
 	zoomFile       = stateDir + "/zoom"            // persisted browser zoom percent, restored by the kiosk on launch

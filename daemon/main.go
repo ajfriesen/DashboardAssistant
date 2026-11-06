@@ -170,11 +170,10 @@ func main() {
 	// Screen saver pages (web/screensavers/<name>.html), fetched by the in-session
 	// screen saver agent to overlay on the dashboard. Loopback only.
 	mux.Handle("/screensaver/", loopbackOnly(http.HandlerFunc(srv.handleScreensaverPage)))
-	// Import a YAML config bundle (HA URL / token / Wi-Fi / API token / pages), fed
-	// by the USB and ESP importers. Loopback only. This is the sole config path.
+	// Import a seed file (Wi-Fi), fed by the USB and ESP importers. Loopback only.
 	mux.Handle("/api/import", loopbackOnly(http.HandlerFunc(srv.handleImport)))
 	// Page navigation (waybar Prev/Next buttons). The page list itself is managed
-	// through the HA integration (the "Page N" text slots), not the web UI.
+	// through the HA integration (the pages in its options), not the web UI.
 	mux.Handle("/api/nav", loopbackOnly(http.HandlerFunc(srv.handleNav)))
 	// Read-only device info, shown behind the sponsor page's info button and
 	// re-served verbatim on the admin listener. Carries no secret.
@@ -252,7 +251,7 @@ func (s *server) handleImport(w http.ResponseWriter, r *http.Request) {
 	log.Printf("import applied: %v", applied)
 	writeJSON(w, http.StatusOK, map[string]any{"applied": applied})
 
-	// Relaunch the kiosk so it re-reads state (new URL / provisioned).
+	// Relaunch the kiosk so it re-reads state (it may be on a new network).
 	if len(applied) > 0 {
 		go func() {
 			if err := restartKiosk(); err != nil {

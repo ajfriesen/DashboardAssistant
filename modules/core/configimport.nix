@@ -1,5 +1,5 @@
-# Seeding: apply dashboard config (Wi-Fi, tokens, pages) from the seed file, the
-# only way to configure a device (docs/adr/0001). Two triggers, both feeding
+# Seeding: join the Wi-Fi in the seed file, the only way to get a device onto a
+# wireless network (docs/adr/0001). Two triggers, both feeding
 # the daemon's loopback /api/import:
 #
 #   1. USB hot-insert: udev fires a per-device service that mounts an inserted
@@ -11,17 +11,11 @@
 #      now — x86 and both Raspberry Pis — which is what lets this module have a
 #      single code path; see bootImport below.
 #
-# YAML schema (all keys optional):
+# YAML schema:
 #   wifi: { ssid: "Net", psk: "secret" }
-#   kiosk_token: "eyJhbGci..."    # long-lived HA access token (stored for injection)
-#   api_token: "..."
-#   pages: [ { name: "Home", url: "..." } ]
 #
-# No Home Assistant URL: Home Assistant discovers the device and hands over its
-# URL when it pairs. An `ha_url` left in an old file is ignored and logged.
-#
-# `token` is still accepted for kiosk_token, deprecated: seed files already in
-# the field carry it, and the daemon logs the rename when it reads one
+# Nothing else: Home Assistant discovers the device and, when it pairs, hands
+# over the URL, the kiosk login and the pages. Any other key is ignored
 # (daemon/configimport.go).
 {
   config,
@@ -72,33 +66,29 @@ let
     Dashboard Assistant - seed file drop zone
     =========================================
 
-    This partition is the one place you can configure this device from another
-    computer, including before it has ever booted.
+    This partition is where you give this device its Wi-Fi, from any computer,
+    before it has ever booted. A wired device needs nothing here.
 
       1. Copy dashboard-assistant.yaml.example to ${seedFileName}
          (same folder, right next to this README).
-      2. Open it in a plain text editor, remove the leading # from the lines you
-         need, and fill them in.
+      2. Open it in a plain text editor, remove the leading # from the wifi
+         lines, and fill in your network name and password.
       3. Eject the card and boot the device.
+
+    The file only carries Wi-Fi. Everything else - which Home Assistant, which
+    dashboard, which pages - is set from Home Assistant once the device is on
+    your network.
 
     The device re-reads this file whenever its contents change, not only on the
     first boot:
 
-      * edit it and reboot  -> the new values are applied
-      * leave it alone      -> the device keeps whatever it has, including
-                               changes you made on the device itself or from
-                               Home Assistant
-      * delete it           -> same thing; nothing is applied from here again
+      * edit it and reboot  -> it joins the new network
+      * leave it alone      -> nothing happens
+      * delete it           -> nothing happens either; the device keeps its Wi-Fi
 
-    One caveat when you do edit it: the whole file is applied, not just the line
-    you changed. That matters for the pages: block, which replaces the device's
-    page list outright - so pages you added or reordered in Home Assistant are
-    replaced by whatever the file says. Delete the pages: block to manage pages
-    from Home Assistant instead.
-
-    Anyone who can pull this card can read your Wi-Fi password and any token in
-    plain text. Delete ${seedFileName} once setup is done if that matters
-    where this device lives.
+    Anyone who can pull this card can read your Wi-Fi password in plain text.
+    Delete ${seedFileName} once setup is done if that matters where
+    this device lives.
 
     If the device does not pick the file up, the most likely cause is YAML
     indentation. The device logs what it did, and any parse error, under
@@ -124,34 +114,13 @@ let
     # this device applies it on the next boot, and again whenever you change it.
     # See README.txt next to this file, or ${seedDocsURL}
     #
-    # Every key is optional. Delete the ones you do not need.
+    # It carries the Wi-Fi this device joins, and nothing else: once it is on
+    # your network, Home Assistant finds it, and everything else is set from
+    # there. A wired device needs no seed file at all.
 
-    # No Home Assistant URL goes here: Home Assistant finds this device on the
-    # network and hands it the URL when you add it.
-
-    # Wi-Fi credentials. Delete this whole block on a wired device.
     #wifi:
     #  ssid: "MyNetwork"
     #  psk: "supersecret"
-
-    # Kiosk token: the long-lived Home Assistant access token the dashboard logs
-    # in with. You normally do NOT need this: the Dashboard Assistant
-    # integration supplies a login for the device by itself.
-    #kiosk_token: "eyJhbGciOi..."
-
-    # Device API token, the credential Home Assistant uses to talk to this
-    # device. Leave it out and the device generates its own, which Home
-    # Assistant picks up when it pairs.
-    #api_token: "a-long-random-string"
-
-    # Dashboard pages. WARNING: this replaces the device's page list every time
-    # this file changes, so pages added or reordered in Home Assistant are lost
-    # on the next boot. Delete this block to manage pages from Home Assistant.
-    #pages:
-    #  - name: "Home"
-    #    url: "http://homeassistant.local:8123/lovelace/0"
-    #  - name: "Kitchen"
-    #    url: "http://homeassistant.local:8123/lovelace/kitchen"
   '';
 
   # The seed file lives on /boot, the FAT EFI system partition, which is
@@ -205,7 +174,7 @@ in
       type = lib.types.bool;
       default = true;
       description = ''
-        Import dashboard config (HA URL, tokens, Wi-Fi) from a dashboard-assistant.yaml
+        Join the Wi-Fi in a dashboard-assistant.yaml
         on an inserted USB stick, and from the flashed boot medium.
 
         On by default: seed-file provisioning is the documented headless path (a

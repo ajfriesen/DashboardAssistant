@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """Provision the bench board from a seed file — `just hw-seed`.
 
-Does for real what test_seed_file_provisioning does with a dummy page: writes a
+Does for real what test_seed_file_provisioning does with a dummy file: writes a
 dashboard-assistant.yaml onto the running board, triggers the first-boot importer
 and reports back what the device did with it, so the result is visible in Home
 Assistant rather than only in an assertion.
 
     DA_WIFI_PSK=... just hw-seed --wifi-ssid MyNet --ha-url $BENCH_HA_URL
 
-The seed file carries no Home Assistant URL: Home Assistant discovers the device
-and hands over its URL when it pairs. --ha-url only checks that the device can
+A seed file carries Wi-Fi and nothing else: Home Assistant discovers the device
+and hands over the rest when it pairs. --ha-url only checks that the device can
 reach it.
 
 The Wi-Fi passphrase comes from $DA_WIFI_PSK by default so it stays out of shell
@@ -73,8 +73,6 @@ def build_seed(args):
         if not psk:
             sys.exit("--wifi-ssid given but no passphrase: set $DA_WIFI_PSK")
         lines += ["wifi:", f"  ssid: {yaml_str(args.wifi_ssid)}", f"  psk: {yaml_str(psk)}"]
-    if args.kiosk_token:
-        lines.append(f"kiosk_token: {yaml_str(args.kiosk_token)}")
     return "\n".join(lines) + "\n"
 
 
@@ -90,9 +88,8 @@ def main():
         help="Home Assistant base URL to check the device can reach. Not seeded: "
         "Home Assistant sets it when it pairs",
     )
-    ap.add_argument("--wifi-ssid", help="Wi-Fi SSID (omit on a wired board)")
+    ap.add_argument("--wifi-ssid", help="Wi-Fi SSID")
     ap.add_argument("--wifi-psk", help="Wi-Fi passphrase (default: $DA_WIFI_PSK)")
-    ap.add_argument("--kiosk-token", help="optional kiosk token for auto-login")
     ap.add_argument(
         "--reflash",
         action="store_true",
@@ -100,8 +97,8 @@ def main():
     )
     ap.add_argument("--timeout", type=int, default=180, help="seconds to wait for HA")
     args = ap.parse_args()
-    if not (args.file or args.wifi_ssid or args.kiosk_token):
-        ap.error("nothing to seed: give --file, --wifi-ssid or --kiosk-token")
+    if not (args.file or args.wifi_ssid):
+        ap.error("nothing to seed: give --file or --wifi-ssid")
 
     seed = None if args.file else build_seed(args)
 

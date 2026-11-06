@@ -3,16 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
 	"syscall"
 )
-
-// pageSlots is how many editable "Page N" text entities we expose to HA for
-// editing the list (each holds "Name | URL"). A fixed count so the integration
-// creates a stable set of text entities; bump it for more capacity.
-const pageSlots = 10
 
 // Page is one entry in the pushable URL list exposed to Home Assistant as a
 // select option. Name is the friendly label; URL is what the kiosk navigates to.
@@ -84,51 +80,26 @@ func (p *Pages) CurrentLabel() string {
 	return p.list[p.index].Label()
 }
 
-// Slot renders slot i for the HA text editor: "Name | URL" (or just the URL
-// when unnamed), or "" for a slot past the end of the list.
-func (p *Pages) Slot(i int) string {
+// List returns a copy of the configured pages, in order.
+func (p *Pages) List() []Page {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if i < 0 || i >= len(p.list) {
-		return ""
-	}
-	pg := p.list[i]
-	if pg.Name != "" {
-		return pg.Name + " | " + pg.URL
-	}
-	return pg.URL
+	return append([]Page{}, p.list...)
 }
 
-// SetSlot applies an edit from the HA "Page N" text entity. The value is
-// "Name | URL" (name optional; a bare string is the URL). An empty/URL-less
-// value clears that slot and compacts the list; otherwise the slot is replaced,
-// or appended when it's the first empty slot past the end.
-func (p *Pages) SetSlot(i int, value string) error {
-	name, url := parseSlot(value)
-
-	p.mu.Lock()
-	list := append([]Page(nil), p.list...)
-	p.mu.Unlock()
-
-	switch {
-	case url == "":
-		if i >= 0 && i < len(list) {
-			list = append(list[:i], list[i+1:]...) // remove + compact
+// Replace swaps in the list Home Assistant sends from its options. Every page
+// must be a website the kiosk can open; on any that is not, nothing changes.
+func (p *Pages) Replace(list []Page) error {
+	clean := make([]Page, 0, len(list))
+	for _, pg := range list {
+		pg.Name, pg.URL = strings.TrimSpace(pg.Name), strings.TrimSpace(pg.URL)
+		u, err := url.Parse(pg.URL)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return fmt.Errorf("page %q: not an http(s) address: %q", pg.Label(), pg.URL)
 		}
-	case i >= 0 && i < len(list):
-		list[i] = Page{Name: name, URL: url}
-	default:
-		list = append(list, Page{Name: name, URL: url}) // append at the end
+		clean = append(clean, pg)
 	}
-	return p.SetList(list)
-}
-
-// parseSlot splits "Name | URL" into its parts; a bare value is the URL.
-func parseSlot(v string) (name, url string) {
-	if before, after, ok := strings.Cut(strings.TrimSpace(v), "|"); ok {
-		return strings.TrimSpace(before), strings.TrimSpace(after)
-	}
-	return "", strings.TrimSpace(v)
+	return p.SetList(clean)
 }
 
 // SetList replaces and persists the configured pages, clamps the index, and
@@ -210,8 +181,8 @@ func (p *Pages) navigate(url string) error {
 
 // defaultPages seeds a fresh device (no urls.json yet) with a single page
 // pointing at the mDNS Home Assistant address, so the page list and the HA
-// select aren't empty out of the box. It's virtual until the list is edited or
-// imported, at which point savePages writes urls.json and takes over.
+// select aren't empty out of the box. It's virtual until Home Assistant sets
+// the list, at which point savePages writes urls.json and takes over.
 func defaultPages() []Page {
 	return []Page{{Name: "Home Assistant", URL: "http://homeassistant.local:8123"}}
 }
