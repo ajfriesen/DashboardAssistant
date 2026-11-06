@@ -163,6 +163,11 @@ pkgs.testers.runNixOSTest {
     )
     assert tls_ident["node_id"] == ident["node_id"], tls_ident
 
+    # Nothing unauthenticated on the network can roll the device back or reset
+    # it: recovery runs from Home Assistant, behind the device token
+    # (docs/adr/0014). The admin page that used to do it on :8099 is gone.
+    machine.fail("curl -sS --max-time 5 http://localhost:8099/")
+
     # The private key must not be readable beyond the daemon. Unlike the HA token,
     # nothing else on the device needs it.
     machine.succeed("test \"$(stat -c %a /var/lib/dashboard-assistant/tls-key.pem)\" = 600")

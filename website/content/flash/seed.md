@@ -122,8 +122,8 @@ token with nothing to type. Writing a seed file does not count as having been
 paired, and there is no extra step to undo.
 
 If pairing is refused, the device has already been paired once. That is what the
-gate is for, and the way back is a factory reset from the
-[admin page](../usage/admin.md).
+gate is for. The way back is a factory reset from Home Assistant, or reflashing
+if its entry is already gone; see [Recovery](../usage/recovery.md).
 
 A factory reset also clears the recorded checksum, so a reset device re-imports
 the seed file still sitting on its card on the next boot. That is usually what

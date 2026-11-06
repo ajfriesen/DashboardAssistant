@@ -69,7 +69,7 @@ _Avoid_: connected, enrolled, provisioned (a different state)
 ### Talking to Home Assistant
 
 **Device API**:
-The authenticated API a device serves on the local network for the integration. Home Assistant always opens the connection; a device never calls Home Assistant. Distinct from the admin page, which serves people.
+The authenticated API a device serves on the local network for the integration. Home Assistant always opens the connection; a device never calls Home Assistant.
 _Avoid_: local API, REST API
 
 **State stream**:
@@ -82,13 +82,9 @@ _Avoid_: state update, patch, diff
 
 ### Keeping a device alive
 
-**Admin page**:
-The page a device serves on the local network for maintenance; it is where recovery happens.
-_Avoid_: settings page, config panel
-
 **Recovery**:
-The admin-page actions that bring a misbehaving device back: rolling back to an earlier generation, or a factory reset. Not a boot mode.
-_Avoid_: rescue, recovery mode
+Bringing a misbehaving device back: rolling back to an earlier generation, or a factory reset. Runs from Home Assistant through the device API. Not a boot mode.
+_Avoid_: rescue, recovery mode, admin page
 
 **Generation**:
 One bootable version of a device's installed system; recovery can return to an earlier one.

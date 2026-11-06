@@ -92,7 +92,7 @@ let
 
     # Provisioning is seed-only (no on-screen wizard): an unprovisioned or
     # offline device shows the waiting splash until a seed file configures it.
-    # There is no on-screen admin page at all — recovery is on the LAN listener.
+    # Nothing on screen recovers the device either — that runs from Home Assistant.
     case "$STATE" in
       READY) URL="$HA_URL" ;;
       *)     URL="${daemonBase}/waiting" ;;
@@ -1010,8 +1010,8 @@ let
   # Nothing here reconfigures the device, and nothing new should. This is a wall
   # panel that guests touch, so every button has to be safe in the hands of someone
   # who is not the owner. There used to be a ⚙ Config button opening a panel that
-  # printed the API token and could roll the system back and reboot it; that moved
-  # to the LAN admin listener (daemon/admin.go). The sponsor page carries a read-only
+  # printed the API token and could roll the system back and reboot it; recovery
+  # now runs from Home Assistant, behind the device token (docs/adr/0014). The sponsor page carries a read-only
   # device-info view, which is as far as on-screen introspection goes.
   # Sponsor button artwork. Referenced straight out of the website's brand/
   # directory rather than copied, so the bar can never drift from the shipped

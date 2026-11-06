@@ -9,7 +9,7 @@
 # `nixos-rebuild switch --flake <ref>/<tag>#<attr>`, triggered by the daemon over
 # the scoped polkit rule below when HA's Install button is pressed. The flake ref
 # and hardware attr are baked in; only the target tag is a runtime instance.
-# Safety net: recovery on the admin page lets a bad update be rolled back by hand.
+# Safety net: Home Assistant can roll a bad update back to an earlier generation.
 # Automatic rollback is not on yet (docs/adr/0009). A preflight in the update script
 # additionally refuses any release whose declared root *or* /boot filesystem
 # differs from the one actually mounted — such a switch would activate cleanly
