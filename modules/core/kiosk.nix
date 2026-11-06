@@ -165,6 +165,14 @@ let
     export XDG_CACHE_HOME="''${XDG_RUNTIME_DIR:-/tmp}/kiosk-cache"
     ${pkgs.coreutils}/bin/mkdir -p "$XDG_CACHE_HOME"
 
+    # --disable-gpu-shader-disk-cache: Chromium's GPU shader caches (GPUCache,
+    # DawnGraphiteCache, DawnWebGPUCache) live in the PROFILE, not under
+    # XDG_CACHE_HOME, so the move above misses them. They are memory-mapped and
+    # written back as the page uses them; with btrfs copy-on-write and DUP
+    # metadata that came to 100–120 MiB an hour on a Pi 5 sitting on one
+    # dashboard, against about 12 with them in RAM. Mesa's shader cache, in RAM
+    # with the rest, still spares the recompile while the session lives.
+
     exec ${lib.getExe pkgs.chromium} \
       --app="$URL" \
       --no-first-run \
@@ -172,6 +180,7 @@ let
       --disable-pinch \
       --disable-session-crashed-bubble \
       --disk-cache-size=67108864 \
+      --disable-gpu-shader-disk-cache \
       --overscroll-history-navigation=0 \
       --touch-events=enabled \
       --ozone-platform=wayland \

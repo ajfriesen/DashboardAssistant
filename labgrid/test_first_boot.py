@@ -531,6 +531,24 @@ def test_browser_cache_is_in_ram(shell):
 
 
 @pytest.mark.needs_display
+def test_no_gpu_shader_cache_in_the_profile(shell):
+    """Chromium keeps no GPU shader cache in its profile on flash.
+
+    These caches live in the profile, not under XDG_CACHE_HOME, so moving the
+    cache to RAM missed them. They are memory-mapped and written back on every
+    cache hit: on a Pi 5 sitting on one dashboard they were the only profile
+    files that changed, and with btrfs' copy-on-write and DUP metadata they
+    cost the card 100-120 MiB an hour, against about 12 with them in RAM.
+    """
+    profile = "/home/kiosk/.config/chromium/Default"
+    found = shell.run_check(
+        f"find {profile}/GPUCache {profile}/DawnGraphiteCache {profile}/DawnWebGPUCache "
+        "-type f -name 'data_*' 2>/dev/null || true"
+    )
+    assert found == [], found
+
+
+@pytest.mark.needs_display
 def test_browser_cache_stays_within_its_cap(shell):
     """--disk-cache-size has to actually bound the tmpfs footprint.
 
