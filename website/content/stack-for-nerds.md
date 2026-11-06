@@ -51,7 +51,9 @@ built to keep the things that write constantly *off* the card.
   wrote 2.87 GB to an SD card in one boot; that is no longer possible.
 - **Chromium's caches.** The browser's HTTP cache and compiled-JavaScript cache
   are the heaviest repeat writers after logging, and both re-fetch from your
-  Home Assistant in well under a second. They are capped at 64 MiB in RAM.
+  Home Assistant in well under a second. They are capped at 64 MiB in RAM. Its GPU
+  shader caches are switched off: they were rewritten constantly as the page
+  drew, and cost an idle panel around 100 MiB of card writes an hour.
 - **`/tmp`,** so nothing scratch ever reaches the card.
 - **Screenshots.** The frame behind the Home Assistant screenshot entity is
   handed between processes through RAM. How often it is taken is up to your
