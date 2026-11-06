@@ -17,8 +17,10 @@ A headless bench needs no marker expression: tests whose hardware is absent
 skip themselves. See labgrid/README.md, "Skipping is derived, never selected".
 """
 
+import hashlib
 import json
 import os
+import shlex
 
 import pytest
 
@@ -31,23 +33,29 @@ import pytest
 #: first, because nothing created it).
 BOOT_MNT = "/boot"
 
-#: Where the daemon keeps the page list a seed file's `pages` replaces.
-URLS_FILE = "/var/lib/dashboard-assistant/urls.json"
+#: The sha256 of the last seed file the boot importer applied, written only
+#: once the daemon accepted it (modules/core/configimport.nix).
+SEED_HASH_FILE = "/var/lib/dashboard-assistant/seed-hash"
 
 
 def write_seed(shell, path, tag):
-    """Write a seed file whose one page carries `tag`, the witness these tests
-    read back from URLS_FILE.
+    """Write a seed file that differs only by `tag`, and return its sha256.
 
-    `pages` is the witness because it is persisted where a shell can read it.
-    The seed file used to carry `ha_url` and these tests read that back; the
-    key is gone (pairing sets the URL), so it is no longer something a seed
-    file can prove.
+    A seed file carries Wi-Fi and nothing else, and a Wi-Fi block is no use as
+    a witness here: provisioning activates the network, which would take the
+    board off the bench Wi-Fi it is reached over. So the file is a comment, and
+    the witness is the importer's own record of it (see `imported`).
     """
+    content = f"# {tag}\n"
     shell.run_check(
-        f"printf 'pages:\\n  - url: \"http://198.51.100.7:8123/{tag}\"\\n' "
-        f"> {path}/dashboard-assistant.yaml"
+        f"printf '# %s\\n' {shlex.quote(tag)} > {path}/dashboard-assistant.yaml"
     )
+    return hashlib.sha256(content.encode()).hexdigest()
+
+
+def imported(digest):
+    """The shell check that the importer last applied the file hashing to `digest`."""
+    return f"grep -qx {digest} {SEED_HASH_FILE}"
 
 
 def kiosk_uid(shell):
@@ -305,10 +313,10 @@ def test_seed_file_provisioning(shell):
     test_seed_file_from_flashed_partition below.
     """
     fat = "/boot"
-    write_seed(shell, fat, "lovelace/provisioning")
+    digest = write_seed(shell, fat, "provisioning")
     try:
         shell.run_check("systemctl restart dashboard-assistant-boot-import.service")
-        shell.run_check(f"grep -q lovelace/provisioning {URLS_FILE}")
+        shell.run_check(imported(digest))
     finally:
         # The card is reflashed next run anyway, but leaving a seed file behind
         # makes a --lg-initial-state session lie to the next one.
@@ -562,16 +570,15 @@ def test_seed_file_from_flashed_partition(shell):
     """
     fat = mount_fat(shell)
     try:
-        write_seed(shell, fat, "lovelace/from-partition")
+        digest = write_seed(shell, fat, "from-partition")
     finally:
         umount_fat(shell)
 
     try:
         shell.run_check("systemctl restart dashboard-assistant-boot-import.service")
-        shell.run_check(f"grep -q lovelace/from-partition {URLS_FILE}")
         # The hash of what was imported is recorded; that is what makes the next
         # boot a no-op instead of a re-import.
-        shell.run_check("test -s /var/lib/dashboard-assistant/seed-hash")
+        shell.run_check(imported(digest))
 
         # And immediately re-running it must now do nothing, because the file has
         # not changed. Same mechanism a reboot relies on, without costing a boot.
@@ -645,7 +652,7 @@ def test_kiosk_not_restarted_by_unchanged_seed(shell):
     """
     fat = mount_fat(shell)
     try:
-        write_seed(shell, fat, "lovelace/no-restart")
+        write_seed(shell, fat, "no-restart")
     finally:
         umount_fat(shell)
 
@@ -656,8 +663,7 @@ def test_kiosk_not_restarted_by_unchanged_seed(shell):
         return int(out[0])
 
     try:
-        # Import once so the file's hash is on record. This one *does* apply
-        # something, so it legitimately restarts the kiosk.
+        # Import once so the file's hash is on record.
         shell.run_check("systemctl restart dashboard-assistant-boot-import.service")
         # Outlast the coalescing window (8 s) so that restart has actually
         # landed and cannot be counted against the no-op below.
@@ -701,7 +707,7 @@ def test_seed_file_reimported_after_edit(shell, _bench):
     """
     fat = mount_fat(shell)
     try:
-        write_seed(shell, fat, "lovelace/edited")
+        digest = write_seed(shell, fat, "edited")
     finally:
         umount_fat(shell)
 
@@ -709,7 +715,7 @@ def test_seed_file_reimported_after_edit(shell, _bench):
         # The same ShellDriver instance comes back: reboot() deactivates and
         # re-activates it rather than rebuilding it, so `shell` stays valid.
         _bench.reboot()
-        shell.run_check(f"grep -q lovelace/edited {URLS_FILE}")
+        shell.run_check(imported(digest))
     finally:
         fat = mount_fat(shell)
         shell.run(f"rm -f {fat}/dashboard-assistant.yaml")

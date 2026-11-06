@@ -9,9 +9,10 @@ It also works after the fact: edit the file on the card later and the device
 applies the change on its next boot, so a device can be moved to a new network
 without reflashing it.
 
-The seed file does not say which Home Assistant to use. Once the device is on
-your network, Home Assistant discovers it, and adding it there hands the device
-its Home Assistant URL (see [Pairing still works](#pairing-still-works)).
+The seed file carries Wi-Fi and nothing else. Once the device is on your
+network, Home Assistant discovers it, and adding it there sets up the rest: its
+Home Assistant URL, the login, the dashboard and the pages (see
+[Pairing still works](#pairing-still-works)).
 
 You need one for any device that is not on Ethernet: the display has no way to ask
 for Wi-Fi credentials on screen, so the seed file is how they reach it. A device
@@ -19,59 +20,25 @@ that boots with a valid seed file joins your network directly.
 
 !!! warning "Physical access = full trust"
     Any USB stick carrying a `dashboard-assistant.yaml` is applied automatically,
-    and the file can carry a long-lived kiosk token in plain text. Only use
-    seed files on hardware and networks you control, and wipe the stick
-    afterwards.
+    and the file carries your Wi-Fi password in plain text. Only use seed files
+    on hardware and networks you control, and wipe the stick afterwards.
 
 ## Populate Seed File
 
-Create a file named exactly `dashboard-assistant.yaml`. Every key is optional — include
-only what you want to provision:
+Create a file named exactly `dashboard-assistant.yaml`:
 
 ```yaml
-# Optional Wi-Fi credentials. Omit the whole block on a wired device.
 wifi:
   ssid: "MyNetwork"
   psk: "supersecret"
-
-# Optional kiosk token: the long-lived Home Assistant access token the kiosk
-# logs in with. You normally don't need this — the Dashboard Assistant
-# integration supplies a login for the device automatically. Only set it to
-# preset a kiosk token yourself.
-kiosk_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiIyZWRlNGE0ZTFjNmQ0ZDY3OTY4ODhmMTk5OGNhNWVjMSIsImlhdCI6MTc4NDcxODk3MywiZXhwIjoyMTAwMDc4OTczfQ.Rd92pdzdYkC8HI3buVO6m9EVVI71Ye-MP_1nwogfOgU"
-
-# Optional device API token, the credential Home Assistant uses to talk to this
-# device. Leave it out and the device generates its own, which Home Assistant
-# picks up when it pairs. Set it to flash a fleet with a token you already know.
-api_token: "a-long-random-string"
-
-# Optional list of dashboard pages, replacing whatever the device has. `name` is
-# the label in Home Assistant; without one the URL is its own label.
-pages:
-  - name: "Home"
-    url: "https://homeassistant.local:8123/lovelace/0"
-  - name: "Kitchen"
-    url: "https://homeassistant.local:8123/lovelace/kitchen"
 ```
 
-| Key           | Required | Description                                                      |
-| ------------- | -------- | ---------------------------------------------------------------- |
-| `wifi.ssid`   | no       | Wi-Fi network name to join.                                      |
-| `wifi.psk`    | no       | Wi-Fi pre-shared key (password).                                 |
-| `kiosk_token` | no       | Kiosk token the dashboard logs in with; normally supplied by the integration. |
-| `api_token`   | no       | Device API token for the Home Assistant integration. Generated per device if omitted. |
-| `pages`       | no       | List of `name` + `url` entries replacing the device's page list. `url` is required per entry. |
-| `token`       | no       | Deprecated name for `kiosk_token`, still applied. Ignored when `kiosk_token` is also present. |
-| `ha_url`      | no       | No longer used, and ignored if present: Home Assistant sets its URL when it pairs with the device. |
+| Key         | Description                       |
+| ----------- | --------------------------------- |
+| `wifi.ssid` | Wi-Fi network name to join.       |
+| `wifi.psk`  | Wi-Fi pre-shared key (password).  |
 
-Three notes on the optional keys. `api_token` only takes effect when the daemon
-next starts, so a stick plugged into a running device needs a reboot for that one
-key (everything else applies immediately) — editing the file on the boot
-partition always applies it, because that is read during boot anyway. And `pages`
-replaces the list wholesale rather than merging, though importing it does not
-move the display off the page it is showing. Finally, `kiosk_token` used to be
-called `token`: a file using the old name is still applied. Rename the key
-anyway — a bare `token` next to `api_token` does not say which credential it is.
+Any other key is ignored.
 
 ## Apply the Seed File
 
@@ -117,25 +84,16 @@ file has changed, while a USB stick is applied each time you plug it in.
     the file it last imported, so:
 
     - **first boot** — the file is applied
-    - **you edit it and reboot** — the new values are applied. This is how you
-      re-provision a device in place: no reflash, no factory reset
-    - **you leave it alone** — nothing is applied, on this or any later boot.
-      Changes you made on the device or from Home Assistant are kept
+    - **you edit it and reboot** — the new Wi-Fi is applied. This is how you
+      move a device to another network: no reflash, no factory reset
+    - **you leave it alone** — nothing is applied, on this or any later boot
     - **you delete it** — same thing. Deleting the file does not reset anything
-
-    !!! warning "An edit applies the whole file"
-
-        Not just the line you changed. That matters for `pages`, which replaces
-        the device's page list outright — so if you edit the Wi-Fi block on a
-        device whose pages you have since reordered in Home Assistant, the
-        file's page list wins. Delete the `pages` block to manage pages from Home Assistant
-        instead.
 
     !!! note "The file stays on the partition"
 
-        Importing does not delete it. If it carries a Wi-Fi passphrase, anyone
-        who pulls the card can read it — so delete it once the device is set up
-        if that matters where the device lives.
+        Importing does not delete it, so anyone who pulls the card can read
+        your Wi-Fi passphrase. Delete it once the device is set up if that
+        matters where the device lives.
 
     If a device does not pick the file up, the usual cause is YAML indentation.
     The device cannot show you the parse error, so compare your file against the

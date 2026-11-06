@@ -57,8 +57,9 @@ Two things are worth knowing:
 
 A **standalone** Music Assistant server — one that is not a Home Assistant add-on
 — gets no page, because without Ingress there is nothing to sign the tablet in
-with. Add its URL as a page by hand (the `Page 1 … N` text entities, see
-[Usage](usage.md#from-home-assistant)) and log in once on the device.
+with. Add its URL as a page by hand (under **Configure**, see
+[Choose the dashboard and pages](integration.md#choose-the-dashboard-and-pages))
+and log in once on the device.
 
 ## Turning it off
 
