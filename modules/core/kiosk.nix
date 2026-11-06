@@ -1459,7 +1459,7 @@ in
       "p ${screenshotFifo} 0660 dashboard-assistant dashboard-assistant - -"
       # Screen saver FIFO: the daemon writes "start <name>"/"stop"; the in-session
       # agent overlays the saver on the page over Chromium's CDP port.
-      "p /var/lib/dashboard-assistant/screensaver.fifo 0660 dashboard-assistant dashboard-assistant - -"
+      "p ${screensaverFifo} 0660 dashboard-assistant dashboard-assistant - -"
     ];
 
     hardware.graphics.enable = true;

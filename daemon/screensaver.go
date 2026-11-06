@@ -127,6 +127,14 @@ func (s *Screensaver) Stop() error {
 	return nil
 }
 
+// Reset tells the in-session agent to drop any saver left over from before a
+// daemon restart. Best-effort: no session yet just means nothing to drop.
+func (s *Screensaver) Reset() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_ = s.writeCmd("stop")
+}
+
 // ReportOff records that the overlay is gone without driving the FIFO — the
 // session restarted and took it with it.
 func (s *Screensaver) ReportOff() {
