@@ -5,7 +5,7 @@
 
 ### ⚠ BREAKING CHANGES
 
-* **hardware:** a device flashed before 1.0.0 must be reflashed with the 1.0.0 image, not updated. 1.0.0 grows the FIRMWARE partition to 1 GiB and adds a @swap subvolume, and an update can create neither: a device updated in place would boot without its /swap mount. Don't pick 1.0.0 in the update picker on such a device.
+* **hardware:** a device flashed before 1.0.0 must be reflashed with the 1.0.0 image, not updated. 1.0.0 grows the FIRMWARE partition to 1 GiB and adds a `@swap` subvolume, and an update can create neither: a device updated in place would boot without its /swap mount. Don't pick 1.0.0 in the update picker on such a device.
 * **core:** the admin page and its port 8099 are gone; recovery runs from the Home Assistant integration.
 
 ### Features
@@ -13,8 +13,8 @@
 * **configimport:** make FIRMWARE a seed drop zone, re-import on change ([b0e31f6](https://github.com/ajfriesen/DashboardAssistant/commit/b0e31f623139890e8836148f53b7fe686b5d1158))
 * **core:** add screen savers, started after idle or from Home Assistant ([d43b9d3](https://github.com/ajfriesen/DashboardAssistant/commit/d43b9d3d8b05599969d922e30f6937d9f0152c45))
 * **core:** add screen savers, started after idle or from Home Assistant ([838c87a](https://github.com/ajfriesen/DashboardAssistant/commit/838c87a9a2010e331a7d3f17c0e7ae2ff9696333))
-* **core:** back zram with a swap file on [@swap](https://github.com/swap), and run oomd on the Pi ([ea52772](https://github.com/ajfriesen/DashboardAssistant/commit/ea52772e036666782d8f0d86c71efc53488f0a34))
-* **core:** back zram with a swap file on [@swap](https://github.com/swap), and run oomd on the Pi ([0085558](https://github.com/ajfriesen/DashboardAssistant/commit/00855580dca80263b3885da4db3bc175f5d23795))
+* **core:** back zram with a swap file on `@swap`, and run oomd on the Pi ([ea52772](https://github.com/ajfriesen/DashboardAssistant/commit/ea52772e036666782d8f0d86c71efc53488f0a34))
+* **core:** back zram with a swap file on `@swap`, and run oomd on the Pi ([0085558](https://github.com/ajfriesen/DashboardAssistant/commit/00855580dca80263b3885da4db3bc175f5d23795))
 * **core:** build every board from pinned nixos-unstable ([9c0f136](https://github.com/ajfriesen/DashboardAssistant/commit/9c0f1369947bfca25178d5354799c8ce106aa5a0))
 * **core:** build every board from pinned nixos-unstable ([094f680](https://github.com/ajfriesen/DashboardAssistant/commit/094f680a233fdb5791cd3bef4e858d8ce6f8926f)), closes [#19](https://github.com/ajfriesen/DashboardAssistant/issues/19)
 * **core:** carry only Wi-Fi in the seed file ([d8d15ab](https://github.com/ajfriesen/DashboardAssistant/commit/d8d15ab22c4976ae9002cecf957c9c3dfd52f33b))
