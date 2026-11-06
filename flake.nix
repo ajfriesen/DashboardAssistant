@@ -270,6 +270,10 @@
                 echo "FAIL: no --disk-cache-size — Chromium sizes its cache from free space, which on a tmpfs is most of RAM, so systemd-oomd will kill the kiosk session in a loop." >&2
                 fail=1
               }
+              grep -q -- '--disable-gpu-shader-disk-cache' "$launcher" || {
+                echo "FAIL: Chromium's GPU shader caches are back in the profile on flash — they are memory-mapped and written back on every cache hit, the largest writer left on an idle device." >&2
+                fail=1
+              }
               [ "$fail" = 0 ] || exit 1
               touch "$out"
             '';
