@@ -85,29 +85,29 @@ access to the machine's internal disk.
 On Ethernet, move the disk into the target machine (or leave it in place) and
 boot it. For Wi-Fi, write a seed file first.
 
-### Raspberry Pi 4: check your bootloader EEPROM { #rpi4-eeprom }
+??? info "Raspberry Pi 4: check your bootloader EEPROM"
 
-Pi 5 boards need nothing special. A **Raspberry Pi 4** does: these images use a
-GPT partition table, which the Pi 4's bootloader only understands from the
-September 2020 EEPROM onwards. Any board bought since late 2020, or that has
-ever run a recent Raspberry Pi OS, is already fine.
+    Pi 5 boards need nothing special. A **Raspberry Pi 4** does: these images use a
+    GPT partition table, which the Pi 4's bootloader only understands from the
+    September 2020 EEPROM onwards. Any board bought since late 2020, or that has
+    ever run a recent Raspberry Pi OS, is already fine.
 
-If a Pi 4 shows no sign of life after flashing, check its bootloader from a
-Raspberry Pi OS card:
+    If a Pi 4 shows no sign of life after flashing, check its bootloader from a
+    Raspberry Pi OS card:
 
-```bash
-vcgencmd bootloader_version
-```
+    ```bash
+    vcgencmd bootloader_version
+    ```
 
-and update it if the date is older than `2020/09/14`:
+    and update it if the date is older than `2020/09/14`:
 
-```bash
-sudo rpi-eeprom-update -a && sudo reboot
-```
+    ```bash
+    sudo rpi-eeprom-update -a && sudo reboot
+    ```
 
-This has to be done from a Raspberry Pi OS card, not from ours: the EEPROM
-recovery file is read by a part of the chip that predates GPT support entirely,
-so a Dashboard Assistant card cannot repair a board that cannot boot it.
+    This has to be done from a Raspberry Pi OS card, not from ours: the EEPROM
+    recovery file is read by a part of the chip that predates GPT support entirely,
+    so a Dashboard Assistant card cannot repair a board that cannot boot it.
 
 ## 2. Get it on your network { #seed-file }
 
