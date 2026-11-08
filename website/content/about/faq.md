@@ -21,6 +21,6 @@ a reboot. Dashboard Assistant takes the opposite approach:
   though every image now boots through systemd-boot, which provides it.)
 - **A first-class Home Assistant citizen.** The panel doesn't just *show* Home
   Assistant — a native integration (installable
-  [via HACS](../usage/integration.md)) reports it back as a device with its own
+  [via HACS](../getting-started.md#integration)) reports it back as a device with its own
   controls and sensors (display, brightness, zoom, screenshots, CPU,
   temperature and more).

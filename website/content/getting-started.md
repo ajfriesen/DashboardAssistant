@@ -1,54 +1,306 @@
 ---
 icon: lucide/rocket
-hide:
-  - toc
 ---
 
 # Getting Started
 
-Going from a spare device to a working Home Assistant dashboard takes a few steps.
-Follow them in order and you'll be up and running without a terminal or a weekend of tinkering.
+Going from a spare mini-PC or Raspberry Pi to a working Home Assistant dashboard
+takes a download and four steps. Follow them in order.
 
-## 1. Download the image
+## Download the image { #download }
 
-Get the latest release here:
+The current release is **1.0.0**
+([release notes](https://github.com/ajfriesen/DashboardAssistant/releases/tag/v1.0.0)).
+There is one image per board:
 
-https://github.com/ajfriesen/DashboardAssistant/releases
+| Board | Image |
+|---|---|
+| x86_64 (mini-PC, NUC) | [`dashboard-assistant-x86_64-1.0.0.raw.zst`](https://download.dashboardassistant.org/release/x86_64/dashboard-assistant-x86_64-1.0.0.raw.zst) |
+| Raspberry Pi 4 | [`dashboard-assistant-rpi4-1.0.0.raw.zst`](https://download.dashboardassistant.org/release/rpi4/dashboard-assistant-rpi4-1.0.0.raw.zst) |
+| Raspberry Pi 5 | [`dashboard-assistant-rpi5-1.0.0.raw.zst`](https://download.dashboardassistant.org/release/rpi5/dashboard-assistant-rpi5-1.0.0.raw.zst) |
 
+Every image is zstd-compressed and several GB even so. All three boards use the
+same image format and the same flashing steps. x86_64 targets need to boot
+**UEFI**; see the [x86_64 requirements](hardware-support/x86.md).
 
-## 2. Flash the image
+!!! tip "Verify the download"
+    If a flash fails midway, download the image again and check its size before
+    retrying.
 
-Write one image to an SD card or SSD, pop it into your tablet, mini-PC or
-single-board computer, and power on. The [Flash](flash/flash.md) guide walks
-through downloading the latest image and writing it to your target disk.
+## 1. Flash the image { #flash }
 
-[Flash the image&nbsp;→](flash/flash.md){ .da-btn .da-btn--primary }
+Write the image to the target's disk: an x86_64 image goes to the SSD or
+internal disk, a Raspberry Pi image goes to the SD card. To reach the disk you
+need an SD-card reader, a SATA-to-USB adapter, an NVMe/USB enclosure, or direct
+access to the machine's internal disk.
 
-## 3. Get it on your network
+!!! danger "Double-check the target device"
+    `dd` writes with no confirmation. Flashing the wrong disk will **erase it**.
+    List your disks first and confirm the device node before running the command.
 
-On Ethernet there is nothing to do.
-For Wi-Fi, put your network name and password in a [seed file](flash/seed.md).
-A short YAML file on the boot partition or a USB stick.
-The device reads it on first boot and joins.
-The same file configures every other setting, so it is also how you set up several devices at once.
+=== "Linux"
 
+    Identify the target disk. An SD card is usually `/dev/mmcblkX` in a
+    built-in slot and `/dev/sdX` in a USB reader:
 
-## 4. Install the DashboardAssistant Integraton
+    ```bash
+    lsblk -o NAME,SIZE,MODEL,TRAN
+    ```
 
-Once online, the device shows an "add me" screen. Install the **DashboardAssistant** integration.
-A HACS custom repository, added in a couple of clicks.
-Home Assistant discovers the panel over mDNS, so it shows up as a device you can see, control and automate.
-The [Connect to Home Assistant](usage/integration.md) guide walks through it.
+    Decompress and write it in one pipe (replace `/dev/sdX` with your device):
 
-[Install the integration&nbsp;→](usage/integration.md){ .da-btn .da-btn--primary }
+    ```bash
+    zstd -dc dashboard-assistant-*.zst \
+      | sudo dd of=/dev/sdX bs=4M conv=fsync oflag=direct status=progress
+    sync
+    ```
 
-## 5. Use it day to day
+=== "macOS"
 
-Once it's up, you control it in two places: on the screen itself and
-from Home Assistant. The [Usage](usage/usage.md) guide covers the on-device
-controls, the integration's entities, one-tap OS updates and rolling back if an
-update ever misbehaves. If something looks off, [Recovery](usage/recovery.md)
-covers rolling back and resetting the device.
+    Identify the target disk:
+
+    ```bash
+    diskutil list
+    ```
+
+    Unmount it (don't eject), then decompress and write to the *raw* device node
+    (`/dev/rdiskN` is faster than `/dev/diskN`):
+
+    ```bash
+    diskutil unmountDisk /dev/diskN
+    zstd -dc dashboard-assistant-*.zst \
+      | sudo dd of=/dev/rdiskN bs=4m
+    ```
+
+    `zstd` is available via [Homebrew](https://brew.sh/): `brew install zstd`.
+
+=== "Windows / GUI"
+
+    1. Download [balenaEtcher](https://etcher.balena.io/).
+    2. Decompress the `.zst` file with [7-Zip](https://www.7-zip.org/) (or
+       `zstd -d`) to get the raw `.raw` image.
+    3. In Etcher, choose **Flash from file**, select the image, pick the
+       target drive, and flash.
+
+On Ethernet, move the disk into the target machine (or leave it in place) and
+boot it. For Wi-Fi, write a seed file first.
+
+### Raspberry Pi 4: check your bootloader EEPROM { #rpi4-eeprom }
+
+Pi 5 boards need nothing special. A **Raspberry Pi 4** does: these images use a
+GPT partition table, which the Pi 4's bootloader only understands from the
+September 2020 EEPROM onwards. Any board bought since late 2020, or that has
+ever run a recent Raspberry Pi OS, is already fine.
+
+If a Pi 4 shows no sign of life after flashing, check its bootloader from a
+Raspberry Pi OS card:
+
+```bash
+vcgencmd bootloader_version
+```
+
+and update it if the date is older than `2020/09/14`:
+
+```bash
+sudo rpi-eeprom-update -a && sudo reboot
+```
+
+This has to be done from a Raspberry Pi OS card, not from ours: the EEPROM
+recovery file is read by a part of the chip that predates GPT support entirely,
+so a Dashboard Assistant card cannot repair a board that cannot boot it.
+
+## 2. Get it on your network { #seed-file }
+
+On Ethernet there is nothing to do; skip to [step 3](#integration).
+
+For Wi-Fi you need a **seed file**: the display has no way to ask for Wi-Fi
+credentials on screen, so the seed file is how they reach the device. It carries
+Wi-Fi and nothing else. Once the device is on your network, Home Assistant
+discovers it, and adding it there sets up the rest: its Home Assistant URL, the
+login, the dashboard and the pages.
+
+!!! warning "Physical access = full trust"
+    Any USB stick carrying a `dashboard-assistant.yaml` is applied automatically,
+    and the file carries your Wi-Fi password in plain text. Only use seed files
+    on hardware and networks you control, and wipe the stick afterwards.
+
+Create a file named exactly `dashboard-assistant.yaml`:
+
+```yaml
+wifi:
+  ssid: "MyNetwork"
+  psk: "supersecret"
+```
+
+| Key         | Description                       |
+| ----------- | --------------------------------- |
+| `wifi.ssid` | Wi-Fi network name to join.       |
+| `wifi.psk`  | Wi-Fi pre-shared key (password).  |
+
+Any other key is ignored.
+
+There are two ways to hand the file to a device, and they differ in when they
+re-apply: the FIRMWARE partition is read on every boot and acted on whenever the
+file has changed, while a USB stick is applied each time you plug it in.
+
+=== "FIRMWARE partition"
+
+    After flashing, the card or disk carries a small FAT partition that any
+    computer can read: the FIRMWARE partition, labelled **`ESP`** and mounted
+    as `/boot` on the device. It is the same partition on every board. Copy
+    `dashboard-assistant.yaml` to its root.
+
+    On Windows and macOS your file manager shows exactly one readable
+    partition, this one; the other one is btrfs, which they cannot read.
+
+    Linux desktops do the opposite: they mount the btrfs root and leave the
+    FIRMWARE partition unmounted, because they treat an EFI system partition as
+    part of the system. Mount it yourself; it is the first partition, the
+    1 GiB one:
+
+    ```sh
+    udisksctl mount -b /dev/sdX1
+    ```
+
+    Replace `sdX` with the card or disk (`lsblk` lists it), and run
+    `udisksctl unmount -b /dev/sdX1` before you pull it.
+
+    That partition is not empty: alongside the boot files it carries a
+    **`README.txt`** and a **`dashboard-assistant.yaml.example`** that say all
+    of this, so a card explains itself without this page. Copy the example, drop
+    the `.example`, and edit it.
+
+    !!! warning "Name the file exactly `dashboard-assistant.yaml`"
+
+        On Windows, "hide extensions for known file types" makes
+        `dashboard-assistant.yaml.example` *look* like
+        `dashboard-assistant.yaml`. Turn extensions on before renaming, or
+        the device will not find the file.
+
+    **It is re-read when you change it.** The device records a checksum of
+    the file it last imported, so:
+
+    - **first boot**: the file is applied
+    - **you edit it and reboot**: the new Wi-Fi is applied. This is how you
+      move a device to another network: no reflash, no factory reset
+    - **you leave it alone**: nothing is applied, on this or any later boot
+    - **you delete it**: same thing. Deleting the file does not reset anything
+
+    !!! note "The file stays on the partition"
+
+        Importing does not delete it, so anyone who pulls the card can read
+        your Wi-Fi passphrase. Delete it once the device is set up if that
+        matters where the device lives.
+
+    If a device does not pick the file up, the usual cause is YAML indentation.
+    The device cannot show you the parse error, so compare your file against the
+    example above: two spaces per level, and every nested key under `wifi`
+    indented below it.
+
+=== "USB stick"
+
+    Put `dashboard-assistant.yaml` in the root of a normal USB stick (any
+    filesystem the OS can mount) and plug it into a running device.
+
+    Inserting the stick triggers an import immediately, so you can re-provision
+    a device in the field without reflashing.
+
+    Unlike the FIRMWARE partition, this applies **every time you plug the stick
+    in**, changed or not. There is no checksum involved.
+
+Once the file is applied, the device joins your network and shows an "add me"
+screen until Home Assistant adds it.
+
+A factory reset clears the recorded checksum, so a reset device re-imports the
+seed file still sitting on its card on the next boot. That is usually what you
+want when re-deploying a device. When it is not, remove the file from the
+partition before resetting.
+
+## 3. Add it to Home Assistant { #integration }
+
+The device is managed from Home Assistant through the **Dashboard Assistant**
+integration. Install it once and every device on your network shows up with its
+own controls and sensors: display power, brightness, pages, screenshots, OS
+updates and more (see the
+[entity reference](about/features.md#home-assistant-integration)).
+
+The integration is distributed through [HACS](https://hacs.xyz/) as a **custom
+repository**: it is not in the default HACS store, so searching HACS alone
+won't find it. If you don't have HACS yet, follow the official
+[HACS installation guide](https://hacs.xyz/docs/use/download/download/).
+
+1. In Home Assistant, open **HACS** from the sidebar.
+2. Click the **⋮** menu in the top-right corner and choose **Custom
+   repositories**.
+3. In the **Repository** field, paste:
+   ```
+   https://github.com/ajfriesen/dashboard-assistant-integration
+   ```
+4. Set **Type** (or **Category**) to **Integration**, click **Add**, and close
+   the dialog.
+5. Search HACS for **Dashboard Assistant**, open it, and click **Download**.
+6. **Restart Home Assistant** (**Settings → System → Restart**). HACS only
+   copies the files; Home Assistant loads the integration on restart.
+
+After the restart, Home Assistant **discovers the device on its own** over
+mDNS: a "Dashboard Assistant" card appears under **Settings → Devices &
+services → Discovered**. Click **Add** and confirm. A device that has not been
+paired yet hands over its API token by itself, so there is no PIN and nothing
+to type. A device set up with a seed file pairs exactly the same way.
+
+Discovery is the only way to add a device. If the card does not appear, Home
+Assistant cannot see the device's mDNS announcement, usually because the two
+are on different networks or VLANs.
+
+!!! note "A device only pairs once"
+    An already-paired device refuses to hand out its token again; that is what
+    keeps a stranger on your network from adopting your device. To pair it with
+    a new Home Assistant instance, press its **Factory reset** button first,
+    which also removes its entry. A device whose entry was deleted without a
+    reset has to be reflashed before it pairs again. See
+    [Recovery](usage/recovery.md).
+
+!!! info "The connection is encrypted"
+    Home Assistant talks to the display over TLS, and remembers the display's
+    certificate the first time it connects. Nothing on the wire is readable by
+    anyone else on your network, which matters most for the Home Assistant
+    login the display is given, since that is a credential to your Home
+    Assistant.
+
+    The certificate is the display's own, so there is nothing to buy, install or
+    renew. If you factory-reset the display it generates a new one, and its
+    Home Assistant entry stops with an error. That is expected after a reset:
+    delete the entry, and the display is discovered again and pairs. If you
+    have not just reset it, take a second look.
+
+Behind the scenes, the integration creates a dedicated **non-admin Home
+Assistant user** for the device (named after it, visible under **Settings →
+People**) and logs the device's browser in with it, which is why the display
+never shows a login screen. The user is removed again if you delete the
+integration. If the [Music Assistant](usage/audio.md) add-on is installed, a
+**Music Assistant** page is added to the device's page list automatically,
+already signed in.
+
+When a new integration release is published, HACS shows an update on the
+**Dashboard Assistant** card. Click **Update**, then restart Home Assistant.
+
+## 4. Choose the dashboard and pages { #pages }
+
+Open **Settings → Devices & services → Dashboard Assistant** and click
+**Configure**:
+
+- **Dashboard**: the device shows Home Assistant's default dashboard until you
+  pick another. Admin-only dashboards are not listed, because the device signs
+  in as a regular user.
+- **Pages**: any number of pages, each a name and the address of any website.
+  The **Page** select and the next/previous buttons switch between them, in
+  this order.
+
+Saving sends both to the device straight away.
+
+That's it. The [Usage](usage/usage.md) guide covers the on-device controls, the
+integration's entities, one-tap OS updates and rolling back if an update ever
+misbehaves. If something looks off, [Recovery](usage/recovery.md) covers rolling
+back and resetting the device.
 
 [Read the usage guide&nbsp;→](usage/usage.md){ .da-btn .da-btn--ghost }
-

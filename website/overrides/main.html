@@ -1,6 +1,13 @@
 {% extends "base.html" %}
 
 {% block extrahead %}
+  {# A page that moved keeps its old address as a stub whose front matter
+     says `redirect: <new URL>`. /flash/seed/ must stay one for good: devices
+     show it on their waiting screen and in the README on the card. #}
+  {% if page.meta and page.meta.redirect %}
+    <meta http-equiv="refresh" content="0; url={{ page.meta.redirect }}">
+    <link rel="canonical" href="{{ page.meta.redirect }}">
+  {% endif %}
   {# data-do-not-track is opt-in: the tracker only checks the browser's DNT
      signal when this attribute is literally the string "true"
      (src/tracker/index.ts, `config('do-not-track') === _true`). Without it a
