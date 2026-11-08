@@ -119,11 +119,6 @@ Wi-Fi and nothing else. Once the device is on your network, Home Assistant
 discovers it, and adding it there sets up the rest: its Home Assistant URL, the
 login, the dashboard and the pages.
 
-!!! warning "Physical access = full trust"
-    Any USB stick carrying a `dashboard-assistant.yaml` is applied automatically,
-    and the file carries your Wi-Fi password in plain text. Only use seed files
-    on hardware and networks you control, and wipe the stick afterwards.
-
 Create a file named exactly `dashboard-assistant.yaml`:
 
 ```yaml
@@ -139,74 +134,63 @@ wifi:
 
 Any other key is ignored.
 
-There are two ways to hand the file to a device, and they differ in when they
-re-apply: the FIRMWARE partition is read on every boot and acted on whenever the
-file has changed, while a USB stick is applied each time you plug it in.
+After flashing, the card or disk carries a small FAT partition that any
+computer can read: the FIRMWARE partition, labelled **`ESP`** and mounted as
+`/boot` on the device. Next to the boot files it already has a **`README.txt`**
+and a **`dashboard-assistant.yaml.example`**, so you can copy the example, drop
+the `.example`, and edit it. Put the file in the partition's root:
 
-=== "FIRMWARE partition"
+=== "Linux"
 
-    After flashing, the card or disk carries a small FAT partition that any
-    computer can read: the FIRMWARE partition, labelled **`ESP`** and mounted
-    as `/boot` on the device. It is the same partition on every board. Copy
-    `dashboard-assistant.yaml` to its root.
-
-    On Windows and macOS your file manager shows exactly one readable
-    partition, this one; the other one is btrfs, which they cannot read.
-
-    Linux desktops do the opposite: they mount the btrfs root and leave the
-    FIRMWARE partition unmounted, because they treat an EFI system partition as
-    part of the system. Mount it yourself; it is the first partition, the
-    1 GiB one:
+    Linux desktops mount the btrfs root and leave the FIRMWARE partition
+    unmounted, because they treat an EFI system partition as part of the system.
+    Mount it yourself; it is the first partition, the 1 GiB one:
 
     ```sh
     udisksctl mount -b /dev/sdX1
     ```
 
-    Replace `sdX` with the card or disk (`lsblk` lists it), and run
-    `udisksctl unmount -b /dev/sdX1` before you pull it.
+    Replace `sdX` with the card or disk (`lsblk` lists it), copy the file to the
+    path `udisksctl` printed, and run `udisksctl unmount -b /dev/sdX1` before
+    you pull it.
 
-    That partition is not empty: alongside the boot files it carries a
-    **`README.txt`** and a **`dashboard-assistant.yaml.example`** that say all
-    of this, so a card explains itself without this page. Copy the example, drop
-    the `.example`, and edit it.
+=== "macOS"
+
+    Finder shows the FIRMWARE partition as a drive named **`ESP`**; the other
+    partition is btrfs, which macOS cannot read. Copy the file to the root of
+    `ESP` and eject the drive before you pull it.
+
+=== "Windows"
+
+    File Explorer shows the FIRMWARE partition as a drive named **`ESP`**; the
+    other partition is btrfs, which Windows cannot read. Copy the file to the
+    root of `ESP` and eject the drive before you pull it.
 
     !!! warning "Name the file exactly `dashboard-assistant.yaml`"
 
-        On Windows, "hide extensions for known file types" makes
+        "Hide extensions for known file types" makes
         `dashboard-assistant.yaml.example` *look* like
-        `dashboard-assistant.yaml`. Turn extensions on before renaming, or
-        the device will not find the file.
+        `dashboard-assistant.yaml`. Turn extensions on before renaming, or the
+        device will not find the file.
 
-    **It is re-read when you change it.** The device records a checksum of
-    the file it last imported, so:
+**It is re-read when you change it.** The device records a checksum of the file
+it last imported, so:
 
-    - **first boot**: the file is applied
-    - **you edit it and reboot**: the new Wi-Fi is applied. This is how you
-      move a device to another network: no reflash, no factory reset
-    - **you leave it alone**: nothing is applied, on this or any later boot
-    - **you delete it**: same thing. Deleting the file does not reset anything
+- **first boot**: the file is applied
+- **you edit it and reboot**: the new Wi-Fi is applied. This is how you move a
+  device to another network: no reflash, no factory reset
+- **you leave it alone**: nothing is applied, on this or any later boot
+- **you delete it**: same thing. Deleting the file does not reset anything
 
-    !!! note "The file stays on the partition"
+!!! warning "The file stays on the partition"
+    Importing does not delete it, and it carries your Wi-Fi password in plain
+    text, so anyone who pulls the card can read it. Delete it once the device is
+    set up if that matters where the device lives.
 
-        Importing does not delete it, so anyone who pulls the card can read
-        your Wi-Fi passphrase. Delete it once the device is set up if that
-        matters where the device lives.
-
-    If a device does not pick the file up, the usual cause is YAML indentation.
-    The device cannot show you the parse error, so compare your file against the
-    example above: two spaces per level, and every nested key under `wifi`
-    indented below it.
-
-=== "USB stick"
-
-    Put `dashboard-assistant.yaml` in the root of a normal USB stick (any
-    filesystem the OS can mount) and plug it into a running device.
-
-    Inserting the stick triggers an import immediately, so you can re-provision
-    a device in the field without reflashing.
-
-    Unlike the FIRMWARE partition, this applies **every time you plug the stick
-    in**, changed or not. There is no checksum involved.
+If a device does not pick the file up, the usual cause is YAML indentation. The
+device cannot show you the parse error, so compare your file against the example
+above: two spaces per level, and every nested key under `wifi` indented below
+it.
 
 Once the file is applied, the device joins your network and shows an "add me"
 screen until Home Assistant adds it.
@@ -224,23 +208,20 @@ own controls and sensors: display power, brightness, pages, screenshots, OS
 updates and more (see the
 [entity reference](about/features.md#home-assistant-integration)).
 
-The integration is distributed through [HACS](https://hacs.xyz/) as a **custom
-repository**: it is not in the default HACS store, so searching HACS alone
-won't find it. If you don't have HACS yet, follow the official
-[HACS installation guide](https://hacs.xyz/docs/use/download/download/).
+The integration is installed from the **Marketplace** that is built into Home
+Assistant (2026.11 and later) as a **custom repository**: it is not in the
+Marketplace catalog, so searching alone won't find it. Custom repositories need
+the Marketplace connected to GitHub.
 
-1. In Home Assistant, open **HACS** from the sidebar.
-2. Click the **⋮** menu in the top-right corner and choose **Custom
-   repositories**.
-3. In the **Repository** field, paste:
+1. In Home Assistant, open **Settings → Marketplace**.
+2. Choose **Add from link** and paste:
    ```
    https://github.com/ajfriesen/dashboard-assistant-integration
    ```
-4. Set **Type** (or **Category**) to **Integration**, click **Add**, and close
-   the dialog.
-5. Search HACS for **Dashboard Assistant**, open it, and click **Download**.
-6. **Restart Home Assistant** (**Settings → System → Restart**). HACS only
-   copies the files; Home Assistant loads the integration on restart.
+3. Open **Dashboard Assistant** and install it.
+4. **Restart Home Assistant** (**Settings → System → Restart**). The
+   Marketplace only copies the files; Home Assistant loads the integration on
+   restart.
 
 After the restart, Home Assistant **discovers the device on its own** over
 mDNS: a "Dashboard Assistant" card appears under **Settings → Devices &
@@ -281,8 +262,8 @@ integration. If the [Music Assistant](usage/audio.md) add-on is installed, a
 **Music Assistant** page is added to the device's page list automatically,
 already signed in.
 
-When a new integration release is published, HACS shows an update on the
-**Dashboard Assistant** card. Click **Update**, then restart Home Assistant.
+When a new integration release is published, the Marketplace shows an update
+for **Dashboard Assistant**. Click **Update**, then restart Home Assistant.
 
 ## 4. Choose the dashboard and pages { #pages }
 

@@ -47,7 +47,7 @@ icon: lucide/sparkles
 ## Home Assistant integration
 
 Install the first-party **Dashboard Assistant** integration
-([via HACS](../getting-started.md#integration)) and Home Assistant discovers the device
+([from the Marketplace](../getting-started.md#integration)) and Home Assistant discovers the device
 over mDNS. A device that has not been added yet
 hands over its API token automatically, so there is nothing to type and nothing to
 press on the tablet. It appears as a single device with these entities:
