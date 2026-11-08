@@ -210,6 +210,8 @@ func (s *server) handleWaitingPage(w http.ResponseWriter, r *http.Request) {
 // Ethernet and no seed file cannot get itself online, and the screen is the only
 // thing its owner can see, so the one useful thing it can offer is the page that
 // explains how to write the seed file.
+// The page itself lives in getting-started.md now; /flash/seed/ is kept as a
+// redirect to it, because this URL is printed on the screen to be typed in.
 const seedDocsURL = "https://dashboardassistant.org/flash/seed/"
 
 // handleWaitingQR renders the seed-file documentation link as a QR code. Encoded

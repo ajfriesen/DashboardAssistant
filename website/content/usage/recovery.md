@@ -10,6 +10,8 @@ So recovery runs from Home Assistant, on the device's page under
 the token the device handed Home Assistant when it paired, and nothing else on
 your network can roll the device back or reset it.
 
+[![Open your Home Assistant instance and show the Dashboard Assistant integration.](https://my.home-assistant.io/badges/integration.svg)](https://my.home-assistant.io/redirect/integration/?domain=dashboard_assistant)
+
 ## Roll back an update
 
 Every update is kept as a NixOS generation, so the previous version is still
@@ -38,12 +40,12 @@ A reset is how you move a device to another Home Assistant, or to another house:
 
 - **On Ethernet** it comes back on its own, and Home Assistant discovers it
   again.
-- **On Wi-Fi** it reads the [seed file](../flash/seed.md) again if one is still
+- **On Wi-Fi** it reads the [seed file](../getting-started.md#seed-file) again if one is still
   on its boot medium, and joins that network. If you deleted it, or the device
   is moving to another network, write a new one first.
 
 Once it is back on the network, add it again from the discovered card, the way
-[Home Assistant integration](integration.md) describes.
+[Home Assistant integration](../getting-started.md#integration) describes.
 
 ## If the entry is already gone
 
@@ -51,14 +53,14 @@ A device pairs once. If its entry was deleted without a factory reset first, or
 the Home Assistant it belonged to was reinstalled without a backup, the device
 still holds its old pairing and refuses to pair again. Nothing on the network
 can undo that, by design: otherwise anyone on your network could adopt your
-device. [Reflash it](../flash/flash.md) and seed it again.
+device. [Reflash it](../getting-started.md#flash) and seed it again.
 
 ## If the network is gone
 
 Home Assistant needs to reach the device, so it cannot help one that will not
 join the network.
 
-- Drop a [seed file](../flash/seed.md) on a USB stick and plug it in. The device
+- Drop a [seed file](../getting-started.md#seed-file) on a USB stick and plug it in. The device
   applies it, which is the way back onto Wi-Fi.
 - Plug in Ethernet, which needs no configuration at all.
 - Pull the card or disk and read the journal directly, or reflash it.

@@ -71,18 +71,11 @@ nav = [
       "about/license.md",
       "about/license-faq.md",
   ]},
-  {"Getting Started" = [
-     "getting-started.md",
-     {"Flash" = [
-        "flash/flash.md",
-        "flash/seed.md",
-     ]},
-     {"Usage" = [
-        "usage/integration.md",
-        "usage/usage.md",
-        "usage/audio.md",
-        "usage/recovery.md",
-     ]},
+  { "Getting Started" = "getting-started.md" },
+  {"Usage" = [
+     "usage/usage.md",
+     "usage/audio.md",
+     "usage/recovery.md",
   ]},
   { "In Action" = "in-action.md" },
   { "Stack for Nerds" = "stack-for-nerds.md" },

@@ -47,7 +47,7 @@ icon: lucide/sparkles
 ## Home Assistant integration
 
 Install the first-party **Dashboard Assistant** integration
-([via HACS](../usage/integration.md)) and Home Assistant discovers the device
+([from the Marketplace](../getting-started.md#integration)) and Home Assistant discovers the device
 over mDNS. A device that has not been added yet
 hands over its API token automatically, so there is nothing to type and nothing to
 press on the tablet. It appears as a single device with these entities:
@@ -64,7 +64,7 @@ press on the tablet. It appears as a single device with these entities:
 | Screen saver style | `select` | Which screen saver to show (clock, logo) |
 | Screen saver timeout | `number` | Minutes without a touch before the screen saver starts, 0–240; 0 turns the idle trigger off |
 | Screenshot | `button` + `image` | Capture the current web view on demand; the latest shot shows as an image you can click to enlarge |
-| Page | `select` | Jump to one of your pages (edit the list under **Configure**, see [Home Assistant integration](../usage/integration.md#choose-the-dashboard-and-pages)) |
+| Page | `select` | Jump to one of your pages (edit the list under **Configure**, see [Home Assistant integration](../getting-started.md#pages)) |
 | Next / Previous page | `button` | Cycle through the dashboard URLs |
 | Sendspin player | `switch` | Turn the device's multi-room audio player on/off; carries a `status` attribute. Only on builds with the audio stack |
 | Reboot / Shut down | `button` | Power-cycle the device |
