@@ -6,7 +6,7 @@ configured. A shared screen gets touched by guests, housemates and children, and
 none of them should be able to roll it back or reset it.
 
 So recovery runs from Home Assistant, on the device's page under
-**Settings → Devices & services → Dashboard Assistant**. Every request carries
+[**Settings → Devices & services → Dashboard Assistant**](https://my.home-assistant.io/redirect/integration/?domain=dashboard_assistant). Every request carries
 the token the device handed Home Assistant when it paired, and nothing else on
 your network can roll the device back or reset it.
 

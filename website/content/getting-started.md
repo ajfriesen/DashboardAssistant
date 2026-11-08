@@ -229,19 +229,21 @@ Assistant (2026.11 and later) as a **custom repository**: it is not in the
 Marketplace catalog, so searching alone won't find it. Custom repositories need
 the Marketplace connected to GitHub.
 
-1. In Home Assistant, open **Settings → Marketplace**.
-2. Choose **Add from link** and paste:
-   ```
-   https://github.com/ajfriesen/dashboard-assistant-integration
-   ```
-3. Open **Dashboard Assistant** and install it.
-4. **Restart Home Assistant** (**Settings → System → Restart**). The
+[Open in your Home Assistant&nbsp;→](https://my.home-assistant.io/redirect/marketplace_repository/?owner=ajfriesen&repository=dashboard-assistant-integration&category=integration){ .da-btn .da-btn--primary }
+
+1. Click the button above: it opens **Dashboard Assistant** in your Home
+   Assistant's Marketplace. Or add it by hand: open
+   [**Settings → Marketplace**](https://my.home-assistant.io/redirect/marketplace_discover/), choose **Add from
+   link**, and paste
+   `https://github.com/ajfriesen/dashboard-assistant-integration`.
+2. Install **Dashboard Assistant**.
+3. **Restart Home Assistant** (**Settings → System → Restart**). The
    Marketplace only copies the files; Home Assistant loads the integration on
    restart.
 
 After the restart, Home Assistant **discovers the device on its own** over
-mDNS: a "Dashboard Assistant" card appears under **Settings → Devices &
-services → Discovered**. Click **Add** and confirm. A device that has not been
+mDNS: a "Dashboard Assistant" card appears under
+[**Settings → Devices & services → Discovered**](https://my.home-assistant.io/redirect/integrations/). Click **Add** and confirm. A device that has not been
 paired yet hands over its API token by itself, so there is no PIN and nothing
 to type. A device set up with a seed file pairs exactly the same way.
 
@@ -271,19 +273,19 @@ are on different networks or VLANs.
     have not just reset it, take a second look.
 
 Behind the scenes, the integration creates a dedicated **non-admin Home
-Assistant user** for the device (named after it, visible under **Settings →
-People**) and logs the device's browser in with it, which is why the display
+Assistant user** for the device (named after it, visible under
+[**Settings → People**](https://my.home-assistant.io/redirect/people/)) and logs the device's browser in with it, which is why the display
 never shows a login screen. The user is removed again if you delete the
 integration. If the [Music Assistant](usage/audio.md) add-on is installed, a
 **Music Assistant** page is added to the device's page list automatically,
 already signed in.
 
 When a new integration release is published, the Marketplace shows an update
-for **Dashboard Assistant**. Click **Update**, then restart Home Assistant.
+for **Dashboard Assistant** under [**Installed**](https://my.home-assistant.io/redirect/marketplace_installed/). Click **Update**, then restart Home Assistant.
 
 ## 4. Choose the dashboard and pages { #pages }
 
-Open **Settings → Devices & services → Dashboard Assistant** and click
+Open [**Settings → Devices & services → Dashboard Assistant**](https://my.home-assistant.io/redirect/integration/?domain=dashboard_assistant) and click
 **Configure**:
 
 - **Dashboard**: the device shows Home Assistant's default dashboard until you
