@@ -192,6 +192,22 @@ device cannot show you the parse error, so compare your file against the example
 above: two spaces per level, and every nested key under `wifi` indented below
 it.
 
+??? tip "Or use a USB stick"
+
+    Put `dashboard-assistant.yaml` in the root of a normal USB stick (any
+    filesystem the OS can mount) and plug it into a running device. Inserting
+    the stick triggers an import immediately, so you can move a device to
+    another network in the field without pulling its card.
+
+    Unlike the FIRMWARE partition, this applies **every time you plug the stick
+    in**, changed or not. There is no checksum involved.
+
+    !!! warning "Physical access = full trust"
+        Any USB stick carrying a `dashboard-assistant.yaml` is applied
+        automatically, and the file carries your Wi-Fi password in plain text.
+        Only use seed files on hardware and networks you control, and wipe the
+        stick afterwards.
+
 Once the file is applied, the device joins your network and shows an "add me"
 screen until Home Assistant adds it.
 
