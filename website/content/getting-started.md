@@ -229,12 +229,11 @@ Assistant (2026.11 and later) as a **custom repository**: it is not in the
 Marketplace catalog, so searching alone won't find it. Custom repositories need
 the Marketplace connected to GitHub.
 
-[Open in your Home Assistant&nbsp;→](https://my.home-assistant.io/redirect/marketplace_repository/?owner=ajfriesen&repository=dashboard-assistant-integration&category=integration){ .da-btn .da-btn--primary }
+[![Open your Home Assistant instance and open the Dashboard Assistant repository in the Marketplace.](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=ajfriesen&repository=dashboard-assistant-integration&category=integration)
 
-1. Click the button above: it opens **Dashboard Assistant** in your Home
+1. Click the badge above: it opens **Dashboard Assistant** in your Home
    Assistant's Marketplace. Or add it by hand: open
-   [**Settings → Marketplace**](https://my.home-assistant.io/redirect/marketplace_discover/), choose **Add from
-   link**, and paste
+   **Settings → Marketplace**, choose **Add from link**, and paste
    `https://github.com/ajfriesen/dashboard-assistant-integration`.
 2. Install **Dashboard Assistant**.
 3. **Restart Home Assistant** (**Settings → System → Restart**). The
@@ -243,9 +242,11 @@ the Marketplace connected to GitHub.
 
 After the restart, Home Assistant **discovers the device on its own** over
 mDNS: a "Dashboard Assistant" card appears under
-[**Settings → Devices & services → Discovered**](https://my.home-assistant.io/redirect/integrations/). Click **Add** and confirm. A device that has not been
+**Settings → Devices & services → Discovered**. Click **Add** and confirm. A device that has not been
 paired yet hands over its API token by itself, so there is no PIN and nothing
 to type. A device set up with a seed file pairs exactly the same way.
+
+[![Open your Home Assistant instance and show your integrations.](https://my.home-assistant.io/badges/integrations.svg)](https://my.home-assistant.io/redirect/integrations/)
 
 Discovery is the only way to add a device. If the card does not appear, Home
 Assistant cannot see the device's mDNS announcement, usually because the two
@@ -274,19 +275,25 @@ are on different networks or VLANs.
 
 Behind the scenes, the integration creates a dedicated **non-admin Home
 Assistant user** for the device (named after it, visible under
-[**Settings → People**](https://my.home-assistant.io/redirect/people/)) and logs the device's browser in with it, which is why the display
+**Settings → People**) and logs the device's browser in with it, which is why the display
 never shows a login screen. The user is removed again if you delete the
 integration. If the [Music Assistant](usage/audio.md) add-on is installed, a
 **Music Assistant** page is added to the device's page list automatically,
 already signed in.
 
+[![Open your Home Assistant instance and show your people.](https://my.home-assistant.io/badges/people.svg)](https://my.home-assistant.io/redirect/people/)
+
 When a new integration release is published, the Marketplace shows an update
-for **Dashboard Assistant** under [**Installed**](https://my.home-assistant.io/redirect/marketplace_installed/). Click **Update**, then restart Home Assistant.
+for **Dashboard Assistant** under **Installed**. Click **Update**, then restart Home Assistant.
+
+[![Open your Home Assistant instance and show what you installed from the Marketplace.](https://my.home-assistant.io/badges/marketplace_installed.svg)](https://my.home-assistant.io/redirect/marketplace_installed/)
 
 ## 4. Choose the dashboard and pages { #pages }
 
-Open [**Settings → Devices & services → Dashboard Assistant**](https://my.home-assistant.io/redirect/integration/?domain=dashboard_assistant) and click
+Open **Settings → Devices & services → Dashboard Assistant** and click
 **Configure**:
+
+[![Open your Home Assistant instance and show the Dashboard Assistant integration.](https://my.home-assistant.io/badges/integration.svg)](https://my.home-assistant.io/redirect/integration/?domain=dashboard_assistant)
 
 - **Dashboard**: the device shows Home Assistant's default dashboard until you
   pick another. Admin-only dashboards are not listed, because the device signs
