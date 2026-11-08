@@ -748,6 +748,77 @@ def test_kiosk_not_restarted_by_unchanged_seed(shell):
         umount_fat(shell)
 
 
+def kiosk_browsers(shell):
+    """PIDs of the kiosk's Chromium browser processes (not its renderers/helpers)."""
+    out = shell.run_check(
+        "ps -u kiosk -o pid=,args= | grep '[c]hromium/chromium ' | grep -v -- '--type=' || true"
+    )
+    return [line.split()[0] for line in out if line.strip()]
+
+
+def wait_for_kiosk_browser(shell, not_pid=None, timeout=90):
+    """Wait until a kiosk Chromium other than `not_pid` is up, and return its PID."""
+    for _ in range(timeout):
+        pids = [p for p in kiosk_browsers(shell) if p != not_pid]
+        if pids:
+            return pids[0]
+        shell.run_check("sleep 1")
+    raise AssertionError(f"no new kiosk browser within {timeout}s")
+
+
+def sway_window_names(shell):
+    """Every window title in the running kiosk Sway's tree."""
+    uid = kiosk_uid(shell)
+    pid = shell.run_check("pgrep -u kiosk -x sway | tail -1")[0]
+    out = shell.run_check(
+        f"swaymsg -s /run/user/{uid}/sway-ipc.{uid}.{pid}.sock -t get_tree "
+        "| grep '\"name\":' || true"
+    )
+    return [line.split(":", 1)[1].strip().strip('",') for line in out]
+
+
+@pytest.mark.needs_display
+def test_kiosk_restart_never_runs_two_browsers_on_one_profile(shell):
+    """Restarting the kiosk session brings back one browser, with its profile intact.
+
+    The daemon relaunches the kiosk by restarting greetd (restartKiosk in
+    daemon/config.go). Stopping greetd does not wait for the old session's
+    Chromium to exit, and the launcher clears Chromium's SingletonLock, so the
+    new browser used to start while the old one still held the profile: its
+    databases came up "locked", Chromium tiled one "Profile error occurred"
+    window per database beside the dashboard, and the old browser kept
+    127.0.0.1:9222, leaving the new one only [::1]. Hardware only: no VM test
+    starts a browser.
+
+    A settled browser exits within a second of the restart, so the overlap
+    needs one that is slow to let go. On the bench that was a browser seconds
+    old, mid-autologin, after pairing — not reproducible on demand. Freezing
+    the old browser with SIGSTOP stands in for it deterministically.
+    """
+    old = wait_for_kiosk_browser(shell)
+    # Let the dashboard settle so the old browser has its databases open, as it
+    # would on a device that has been up for a while.
+    shell.run_check("sleep 20")
+
+    shell.run_check(f"kill -STOP {old}")
+    try:
+        shell.run_check("systemctl restart greetd.service")
+        new = wait_for_kiosk_browser(shell, not_pid=old)
+        old_alive = shell.run(f"kill -0 {old}")[2] == 0
+        # Profile errors surface once the new browser opens its databases.
+        shell.run_check("sleep 20")
+        windows = sway_window_names(shell)
+        listeners = shell.run_check("ss -ltnp 'sport = :9222' | tail -n +2 || true")
+    finally:
+        # Let a still-frozen old browser go, so a failure here cannot wedge the
+        # rest of the run.
+        shell.run(f"kill -CONT {old} 2>/dev/null")
+
+    assert not old_alive, "the new browser started while the old one still held the profile"
+    assert "Profile error occurred" not in windows, windows
+    assert any("127.0.0.1:9222" in l and f"pid={new}," in l for l in listeners), listeners
+
+
 def test_seed_file_reimported_after_edit(shell, _bench):
     """Editing the seed file on the card re-provisions the device on the next boot.
 
