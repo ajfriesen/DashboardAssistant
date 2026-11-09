@@ -115,7 +115,28 @@ let
     # Chromium refuses to launch when its SingletonLock names a different host
     # ("profile in use by another computer") — which happens once the MAC-derived
     # hostname is assigned, or after an unclean shutdown leaves a stale lock. A
-    # kiosk only ever runs one instance, so clearing the guard first is safe.
+    # kiosk only ever runs one instance, so clearing the guard first is safe —
+    # but only once that one instance is really gone. A kiosk relaunch restarts
+    # greetd, which does not wait for the old session's browser to exit; one
+    # slow to let go (seconds old, mid-autologin) still holds the profile's
+    # databases and 127.0.0.1:9222, and a second browser on the same profile
+    # tiles a "Profile error occurred" window per locked database beside the
+    # dashboard. So: ask it to quit, give it a few seconds, then kill it.
+    uid=$(${pkgs.coreutils}/bin/id -u)
+    if ${pkgs.procps}/bin/pkill -TERM -u "$uid" -x chromium; then
+      for _ in 1 2 3 4 5 6 7 8 9 10; do
+        ${pkgs.procps}/bin/pgrep -u "$uid" -x chromium >/dev/null || break
+        ${pkgs.coreutils}/bin/sleep 0.5
+      done
+      ${pkgs.procps}/bin/pkill -KILL -u "$uid" -x chromium || true
+      # Bounded even after SIGKILL: a browser stuck in the kernel must not keep
+      # the dashboard from coming back at all.
+      for _ in 1 2 3 4 5 6 7 8 9 10; do
+        ${pkgs.procps}/bin/pgrep -u "$uid" -x chromium >/dev/null || break
+        ${pkgs.coreutils}/bin/sleep 0.5
+      done
+    fi
+
     # Explicit names (not a glob): `set -f` above disables pathname expansion.
     chromeProfile="''${XDG_CONFIG_HOME:-$HOME/.config}/chromium"
     rm -f "$chromeProfile/SingletonLock" "$chromeProfile/SingletonCookie" "$chromeProfile/SingletonSocket" 2>/dev/null || true
