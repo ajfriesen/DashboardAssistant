@@ -16,7 +16,8 @@ let
   # On-screen keyboard, packaged from source (not in nixpkgs). See packages/vboard/.
   vboard = pkgs.callPackage ../../packages/vboard/vboard.nix { };
   # Fallback dashboard target if runtime.env is somehow missing. Normal config
-  # lives in /var/lib/dashboard-assistant/runtime.env (HA_URL=...), written by the daemon.
+  # lives in /var/lib/dashboard-assistant/runtime.env (HA_URL=..., HOME_URL=...),
+  # written by the daemon; see kioskUrls.
   # The .local name, matching defaultPages in daemon/pages.go — the bare
   # `homeassistant` this used to be resolves only where the LAN hands out a
   # search domain, while .local is answered by mDNS (services.avahi.nssmdns4,
@@ -77,13 +78,27 @@ let
   # Used both by the dev remote-debug flag and by token auto-login.
   cdpArgs = "--remote-debugging-port=9222 --remote-allow-origins=*";
 
+  # The kiosk's two URLs, sourced by every script that needs them (launcher,
+  # token injector, Home button) so they cannot drift apart:
+  #   HA_URL   where Home Assistant lives. The token injector signs the browser
+  #            in only on this origin, so the token never reaches another site.
+  #   HOME_URL where the browser starts and where Home goes: a dashboard, one of
+  #            its tabs, or any website. Falls back to HA_URL.
+  # The daemon writes runtime.env when Home Assistant pairs; a seeded image bakes
+  # HA_URL alone (seed.nix). DA_RUNTIME_ENV exists for the kiosk-urls check.
+  kioskUrls = pkgs.writeText "ha-kiosk-urls.sh" ''
+    HA_URL="${defaultUrl}"
+    HOME_URL=""
+    if [ -r "''${DA_RUNTIME_ENV:-/var/lib/dashboard-assistant/runtime.env}" ]; then
+      # shellcheck disable=SC1090
+      . "''${DA_RUNTIME_ENV:-/var/lib/dashboard-assistant/runtime.env}"
+    fi
+    : "''${HOME_URL:=$HA_URL}"
+  '';
+
   kioskLauncher = pkgs.writeShellScript "ha-kiosk-launch" ''
     set -eu
-    HA_URL="${defaultUrl}"
-    if [ -r /var/lib/dashboard-assistant/runtime.env ]; then
-      # shellcheck disable=SC1091
-      . /var/lib/dashboard-assistant/runtime.env
-    fi
+    . ${kioskUrls}
 
     # Ask the daemon what to display. Fall back to SETUP if it is slow to start,
     # so a race never lands us on a blank screen.
@@ -94,7 +109,7 @@ let
     # offline device shows the waiting splash until a seed file configures it.
     # Nothing on screen recovers the device either — that runs from Home Assistant.
     case "$STATE" in
-      READY) URL="$HA_URL" ;;
+      READY) URL="$HOME_URL" ;;
       *)     URL="${daemonBase}/waiting" ;;
     esac
 
@@ -362,17 +377,12 @@ let
       [ "$pid" = "$$" ] || kill "$pid" 2>/dev/null || true
     done
 
-    # The HA origin (scheme://host[:port]) from the daemon's runtime state, so we
-    # only ever inject into the HA page and not the daemon's setup/waiting pages
-    # on a different origin. Re-read every pass: provisioning rewrites it.
+    # The HA origin (scheme://host[:port]) of HA_URL, so we only ever inject into
+    # the HA page: not the daemon's setup/waiting pages, and not a home page on
+    # another site, which must never be handed the token.
     origin_of() {
-      HA_URL="${defaultUrl}"
-      if [ -r /var/lib/dashboard-assistant/runtime.env ]; then
-        # shellcheck disable=SC1091
-        . /var/lib/dashboard-assistant/runtime.env
-      fi
-      scheme=''${HA_URL%%://*}
-      rest=''${HA_URL#*://}
+      scheme=''${1%%://*}
+      rest=''${1#*://}
       printf '%s://%s' "$scheme" "''${rest%%/*}"
     }
 
@@ -391,7 +401,7 @@ let
         | ${lib.getExe pkgs.jq} -r '.result.result.value // empty' 2>/dev/null
     }
 
-    token=""; origin=""; inject=""; ok=0; injects=0; delay=2
+    token=""; origin=""; home=""; inject=""; ok=0; injects=0; delay=2
 
     while :; do
       new_token=$(${pkgs.coreutils}/bin/cat ${tokenPath} 2>/dev/null || true)
@@ -401,16 +411,26 @@ let
         ${pkgs.coreutils}/bin/sleep 5
         continue
       fi
-      new_origin=$(origin_of)
+      # Re-read every pass: provisioning rewrites runtime.env.
+      . ${kioskUrls}
+      new_origin=$(origin_of "$HA_URL")
+      # Once signed in, land on the home page when it is a Home Assistant page
+      # (a dashboard or one of its tabs), not on Home Assistant's default one.
+      case "$HOME_URL" in
+        "$new_origin" | "$new_origin"/*) new_home=$HOME_URL ;;
+        *)                               new_home="$new_origin/" ;;
+      esac
 
       # Rebuild the payload only when the inputs actually change, so the steady
       # state is two loopback calls and no jq churn.
-      if [ "$new_token" != "$token" ] || [ "$new_origin" != "$origin" ]; then
+      if [ "$new_token" != "$token" ] || [ "$new_origin" != "$origin" ] || [ "$new_home" != "$home" ]; then
         token=$new_token
         origin=$new_origin
-        # JSON-encode the token once so it is a safe JS string literal.
+        home=$new_home
+        # JSON-encode the token and the URL once so they are safe JS string literals.
         tokjson=$(${lib.getExe pkgs.jq} -cn --arg t "$token" '$t')
-        inject='localStorage.setItem("hassTokens", JSON.stringify({access_token:'"$tokjson"',token_type:"Bearer",expires_in:315360000,expires:Date.now()+315360000000,refresh_token:"",clientId:null,hassUrl:location.origin})); location.replace(location.origin + "/"); "injected"'
+        homejson=$(${lib.getExe pkgs.jq} -cn --arg u "$home" '$u')
+        inject='localStorage.setItem("hassTokens", JSON.stringify({access_token:'"$tokjson"',token_type:"Bearer",expires_in:315360000,expires:Date.now()+315360000000,refresh_token:"",clientId:null,hassUrl:location.origin})); location.replace('"$homejson"'); "injected"'
         ok=0; injects=0; delay=2
       fi
 
@@ -457,15 +477,11 @@ let
       | ${pkgs.coreutils}/bin/timeout 5 ${pkgs.websocat}/bin/websocat "$ws" >/dev/null 2>&1 || true
   '';
 
-  # The Home button: resolve the live HA URL (runtime.env, written by the daemon)
-  # the same way the launcher does, then navigate there.
+  # The Home button: resolve the home URL the same way the launcher does, then
+  # navigate there.
   navHome = pkgs.writeShellScript "ha-kiosk-nav-home" ''
-    HA_URL="${defaultUrl}"
-    if [ -r /var/lib/dashboard-assistant/runtime.env ]; then
-      # shellcheck disable=SC1091
-      . /var/lib/dashboard-assistant/runtime.env
-    fi
-    exec ${cdpNav} "$HA_URL"
+    . ${kioskUrls}
+    exec ${cdpNav} "$HOME_URL"
   '';
 
   # Navigation agent: the daemon writes a target URL to the nav FIFO — on an HA
@@ -1304,6 +1320,13 @@ in
     description = "The Chromium kiosk launcher script, for checks to inspect.";
   };
 
+  options.dashboardAssistant.kiosk.urls = lib.mkOption {
+    type = lib.types.package;
+    internal = true;
+    readOnly = true;
+    description = "The shell snippet that resolves the kiosk's HA_URL and HOME_URL, for checks to run.";
+  };
+
   options.dashboardAssistant.kiosk.brightness.method = lib.mkOption {
     type = lib.types.enum [
       "auto"
@@ -1324,6 +1347,7 @@ in
 
   config = {
     dashboardAssistant.kiosk.launcher = kioskLauncher;
+    dashboardAssistant.kiosk.urls = kioskUrls;
 
     programs.sway.enable = true;
 

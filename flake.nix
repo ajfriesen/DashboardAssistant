@@ -285,24 +285,74 @@
         # integration paired without pushing a URL loaded a name that only
         # resolves where the LAN hands out a search domain. Eval-time rather
         # than a VM assertion because first-boot.nix disables greetd, so no VM
-        # test ever sees the launcher's fallback branch.
+        # test ever sees the kiosk's fallback branch.
         one-home-assistant-fallback =
           pkgs.runCommand "one-home-assistant-fallback"
             {
-              launcher =
-                self.nixosConfigurations.dashboard-assistant-x86-disk.config.dashboardAssistant.kiosk.launcher;
+              # The fallback lives in the URL resolver every kiosk script sources.
+              urls = self.nixosConfigurations.dashboard-assistant-x86-disk.config.dashboardAssistant.kiosk.urls;
               pagesSrc = ./daemon/pages.go;
               expected = "homeassistant.local:8123";
             }
             ''
               set -euo pipefail
               fail=0
-              grep -q "$expected" "$launcher" || {
-                echo "FAIL: the kiosk launcher's fallback dashboard URL is not $expected — see defaultUrl in modules/core/kiosk.nix." >&2
+              grep -q "$expected" "$urls" || {
+                echo "FAIL: the kiosk's fallback dashboard URL is not $expected — see defaultUrl in modules/core/kiosk.nix." >&2
                 fail=1
               }
               grep -q "$expected" "$pagesSrc" || {
                 echo "FAIL: defaultPages in daemon/pages.go no longer points at $expected, so the page list and the kiosk fallback disagree." >&2
+                fail=1
+              }
+              [ "$fail" = 0 ] || exit 1
+              touch "$out"
+            '';
+
+        # The kiosk's two URLs, resolved from runtime.env the way the launcher,
+        # the token injector and the Home button all do it: HA_URL is where Home
+        # Assistant lives (sign-in goes only there), HOME_URL where the browser
+        # starts and where Home goes, falling back to HA_URL. Runs the real
+        # resolver against the files the seed and the daemon write, including a
+        # home URL whose `&` would run as shell if the daemon stopped quoting.
+        # Eval-time for the same reason as above: first-boot.nix never starts
+        # the kiosk session.
+        kiosk-urls =
+          let
+            kiosk = self.nixosConfigurations.dashboard-assistant-x86-disk.config.dashboardAssistant.kiosk;
+          in
+          pkgs.runCommand "kiosk-urls"
+            {
+              inherit (kiosk) launcher urls;
+            }
+            ''
+              set -euo pipefail
+              fail=0
+              resolve() {
+                env -i DA_RUNTIME_ENV="$1" ${pkgs.runtimeShell} -c \
+                  '. "$0"; printf "%s|%s" "$HA_URL" "$HOME_URL"' "$urls"
+              }
+              expect() {
+                got=$(resolve "$2")
+                [ "$got" = "$3" ] || {
+                  echo "FAIL: $1: got '$got', want '$3'" >&2
+                  fail=1
+                }
+              }
+
+              expect "no runtime.env yet" /nonexistent \
+                "http://homeassistant.local:8123/|http://homeassistant.local:8123/"
+
+              printf 'HA_URL=http://ha.lan:8123\n' > seed.env
+              expect "a seeded device starts at Home Assistant" seed.env \
+                "http://ha.lan:8123|http://ha.lan:8123"
+
+              printf "HA_URL='http://ha.lan:8123'\nHOME_URL='https://example.com/v?a=1&b=2'\n" > paired.env
+              expect "a paired device starts at its home" paired.env \
+                "http://ha.lan:8123|https://example.com/v?a=1&b=2"
+
+              grep -qF "$urls" "$launcher" || {
+                echo "FAIL: the kiosk launcher no longer reads its URLs through the shared resolver." >&2
                 fail=1
               }
               [ "$fail" = 0 ] || exit 1
