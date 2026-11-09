@@ -288,16 +288,19 @@ for **Dashboard Assistant** under **Installed**. Click **Update**, then restart 
 
 [![Open your Home Assistant instance and show what you installed from the Marketplace.](https://my.home-assistant.io/badges/marketplace_installed.svg)](https://my.home-assistant.io/redirect/marketplace_installed/)
 
-## 4. Choose the dashboard and pages { #pages }
+## 4. Choose the home and pages { #pages }
 
 Open **Settings → Devices & services → Dashboard Assistant** and click
 **Configure**:
 
 [![Open your Home Assistant instance and show the Dashboard Assistant integration.](https://my.home-assistant.io/badges/integration.svg)](https://my.home-assistant.io/redirect/integration/?domain=dashboard_assistant)
 
-- **Dashboard**: the device shows Home Assistant's default dashboard until you
-  pick another. Admin-only dashboards are not listed, because the device signs
-  in as a regular user.
+- **Home**: where the device starts and where its **Home** button goes. It is
+  Home Assistant's default dashboard until you pick another dashboard or one of
+  its tabs. You can also type a path on Home Assistant, such as `/energy`, or
+  the address of any website. The device signs in to Home Assistant only, so
+  another website is shown signed out. Admin-only dashboards are not listed,
+  because the device signs in as a regular user.
 - **Pages**: any number of pages, each a name and the address of any website.
   The **Page** select and the next/previous buttons switch between them, in
   this order.

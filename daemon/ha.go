@@ -572,12 +572,19 @@ func (h *HAHub) notePaired() {
 // handleKioskLogin stages a Home Assistant login for the kiosk so no one has to
 // type credentials on the device. The integration creates a dedicated HA user
 // and a long-lived token, then posts it here; the daemon persists the token (and
-// the dashboard URL, if given) and relaunches the kiosk, whose autologin
-// injector signs the browser in on the next start. Authenticated with the device token like every other command.
+// the URLs, if given) and relaunches the kiosk, whose autologin injector signs
+// the browser in on the next start. Authenticated with the device token like
+// every other command.
+//
+// ha_url is where Home Assistant lives: the kiosk signs in only on its origin.
+// home_url is where the browser starts and where Home goes, and may be any
+// website; without it the kiosk starts at ha_url. home_url counts only with
+// ha_url, so the two are always replaced together.
 func (h *HAHub) handleKioskLogin(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Token string `json:"token"`
-		HAURL string `json:"ha_url"`
+		Token   string `json:"token"`
+		HAURL   string `json:"ha_url"`
+		HomeURL string `json:"home_url"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
@@ -586,20 +593,34 @@ func (h *HAHub) handleKioskLogin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "token required"})
 		return
 	}
+	haURL := strings.TrimSpace(req.HAURL)
+	homeURL := strings.TrimSpace(req.HomeURL)
+	for _, u := range []string{haURL, homeURL} {
+		if u == "" {
+			continue
+		}
+		if err := checkKioskURL(u); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+	}
 
 	applied := []string{"token"}
 	if err := writeToken(req.Token); err != nil {
 		writeErr(w, err)
 		return
 	}
-	// An explicit dashboard URL is optional — without one the kiosk falls back to
-	// its built-in default. Store it when given.
-	if u := strings.TrimSpace(req.HAURL); u != "" {
-		if err := writeHAURL(u); err != nil {
+	// The URLs are optional — without them the kiosk keeps the ones it has, or
+	// its built-in default. Store them when given.
+	if haURL != "" {
+		if err := writeKioskURLs(haURL, homeURL); err != nil {
 			writeErr(w, err)
 			return
 		}
 		applied = append(applied, "ha_url")
+		if homeURL != "" {
+			applied = append(applied, "home_url")
+		}
 	}
 	// Being handed a login means Home Assistant has added this device, so mark it
 	// provisioned — it leaves the add screen for the dashboard even if no URL was

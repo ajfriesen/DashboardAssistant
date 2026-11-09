@@ -4,12 +4,14 @@ import (
 	"bufio"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/godbus/dbus/v5"
 )
@@ -102,21 +104,47 @@ func readHAURL() (string, error) {
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
 		if strings.HasPrefix(line, "HA_URL=") {
-			return strings.Trim(strings.TrimPrefix(line, "HA_URL="), `"`), nil
+			return strings.Trim(strings.TrimPrefix(line, "HA_URL="), `"'`), nil
 		}
 	}
 	return "", sc.Err()
 }
 
-// writeHAURL atomically rewrites runtime.env with the given dashboard URL.
+// writeKioskURLs atomically rewrites runtime.env with the kiosk's two URLs:
+// HA_URL, where Home Assistant lives (the kiosk signs in only on that origin),
+// and HOME_URL, where the browser starts and where the Home button goes. An
+// empty home leaves HOME_URL out, and the kiosk falls back to HA_URL.
+//
+// The kiosk scripts source this file, so each value is single-quoted: a home
+// URL's query string (`?a=1&b=2`) would otherwise run as shell. checkKioskURL
+// keeps quotes and line breaks out, which is what makes the quoting safe.
 // Mode 0664 keeps it readable by the shared `dashboard` group (the kiosk user).
-func writeHAURL(url string) error {
+func writeKioskURLs(ha, home string) error {
+	content := fmt.Sprintf("HA_URL='%s'\n", ha)
+	if home != "" {
+		content += fmt.Sprintf("HOME_URL='%s'\n", home)
+	}
 	tmp := runtimeEnv + ".tmp"
-	content := fmt.Sprintf("HA_URL=%s\n", url)
 	if err := os.WriteFile(tmp, []byte(content), 0o664); err != nil {
 		return err
 	}
 	return os.Rename(tmp, runtimeEnv)
+}
+
+// checkKioskURL accepts an absolute http(s) URL that is safe to single-quote in
+// runtime.env: no quote, no whitespace, no control character.
+func checkKioskURL(raw string) error {
+	if strings.ContainsAny(raw, "'\"\\` \t\r\n") || strings.IndexFunc(raw, unicode.IsControl) >= 0 {
+		return fmt.Errorf("URL %q has a quote, space or control character", raw)
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("URL %q: %w", raw, err)
+	}
+	if (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return fmt.Errorf("URL %q is not an http(s) URL with a host", raw)
+	}
+	return nil
 }
 
 // parseEnvFile reads a KEY=VALUE file in the systemd EnvironmentFile style: one
