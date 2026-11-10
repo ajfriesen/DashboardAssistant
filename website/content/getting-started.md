@@ -225,16 +225,13 @@ updates and more (see the
 [entity reference](about/features.md#home-assistant-integration)).
 
 The integration is installed from the **Marketplace** that is built into Home
-Assistant (2026.11 and later) as a **custom repository**: it is not in the
-Marketplace catalog, so searching alone won't find it. Custom repositories need
-the Marketplace connected to GitHub.
+Assistant (2026.11 and later).
 
 [![Open your Home Assistant instance and open the Dashboard Assistant repository in the Marketplace.](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=ajfriesen&repository=dashboard-assistant-integration&category=integration)
 
 1. Click the badge above: it opens **Dashboard Assistant** in your Home
-   Assistant's Marketplace. Or add it by hand: open
-   **Settings → Marketplace**, choose **Add from link**, and paste
-   `https://github.com/ajfriesen/dashboard-assistant-integration`.
+   Assistant's Marketplace. Or open **Settings → Marketplace** and search for
+   **Dashboard Assistant**.
 2. Install **Dashboard Assistant**.
 3. **Restart Home Assistant** (**Settings → System → Restart**). The
    Marketplace only copies the files; Home Assistant loads the integration on

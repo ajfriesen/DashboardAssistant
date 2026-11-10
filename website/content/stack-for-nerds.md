@@ -114,7 +114,7 @@ The panel doesn't just *show* Home Assistant — it reports back into it as a
 device.
 
 - A **first-party integration**, installable
-  [from the Marketplace](getting-started.md#integration) as a custom repository.
+  [from the Marketplace](getting-started.md#integration).
 - Home Assistant **discovers the device over mDNS** and claims the API token
   itself while the device is still unprovisioned, so there is no code to type.
 - **No MQTT broker required** — it talks to Home Assistant directly.

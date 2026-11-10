@@ -28,14 +28,12 @@ The screen itself becomes something you can see and control from your automation
 
 1. Download the image
 2. Flash the image
-3. Install the custom integration (while you are waiting)
+3. Install the integration from the Marketplace (while you are waiting)
 4. Write your seed file
 5. Boot
 6. Done
 
-[![Open your Home Assistant instance and show an integration.](https://my.home-assistant.io/badges/integration.svg)](https://my.home-assistant.io/redirect/integration/?domain=https%3A%2F%2Fgithub.com%2Fajfriesen%2Fdashboard-assistant-integration)
-
-![GitHub pull request status](https://img.shields.io/github/status/s/pulls/hacs/default/11319)
+[![Open your Home Assistant instance and open the Dashboard Assistant repository in the Marketplace.](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=ajfriesen&repository=dashboard-assistant-integration&category=integration)
 
 
 
