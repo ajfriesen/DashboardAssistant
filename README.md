@@ -6,7 +6,7 @@
     <br />
     <a href="https://dashboardassistant.org">DashboardAssistant.org</a>
     ·
-    <a href="https://my.home-assistant.io/redirect/integration/?domain=https%3A%2F%2Fgithub.com%2Fajfriesen%2Fdashboard-assistant-integration">Integration</a>
+    <a href="https://my.home-assistant.io/redirect/marketplace_repository/?owner=ajfriesen&repository=dashboard-assistant-integration">Integration</a>
     ·
     <a href="https://dashboardassistant.org/getting-started/">Documentation</a>
     ·
