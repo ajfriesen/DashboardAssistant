@@ -577,14 +577,11 @@ func (h *HAHub) notePaired() {
 // every other command.
 //
 // ha_url is where Home Assistant lives: the kiosk signs in only on its origin.
-// home_url is where the browser starts and where Home goes, and may be any
-// website; without it the kiosk starts at ha_url. home_url counts only with
-// ha_url, so the two are always replaced together.
+// Where the kiosk starts is not part of the login: it is the first page.
 func (h *HAHub) handleKioskLogin(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Token   string `json:"token"`
-		HAURL   string `json:"ha_url"`
-		HomeURL string `json:"home_url"`
+		Token string `json:"token"`
+		HAURL string `json:"ha_url"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
@@ -594,12 +591,8 @@ func (h *HAHub) handleKioskLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	haURL := strings.TrimSpace(req.HAURL)
-	homeURL := strings.TrimSpace(req.HomeURL)
-	for _, u := range []string{haURL, homeURL} {
-		if u == "" {
-			continue
-		}
-		if err := checkKioskURL(u); err != nil {
+	if haURL != "" {
+		if err := checkKioskURL(haURL); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
@@ -610,17 +603,14 @@ func (h *HAHub) handleKioskLogin(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	// The URLs are optional — without them the kiosk keeps the ones it has, or
-	// its built-in default. Store them when given.
+	// The URL is optional — without it the kiosk keeps the one it has, or its
+	// built-in default. Store it when given.
 	if haURL != "" {
-		if err := writeKioskURLs(haURL, homeURL); err != nil {
+		if err := writeHAURL(haURL); err != nil {
 			writeErr(w, err)
 			return
 		}
 		applied = append(applied, "ha_url")
-		if homeURL != "" {
-			applied = append(applied, "home_url")
-		}
 	}
 	// Being handed a login means Home Assistant has added this device, so mark it
 	// provisioned — it leaves the add screen for the dashboard even if no URL was
@@ -681,6 +671,10 @@ func (h *HAHub) handleInfo(w http.ResponseWriter, r *http.Request) {
 		"has_temperature": hasTemp,
 		"has_btrfs":       hasBtrfs,
 		"has_sendspin":    h.snd.Available(),
+		// The first page is the device's home: it starts there and the Home
+		// button goes there. Before, both used the kiosk login's ha_url, so the
+		// integration keeps sending a home in it to a device without this.
+		"home_is_first_page": true,
 	})
 }
 

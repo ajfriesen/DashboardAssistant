@@ -16,8 +16,8 @@ let
   # On-screen keyboard, packaged from source (not in nixpkgs). See packages/vboard/.
   vboard = pkgs.callPackage ../../packages/vboard/vboard.nix { };
   # Fallback dashboard target if runtime.env is somehow missing. Normal config
-  # lives in /var/lib/dashboard-assistant/runtime.env (HA_URL=..., HOME_URL=...),
-  # written by the daemon; see kioskUrls.
+  # lives in /var/lib/dashboard-assistant/runtime.env (HA_URL=...), written by
+  # the daemon; see kioskUrls.
   # The .local name, matching defaultPages in daemon/pages.go — the bare
   # `homeassistant` this used to be resolves only where the LAN hands out a
   # search domain, while .local is answered by mDNS (services.avahi.nssmdns4,
@@ -78,22 +78,26 @@ let
   # Used both by the dev remote-debug flag and by token auto-login.
   cdpArgs = "--remote-debugging-port=9222 --remote-allow-origins=*";
 
-  # The kiosk's two URLs, sourced by every script that needs them (launcher,
-  # token injector, Home button) so they cannot drift apart:
-  #   HA_URL   where Home Assistant lives. The token injector signs the browser
-  #            in only on this origin, so the token never reaches another site.
-  #   HOME_URL where the browser starts and where Home goes: a dashboard, one of
-  #            its tabs, or any website. Falls back to HA_URL.
+  # The kiosk's two URLs, sourced by the launcher and the token injector so they
+  # cannot drift apart:
+  #   HA_URL     where Home Assistant lives. The token injector signs the browser
+  #              in only on this origin, so the token never reaches another site.
+  #   FIRST_PAGE the first page, the device's home: where it starts and where the
+  #              Home button goes. Read from the page list Home Assistant sent
+  #              (urls.json); before it sent one, Home Assistant itself, as in
+  #              defaultPages (daemon/pages.go).
   # The daemon writes runtime.env when Home Assistant pairs; a seeded image bakes
-  # HA_URL alone (seed.nix). DA_RUNTIME_ENV exists for the kiosk-urls check.
+  # HA_URL alone (seed.nix). DA_RUNTIME_ENV and DA_PAGES exist for the
+  # kiosk-urls check.
   kioskUrls = pkgs.writeText "ha-kiosk-urls.sh" ''
     HA_URL="${defaultUrl}"
-    HOME_URL=""
     if [ -r "''${DA_RUNTIME_ENV:-/var/lib/dashboard-assistant/runtime.env}" ]; then
       # shellcheck disable=SC1090
       . "''${DA_RUNTIME_ENV:-/var/lib/dashboard-assistant/runtime.env}"
     fi
-    : "''${HOME_URL:=$HA_URL}"
+    FIRST_PAGE=$(${lib.getExe pkgs.jq} -r '.[0].url // empty' \
+      "''${DA_PAGES:-/var/lib/dashboard-assistant/urls.json}" 2>/dev/null || true)
+    : "''${FIRST_PAGE:=$HA_URL}"
   '';
 
   kioskLauncher = pkgs.writeShellScript "ha-kiosk-launch" ''
@@ -108,9 +112,17 @@ let
     # Provisioning is seed-only (no on-screen wizard): an unprovisioned or
     # offline device shows the waiting splash until a seed file configures it.
     # Nothing on screen recovers the device either — that runs from Home Assistant.
+    # The kiosk always starts on the first page. Asking the daemon also makes it
+    # the current page, so Home Assistant's Page select agrees with the screen;
+    # if the daemon does not answer, read the first page straight from the list.
     case "$STATE" in
-      READY) URL="$HOME_URL" ;;
-      *)     URL="${daemonBase}/waiting" ;;
+      READY)
+        URL=$(${lib.getExe pkgs.curl} -s --max-time 2 -X POST ${daemonBase}/api/nav \
+          -H 'Content-Type: application/json' -d '{"dir":"start"}' \
+          | ${lib.getExe pkgs.jq} -r '.url // empty' 2>/dev/null || true)
+        : "''${URL:=$FIRST_PAGE}"
+        ;;
+      *) URL="${daemonBase}/waiting" ;;
     esac
 
     # Host<->guest clipboard when running under QEMU/SPICE: the vdagent virtio
@@ -435,10 +447,11 @@ let
       # Re-read every pass: provisioning rewrites runtime.env.
       . ${kioskUrls}
       new_origin=$(origin_of "$HA_URL")
-      # Once signed in, land on the home page when it is a Home Assistant page
-      # (a dashboard or one of its tabs), not on Home Assistant's default one.
-      case "$HOME_URL" in
-        "$new_origin" | "$new_origin"/*) new_home=$HOME_URL ;;
+      # Once signed in, land on the first page when it is a Home Assistant page
+      # (a dashboard or one of its tabs), not on Home Assistant's default one:
+      # signing in happens right after the kiosk starts there.
+      case "$FIRST_PAGE" in
+        "$new_origin" | "$new_origin"/*) new_home=$FIRST_PAGE ;;
         *)                               new_home="$new_origin/" ;;
       esac
 
@@ -498,11 +511,12 @@ let
       | ${pkgs.coreutils}/bin/timeout 5 ${pkgs.websocat}/bin/websocat "$ws" >/dev/null 2>&1 || true
   '';
 
-  # The Home button: resolve the home URL the same way the launcher does, then
-  # navigate there.
+  # The Home button: back to the first page. Through the daemon like Prev/Next,
+  # so Home Assistant's Page select follows and the nav agent restores zoom and
+  # theme on the new page.
   navHome = pkgs.writeShellScript "ha-kiosk-nav-home" ''
-    . ${kioskUrls}
-    exec ${cdpNav} "$HOME_URL"
+    ${lib.getExe pkgs.curl} -s --max-time 3 -X POST ${daemonBase}/api/nav \
+      -H 'Content-Type: application/json' -d '{"dir":"home"}' >/dev/null 2>&1 || true
   '';
 
   # Navigation agent: the daemon writes a target URL to the nav FIFO — on an HA
@@ -1345,7 +1359,7 @@ in
     type = lib.types.package;
     internal = true;
     readOnly = true;
-    description = "The shell snippet that resolves the kiosk's HA_URL and HOME_URL, for checks to run.";
+    description = "The shell snippet that resolves the kiosk's HA_URL and FIRST_PAGE, for checks to run.";
   };
 
   options.dashboardAssistant.kiosk.brightness.method = lib.mkOption {

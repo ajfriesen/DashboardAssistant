@@ -143,6 +143,33 @@ func (p *Pages) step(delta int) {
 func (p *Pages) Next() { p.step(1) }
 func (p *Pages) Prev() { p.step(-1) }
 
+// Home goes back to the first page, the device's home (the waybar Home button).
+func (p *Pages) Home() {
+	p.mu.Lock()
+	p.index = 0
+	p.mu.Unlock()
+	p.step(0)
+}
+
+// Start marks the first page as current and returns its URL, for the launcher
+// to open: the kiosk always starts at home. It does not navigate, since the
+// browser is not up yet. Empty when the list is.
+func (p *Pages) Start() string {
+	p.mu.Lock()
+	if len(p.list) == 0 {
+		p.mu.Unlock()
+		return ""
+	}
+	p.index = 0
+	url := p.list[0].URL
+	obs := p.observer
+	p.mu.Unlock()
+	if obs != nil {
+		obs()
+	}
+	return url
+}
+
 // Select jumps to the page with the given label (from the HA select entity).
 func (p *Pages) Select(label string) {
 	p.mu.Lock()
@@ -179,12 +206,18 @@ func (p *Pages) navigate(url string) error {
 	return werr
 }
 
-// defaultPages seeds a fresh device (no urls.json yet) with a single page
-// pointing at the mDNS Home Assistant address, so the page list and the HA
-// select aren't empty out of the box. It's virtual until Home Assistant sets
-// the list, at which point savePages writes urls.json and takes over.
+// defaultPages seeds a device Home Assistant has not sent a list to (no
+// urls.json yet) with a single page: Home Assistant itself, at the URL it
+// paired with, or the mDNS address before then. So the page list, the HA select
+// and the device's home (the first page) are never empty. It's virtual until
+// Home Assistant sets the list, at which point savePages writes urls.json and
+// takes over.
 func defaultPages() []Page {
-	return []Page{{Name: "Home Assistant", URL: "http://homeassistant.local:8123"}}
+	url := "http://homeassistant.local:8123"
+	if ha, _ := readHAURL(); ha != "" {
+		url = ha
+	}
+	return []Page{{Name: "Home Assistant", URL: url}}
 }
 
 func loadPages() ([]Page, error) {

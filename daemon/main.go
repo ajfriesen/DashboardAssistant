@@ -259,8 +259,9 @@ func (s *server) handleImport(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleNav cycles or jumps the displayed page. Body: {"dir":"next"|"prev"} for
-// the waybar buttons, or {"page":"<label>"} to jump. POST only.
+// handleNav cycles or jumps the displayed page. Body: {"dir":"next"|"prev"|"home"}
+// for the waybar buttons, {"page":"<label>"} to jump, or {"dir":"start"} from the
+// launcher, which opens the returned url itself. POST only.
 func (s *server) handleNav(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "POST only"})
@@ -281,8 +282,14 @@ func (s *server) handleNav(w http.ResponseWriter, r *http.Request) {
 		s.pages.Next()
 	case req.Dir == "prev":
 		s.pages.Prev()
+	case req.Dir == "home":
+		s.pages.Home()
+	case req.Dir == "start":
+		url := s.pages.Start()
+		writeJSON(w, http.StatusOK, map[string]string{"page": s.pages.CurrentLabel(), "url": url})
+		return
 	default:
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "dir must be next/prev, or give a page"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "dir must be next/prev/home/start, or give a page"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"page": s.pages.CurrentLabel()})

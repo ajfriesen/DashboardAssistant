@@ -110,20 +110,16 @@ func readHAURL() (string, error) {
 	return "", sc.Err()
 }
 
-// writeKioskURLs atomically rewrites runtime.env with the kiosk's two URLs:
-// HA_URL, where Home Assistant lives (the kiosk signs in only on that origin),
-// and HOME_URL, where the browser starts and where the Home button goes. An
-// empty home leaves HOME_URL out, and the kiosk falls back to HA_URL.
+// writeHAURL atomically rewrites runtime.env with HA_URL, where Home Assistant
+// lives: the kiosk signs in only on that origin, and it is the first page until
+// Home Assistant sends a list (defaultPages).
 //
-// The kiosk scripts source this file, so each value is single-quoted: a home
-// URL's query string (`?a=1&b=2`) would otherwise run as shell. checkKioskURL
-// keeps quotes and line breaks out, which is what makes the quoting safe.
+// The kiosk scripts source this file, so the value is single-quoted: a query
+// string (`?a=1&b=2`) would otherwise run as shell. checkKioskURL keeps quotes
+// and line breaks out, which is what makes the quoting safe.
 // Mode 0664 keeps it readable by the shared `dashboard` group (the kiosk user).
-func writeKioskURLs(ha, home string) error {
+func writeHAURL(ha string) error {
 	content := fmt.Sprintf("HA_URL='%s'\n", ha)
-	if home != "" {
-		content += fmt.Sprintf("HOME_URL='%s'\n", home)
-	}
 	tmp := runtimeEnv + ".tmp"
 	if err := os.WriteFile(tmp, []byte(content), 0o664); err != nil {
 		return err

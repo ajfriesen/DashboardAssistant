@@ -288,24 +288,23 @@ for **Dashboard Assistant** under **Installed**. Click **Update**, then restart 
 
 [![Open your Home Assistant instance and show what you installed from the Marketplace.](https://my.home-assistant.io/badges/marketplace_installed.svg)](https://my.home-assistant.io/redirect/marketplace_installed/)
 
-## 4. Choose the home and pages { #pages }
+## 4. Choose the pages { #pages }
 
 Open **Settings → Devices & services → Dashboard Assistant** and click
 **Configure**:
 
 [![Open your Home Assistant instance and show the Dashboard Assistant integration.](https://my.home-assistant.io/badges/integration.svg)](https://my.home-assistant.io/redirect/integration/?domain=dashboard_assistant)
 
-- **Home**: where the device starts and where its **Home** button goes. It is
-  Home Assistant's default dashboard until you pick another dashboard or one of
-  its tabs. You can also type a path on Home Assistant, such as `/energy`, or
-  the address of any website. The device signs in to Home Assistant only, so
-  another website is shown signed out. Admin-only dashboards are not listed,
-  because the device signs in as a regular user.
-- **Pages**: any number of pages, each a name and the address of any website.
-  The **Page** select and the next/previous buttons switch between them, in
-  this order.
+- **Pages**: the pages the device shows, in order. Each page is either a
+  **Home Assistant page**, picked from your dashboards and their tabs, or a
+  **Website**, the address of any site. The device signs in to Home Assistant
+  only, so other websites are shown signed out. Admin-only dashboards are not
+  listed, because the device signs in as a regular user.
+- **The first page is the device's home**: it starts there, and its **Home**
+  button goes back to it. Drag a page to the top to make it the home.
+- The **Page** select and the next/previous buttons switch between the pages.
 
-Saving sends both to the device straight away.
+Saving sends the list to the device straight away.
 
 That's it. The [Usage](usage/usage.md) guide covers the on-device controls, the
 integration's entities, one-tap OS updates and rolling back if an update ever
