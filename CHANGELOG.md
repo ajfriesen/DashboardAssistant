@@ -6,13 +6,11 @@
 ### Features
 
 * **core:** make the first page the device's home: it starts there and the Home button goes back to it. Update the Dashboard Assistant integration to 1.1.0 together with the OS ([9b6b790](https://github.com/ajfriesen/DashboardAssistant/commit/9b6b790fde005f0bac7a6bcf37bfd79dc59759eb))
-* **core:** make the first page the device's home: it starts there and the Home button goes back to it. Update the Dashboard Assistant integration to 1.1.0 together with the OS ([2d55c38](https://github.com/ajfriesen/DashboardAssistant/commit/2d55c38a1b7124048fd3ca1c38cbae9856760945))
 
 
 ### Bug Fixes
 
 * **core:** wait for the old kiosk browser before launching a new one ([c686f2a](https://github.com/ajfriesen/DashboardAssistant/commit/c686f2af50051cf37863dd5db0cbe4884b6d59df))
-* **core:** wait for the old kiosk browser before launching a new one ([28d2da3](https://github.com/ajfriesen/DashboardAssistant/commit/28d2da3f36dc112a9433222e693fc07aa330335e))
 
 
 ### Documentation
@@ -22,11 +20,9 @@
 * **website:** collapse the Pi 4 EEPROM check on Getting Started ([902f6e8](https://github.com/ajfriesen/DashboardAssistant/commit/902f6e8bba6050b426b3eb94399c4bd5c84b0652))
 * **website:** install from the Marketplace, seed file per OS ([ee51500](https://github.com/ajfriesen/DashboardAssistant/commit/ee51500d18511729a093aa057e88482dc08d5bbf))
 * **website:** install the integration from the Marketplace catalog ([ca8661d](https://github.com/ajfriesen/DashboardAssistant/commit/ca8661d797c4760437983bb6d83f85a6d6d7f881))
-* **website:** install the integration from the Marketplace catalog ([92faa2c](https://github.com/ajfriesen/DashboardAssistant/commit/92faa2ca89b4e77c97fd3d01e374144a6a22c513))
 * **website:** link Home Assistant pages through My Home Assistant ([a8ad3f9](https://github.com/ajfriesen/DashboardAssistant/commit/a8ad3f9c0a8fb787e511bde66cdfc90b7229efef))
 * **website:** link the 1.0.0 images from the flash page ([1a53cf9](https://github.com/ajfriesen/DashboardAssistant/commit/1a53cf952d2d71002536f8afbb9c9ed96604a4d4))
 * **website:** make Getting Started one page, downloads on top ([62e872b](https://github.com/ajfriesen/DashboardAssistant/commit/62e872b16323a039d113e22e3967d361374ebf1e))
-* **website:** make Getting Started one page, downloads on top ([5cc4719](https://github.com/ajfriesen/DashboardAssistant/commit/5cc4719eda48dc4890ae133eca4f677943f3c66b))
 * **website:** use the official My Home Assistant badges ([da0bdbb](https://github.com/ajfriesen/DashboardAssistant/commit/da0bdbb8db0f818a9ed138f41e577d2a7f873ffd))
 
 ## [1.0.0](https://github.com/ajfriesen/DashboardAssistant/compare/v1.0.0-rc.1...v1.0.0) (2026-11-06)
