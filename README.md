@@ -6,7 +6,7 @@
     <br />
     <a href="https://dashboardassistant.org">DashboardAssistant.org</a>
     ·
-    <a href="https://my.home-assistant.io/redirect/integration/?domain=https%3A%2F%2Fgithub.com%2Fajfriesen%2Fdashboard-assistant-integration">Integration</a>
+    <a href="https://my.home-assistant.io/redirect/integrations/?search=Dashboard+Assistant">Integration</a>
     ·
     <a href="https://dashboardassistant.org/getting-started/">Documentation</a>
     ·
@@ -28,7 +28,7 @@ The screen itself becomes something you can see and control from your automation
 
 1. Download the image
 2. Flash the image
-3. Install the integration from the Marketplace (while you are waiting)
+3. Install the Dashboard Assistant integration from the marketplace
 4. Write your seed file
 5. Boot
 6. Done
