@@ -16,56 +16,21 @@ func sourced(t *testing.T, name string) string {
 	return string(out)
 }
 
-// The kiosk login carries two URLs: where Home Assistant lives (the login goes
-// there) and the device's home (where it starts and where Home goes). Both
-// reach the kiosk exactly as given.
-func TestKioskURLsReachTheKiosk(t *testing.T) {
+// Home Assistant's URL reaches the kiosk exactly as given, even one the shell
+// would otherwise split: the kiosk scripts source runtime.env.
+func TestHAURLReachesTheKiosk(t *testing.T) {
 	tempState(t)
-	ha := "http://ha.example:8123"
-	home := "http://ha.example:8123/dashboard-kitchen/lights"
+	ha := "http://ha.example:8123/?a=1&b=2"
 
-	if err := writeKioskURLs(ha, home); err != nil {
-		t.Fatalf("writeKioskURLs: %v", err)
+	if err := writeHAURL(ha); err != nil {
+		t.Fatalf("writeHAURL: %v", err)
 	}
 
 	if got := sourced(t, "HA_URL"); got != ha {
 		t.Errorf("HA_URL = %q, want %q", got, ha)
 	}
-	if got := sourced(t, "HOME_URL"); got != home {
-		t.Errorf("HOME_URL = %q, want %q", got, home)
-	}
 	if got, _ := readHAURL(); got != ha {
 		t.Errorf("readHAURL = %q, want %q", got, ha)
-	}
-}
-
-// A home URL with a query string must not be cut off or run as a command when
-// the kiosk sources runtime.env: an unquoted `&` would background the line.
-func TestAHomeURLWithAQueryIsSourcedWhole(t *testing.T) {
-	tempState(t)
-	home := "https://example.com/view?a=1&b=2;c=$(x)"
-
-	if err := writeKioskURLs("http://ha.example:8123", home); err != nil {
-		t.Fatalf("writeKioskURLs: %v", err)
-	}
-
-	if got := sourced(t, "HOME_URL"); got != home {
-		t.Errorf("HOME_URL = %q, want %q", got, home)
-	}
-}
-
-// Without a home URL the kiosk falls back to Home Assistant's, so the file
-// carries no stale home from an earlier login.
-func TestNoHomeURLLeavesNoHome(t *testing.T) {
-	tempState(t)
-	if err := writeKioskURLs("http://ha.example:8123", "http://other.example/"); err != nil {
-		t.Fatal(err)
-	}
-	if err := writeKioskURLs("http://ha.example:8123", ""); err != nil {
-		t.Fatal(err)
-	}
-	if got := sourced(t, "HOME_URL"); got != "" {
-		t.Errorf("HOME_URL = %q, want it gone", got)
 	}
 }
 

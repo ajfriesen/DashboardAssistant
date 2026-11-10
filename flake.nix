@@ -309,14 +309,14 @@
               touch "$out"
             '';
 
-        # The kiosk's two URLs, resolved from runtime.env the way the launcher,
-        # the token injector and the Home button all do it: HA_URL is where Home
-        # Assistant lives (sign-in goes only there), HOME_URL where the browser
-        # starts and where Home goes, falling back to HA_URL. Runs the real
-        # resolver against the files the seed and the daemon write, including a
-        # home URL whose `&` would run as shell if the daemon stopped quoting.
-        # Eval-time for the same reason as above: first-boot.nix never starts
-        # the kiosk session.
+        # The kiosk's two URLs, resolved the way the launcher and the token
+        # injector both do it: HA_URL is where Home Assistant lives (sign-in goes
+        # only there), FIRST_PAGE the device's home, from the page list Home
+        # Assistant sent, or Home Assistant itself before it sent one. Runs the
+        # real resolver against the files the seed and the daemon write,
+        # including a URL whose `&` would run as shell if the daemon stopped
+        # quoting. Eval-time for the same reason as above: first-boot.nix never
+        # starts the kiosk session.
         kiosk-urls =
           let
             kiosk = self.nixosConfigurations.dashboard-assistant-x86-disk.config.dashboardAssistant.kiosk;
@@ -329,30 +329,35 @@
               set -euo pipefail
               fail=0
               resolve() {
-                env -i DA_RUNTIME_ENV="$1" ${pkgs.runtimeShell} -c \
-                  '. "$0"; printf "%s|%s" "$HA_URL" "$HOME_URL"' "$urls"
+                env -i DA_RUNTIME_ENV="$1" DA_PAGES="$2" ${pkgs.runtimeShell} -c \
+                  '. "$0"; printf "%s|%s" "$HA_URL" "$FIRST_PAGE"' "$urls"
               }
               expect() {
-                got=$(resolve "$2")
-                [ "$got" = "$3" ] || {
-                  echo "FAIL: $1: got '$got', want '$3'" >&2
+                got=$(resolve "$2" "$3")
+                [ "$got" = "$4" ] || {
+                  echo "FAIL: $1: got '$got', want '$4'" >&2
                   fail=1
                 }
               }
 
-              expect "no runtime.env yet" /nonexistent \
+              expect "nothing yet" /nonexistent /nonexistent \
                 "http://homeassistant.local:8123/|http://homeassistant.local:8123/"
 
               printf 'HA_URL=http://ha.lan:8123\n' > seed.env
-              expect "a seeded device starts at Home Assistant" seed.env \
+              expect "a seeded device starts at Home Assistant" seed.env /nonexistent \
                 "http://ha.lan:8123|http://ha.lan:8123"
 
-              printf "HA_URL='http://ha.lan:8123'\nHOME_URL='https://example.com/v?a=1&b=2'\n" > paired.env
-              expect "a paired device starts at its home" paired.env \
-                "http://ha.lan:8123|https://example.com/v?a=1&b=2"
+              printf "HA_URL='http://ha.lan:8123/?a=1&b=2'\n" > paired.env
+              printf '[{"name":"Weather","url":"https://example.com/v?a=1&b=2"},{"name":"HA","url":"http://ha.lan:8123"}]\n' > urls.json
+              expect "a paired device starts on its first page" paired.env urls.json \
+                "http://ha.lan:8123/?a=1&b=2|https://example.com/v?a=1&b=2"
 
               grep -qF "$urls" "$launcher" || {
                 echo "FAIL: the kiosk launcher no longer reads its URLs through the shared resolver." >&2
+                fail=1
+              }
+              grep -qF '"dir":"start"' "$launcher" || {
+                echo "FAIL: the kiosk launcher no longer asks the daemon for the first page." >&2
                 fail=1
               }
               [ "$fail" = 0 ] || exit 1
