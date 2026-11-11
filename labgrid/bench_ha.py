@@ -33,10 +33,22 @@ import time
 import urllib.error
 import urllib.request
 
-#: The integration's domain, and so its config-flow handler. Pinned in the bench
-#: host's configuration as a flake input; never fetched over the network during
-#: a run, because a HACS rate limit must not be able to redden this gate.
+#: The integration's domain, and so its config-flow handler.
 DOMAIN = "dashboard_assistant"
+
+#: Where the integration comes from: the built-in marketplace's default catalog,
+#: the same listing a user installs it from. The suite installs it after every
+#: reset, so the install path is part of what the gate tests and the version is
+#: the run's choice rather than the bench host's. The price is that a run needs
+#: GitHub — see install_integration.
+REPOSITORY = "ajfriesen/dashboard-assistant-integration"
+
+#: Which version of the integration to install, as a release tag (`v1.1.0`).
+#: Unset installs whatever the catalog currently offers — what a user installing
+#: it today would get, which is the honest default for a release gate. Set it to
+#: gate against a pre-release or to bisect: a named tag installs even when the
+#: catalog hides pre-releases.
+VERSION_ENV = "BENCH_HA_INTEGRATION_VERSION"
 
 #: Where the Bench Home Assistant is, and an optional token override. Not
 #: defaulted here on purpose, exactly like the LG_* variables: the justfile owns
@@ -52,9 +64,10 @@ TOKEN_ENV = "BENCH_HA_TOKEN"
 TOKEN_PATH = "/etc/bench-home-assistant/token"
 
 #: Resetting is a unit rather than a sequence of API calls, and it exits
-#: non-zero unless Home Assistant is up *and* answers to the fixture's token
-#: *and* has loaded the integration — so the suite does not re-implement that
-#: wait, and a slow start does not read as a failure. A polkit rule on the bench
+#: non-zero unless Home Assistant is up *and* answers to the fixture's token —
+#: so the suite does not re-implement that wait, and a slow start does not read
+#: as a failure. It says nothing about the integration: the fixture has none
+#: installed, and installing it is this suite's job. A polkit rule on the bench
 #: host scopes it to this one unit, so no tty and no sudo are needed.
 RESET_UNIT = "bench-home-assistant-reset.service"
 
@@ -241,6 +254,77 @@ def device_side(message):
     return f"device side: {message}"
 
 
+#: The marketplace's stage once its startup tasks — the catalog fetch among
+#: them — are done. Before that its repository list is the cache the fixture
+#: was captured with, which can predate a release or the listing itself.
+MARKETPLACE_RUNNING = "running"
+
+
+def marketplace_running(info):
+    """Whether `marketplace/info` says it is ready to install from.
+
+    Raises rather than returning False when the marketplace has disabled
+    itself, because that is a verdict rather than a stage to wait out, and
+    the reason (a GitHub rate limit, typically) is the whole diagnosis.
+    """
+    reason = info.get("disabled_reason")
+    if reason:
+        raise RuntimeError(f"the marketplace is disabled: {reason}")
+    return info.get("stage") == MARKETPLACE_RUNNING
+
+
+def catalog_entry(repositories, full_name=REPOSITORY):
+    """The marketplace's entry for `full_name`, or None.
+
+    Matched case-insensitively, as GitHub does: the catalog keeps the name as
+    it was listed, and a change of case in the owner's name would otherwise
+    read as a delisting.
+    """
+    wanted = full_name.lower()
+    for repository in repositories:
+        if (repository.get("full_name") or "").lower() == wanted:
+            return repository
+    return None
+
+
+def requested_version(environ):
+    """The integration version this run asked for, or None for the catalog's."""
+    return (environ.get(VERSION_ENV) or "").strip() or None
+
+
+def same_version(tag, manifest_version):
+    """Whether a release tag and a manifest.json version name the same release.
+
+    Tags carry a `v` and manifests do not (`v1.1.0` is `1.1.0`), and that is
+    the only difference tolerated: anything looser would let a stale install
+    pass for the version the run asked for.
+    """
+
+    def bare(version):
+        version = (version or "").strip()
+        return version[1:] if version[:1] in ("v", "V") else version
+
+    return bool(bare(tag)) and bare(tag) == bare(manifest_version)
+
+
+def install_problem(manifest, version=None, domain=DOMAIN):
+    """What is wrong with the integration Home Assistant now resolves, or None.
+
+    `manifest` is what `manifest/get` returns after the restart. A built-in of
+    the same name, or a version other than the one asked for, means the
+    journey would run against something other than the release under test —
+    and pass or fail for reasons that have nothing to do with it.
+    """
+    if manifest.get("is_built_in"):
+        return f"{domain} resolves to a built-in integration, not the installed one"
+    if version is not None and not same_version(version, manifest.get("version")):
+        return (
+            f"asked for {version} but Home Assistant loaded "
+            f"{manifest.get('version')!r}"
+        )
+    return None
+
+
 def websocket_url(base):
     """The websocket endpoint for a Home Assistant at `base`."""
     scheme, _, rest = base.rstrip("/").partition("://")
@@ -297,8 +381,12 @@ class BenchHomeAssistant:
         # websockets installed.
         from websockets.sync.client import connect
 
+        # No frame limit: the client's default is 1 MiB, and the marketplace's
+        # repository list alone is several. Over the limit, the client closes
+        # the connection rather than raising, so every later command fails
+        # with an error that points away from the cause.
         self._socket = connect(
-            websocket_url(self.base_url), open_timeout=self.timeout
+            websocket_url(self.base_url), open_timeout=self.timeout, max_size=None
         )
         # Anything that goes wrong from here leaves an open socket behind,
         # and `with BenchHomeAssistant(...)` never reaches __exit__ when
@@ -389,6 +477,82 @@ class BenchHomeAssistant:
             target={"entity_id": entity_id},
             service_data=data,
         )
+
+    # -- the marketplace ---------------------------------------------------- #
+
+    def marketplace_info(self):
+        """The marketplace's stage, and why it is disabled if it is."""
+        return self.command("marketplace/info") or {}
+
+    def marketplace_repositories(self):
+        """The integrations the marketplace lists, installed or not."""
+        return (
+            self.command("marketplace/repositories/list", categories=["integration"])
+            or []
+        )
+
+    def accept_marketplace_warning(self):
+        """Accept the marketplace's first-run warning for the fixture's user.
+
+        Every install is refused until this user has, and accepting is what
+        clicking through the warning in the panel does. Done on every run rather
+        than baked into the fixture, so a re-capture cannot quietly drop it.
+        """
+        return self.command("marketplace/warning/accept")
+
+    def install_repository(self, repository_id, version=None):
+        """Install a catalog repository, at `version` or at the catalog's."""
+        fields = {"repository": str(repository_id)}
+        if version is not None:
+            fields["version"] = version
+        return self.command("marketplace/repository/install", **fields)
+
+    def manifest(self, domain=DOMAIN):
+        """The manifest Home Assistant resolves for `domain`."""
+        return self.command("manifest/get", integration=domain) or {}
+
+    def restart(self):
+        """Restart Home Assistant, returning once this instance has gone.
+
+        Returns when the old instance drops this connection, which it does on
+        its way down — the one signal that cannot be confused with the
+        instance still being up. Polling for "not RUNNING" instead would race
+        a fast restart. The connection is closed afterwards either way; call
+        connect() again once the new instance is RUNNING.
+        """
+        from websockets.exceptions import ConnectionClosed
+
+        message_id = self._next_id
+        self._next_id += 1
+        self._send(
+            {
+                "id": message_id,
+                "type": "call_service",
+                "domain": "homeassistant",
+                "service": "restart",
+            }
+        )
+        try:
+            while True:
+                reply = self._receive()
+                # Home Assistant checks its configuration before restarting,
+                # and refuses here rather than going down if that fails.
+                if reply.get("id") == message_id and not reply.get("success", True):
+                    error = reply.get("error") or {}
+                    raise RuntimeError(
+                        ha_side(
+                            "Home Assistant refused to restart: "
+                            f"{error.get('code')} {error.get('message')}"
+                        )
+                    )
+        except ConnectionClosed:
+            pass
+        finally:
+            self.close()
+
+    def config(self):
+        """Home Assistant's /api/config, including its `state`."""
+        return self._rest("GET", "config")
 
     # -- the config-flow REST API ------------------------------------------- #
 
@@ -530,6 +694,72 @@ def wait_until(
         sleep(interval)
     trailer = f" (last error: {last_error!r})" if last_error else ""
     raise AssertionError(f"{what} did not appear within {timeout}s{trailer}")
+
+
+#: How long the marketplace may take to finish its startup tasks. They include
+#: fetching the catalog from GitHub, after Home Assistant itself has started.
+MARKETPLACE_TIMEOUT = 120
+
+#: How long a restart may take. The same cold start a reset waits out
+#: (RESET_TIMEOUT), plus the shutdown in front of it.
+RESTART_TIMEOUT = 240
+
+
+def install_integration(client, version=None):
+    """Install the integration from the marketplace, as a user would.
+
+    Returns the version Home Assistant loaded. Then restarts Home Assistant,
+    and that restart is not optional: a first install of a config-flow
+    integration is usable without one, but zeroconf reads the service types to
+    browse for exactly once, at startup. Skip the restart and the device
+    announces itself to a Home Assistant that is not listening for it, which
+    fails the discovery assertion for a reason that looks like the device's.
+
+    `client` is left connected to the restarted instance.
+
+    The marketplace fetches from GitHub, so this is where a run stops being
+    offline. Anonymous GitHub access is rate-limited, but installing the
+    catalog's own version downloads from hosts without that limit — so leaving
+    VERSION_ENV unset is also the setting least likely to be throttled.
+    """
+    wait_until(
+        lambda: marketplace_running(client.marketplace_info()),
+        ha_side("the marketplace finishing its startup"),
+        MARKETPLACE_TIMEOUT,
+    )
+    entry = wait_until(
+        lambda: catalog_entry(client.marketplace_repositories()),
+        ha_side(
+            f"{REPOSITORY} in the marketplace catalog. It is in the default "
+            "catalog, so if the catalog fetch worked and it is still missing, "
+            "it has been delisted"
+        ),
+        MARKETPLACE_TIMEOUT,
+    )
+    if entry.get("installed"):
+        raise AssertionError(
+            ha_side(
+                f"{REPOSITORY} is already installed — the reset left it behind, "
+                "and nothing about this run would say which version it tests"
+            )
+        )
+
+    client.accept_marketplace_warning()
+    client.install_repository(entry["id"], version)
+
+    client.restart()
+    wait_until(
+        lambda: client.config().get("state") == "RUNNING",
+        ha_side("Home Assistant RUNNING again after the post-install restart"),
+        RESTART_TIMEOUT,
+    )
+    client.connect()
+
+    manifest = client.manifest()
+    problem = install_problem(manifest, version)
+    if problem:
+        raise AssertionError(ha_side(problem))
+    return manifest.get("version")
 
 
 #: What one run of the journey produced, for the assertions to read.

@@ -371,7 +371,16 @@ pytest labgrid/test_wifi.py -v                # Wi-Fi only, wire down and back
 `test_journey.py` and `test_wifi.py` need a **Bench Home Assistant** at
 `$BENCH_HA_URL` (defaulted by the justfile) and skip themselves cleanly when
 there is none — which is what the x86_64 target below does, since user-mode
-networking carries no mDNS. `test_wifi.py` additionally needs the Bench Wi-Fi's
+networking carries no mDNS. After resetting it, the suite installs the
+**integration** from Home Assistant's marketplace, as a user would, then restarts
+Home Assistant so zeroconf browses for the device. That needs GitHub. The version
+is the catalog's unless `BENCH_HA_INTEGRATION_VERSION` names a release tag:
+
+```sh
+BENCH_HA_INTEGRATION_VERSION=v1.1.0-rc.3 just hw-test
+```
+
+`test_wifi.py` additionally needs the Bench Wi-Fi's
 credentials, declared in `secretspec.toml` and never committed:
 
 ```sh

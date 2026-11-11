@@ -61,6 +61,11 @@ export LG_PLACE := env_var_or_default("LG_PLACE", "raspberrypi5")
 # No token here. It is read off the bench host at /etc/bench-home-assistant/token,
 # beside the fixture that minted it, so there is no second copy to drift —
 # override with BENCH_HA_TOKEN for a throwaway instance.
+#
+# No integration version here either. The suite installs the integration from
+# Home Assistant's marketplace after every reset, at whatever version the
+# catalog offers, which is what a user would get. Set BENCH_HA_INTEGRATION_VERSION
+# to a release tag (v1.1.0-rc.3) to gate against another one.
 export BENCH_HA_URL := env_var_or_default("BENCH_HA_URL", "http://192.168.178.72:8123")
 
 # Build the release installable raw disk image (btrfs+zstd, built by disko). No

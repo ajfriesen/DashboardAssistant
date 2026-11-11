@@ -521,8 +521,20 @@ def test_browser_cache_is_in_ram(shell):
     """
     cache = f"/run/user/{kiosk_uid(shell)}/kiosk-cache"
     assert shell.run_check(f"findmnt -no FSTYPE -T {cache}") == ["tmpfs"]
-    dirs = shell.run_check(f"find {cache} -maxdepth 4 -type d -name '*Cache*' || true")
-    assert any("Cache" in d for d in dirs), dirs
+    # Waited for, bounded: Chromium creates its disk cache lazily, and on a
+    # first boot the kiosk can still be on the local waiting page when this
+    # runs. Asserting at once failed a healthy device whose cache turned up a
+    # minute later, exactly where it should.
+    find = f"find {cache} -maxdepth 4 -type d -name '*Cache*'"
+    dirs = shell.run_check(
+        f'for i in $(seq 120); do [ -n "$({find})" ] && break; sleep 1; done; '
+        f"{find} || true",
+        timeout=150,
+    )
+    assert any("Cache" in d for d in dirs), (
+        f"no Chromium cache under {cache} after 120s — either the browser never "
+        f"started or it is caching somewhere else: {dirs}"
+    )
 
     # The old on-flash location must not be filling up behind our back. A few
     # stray KiB from an earlier build are fine; a real cache is not.
