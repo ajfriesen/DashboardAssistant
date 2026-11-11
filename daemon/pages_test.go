@@ -154,3 +154,39 @@ func TestTheBuiltInPageIsHomeAssistantsOwnURL(t *testing.T) {
 		t.Errorf("after pairing: %v, want Home Assistant's own URL", got)
 	}
 }
+
+// A device is flashed, boots, and only then pairs: the daemon that loaded the
+// list before Home Assistant's URL existed is the one the relaunched kiosk asks
+// where to start. It has to answer with Home Assistant's URL, or the kiosk opens
+// the .local guess holding a token for another origin and shows a login page.
+func TestARunningDaemonStartsAtTheURLItPairedWith(t *testing.T) {
+	tempState(t)
+	p := NewPages()
+
+	if err := writeHAURL("http://192.168.1.5:8123"); err != nil {
+		t.Fatal(err)
+	}
+	p.HAURLChanged()
+
+	if got := p.Start(); got != "http://192.168.1.5:8123" {
+		t.Errorf("Start = %q, want Home Assistant's own URL", got)
+	}
+}
+
+// A list Home Assistant sent is its own: a later login does not replace it.
+func TestAPairingURLLeavesASentListAlone(t *testing.T) {
+	tempState(t)
+	p := NewPages()
+	if err := p.Replace(threePages); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := writeHAURL("http://192.168.1.5:8123"); err != nil {
+		t.Fatal(err)
+	}
+	p.HAURLChanged()
+
+	if got := p.List(); !reflect.DeepEqual(got, threePages) {
+		t.Errorf("list = %v, want the one Home Assistant sent", got)
+	}
+}
