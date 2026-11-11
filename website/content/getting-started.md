@@ -9,15 +9,15 @@ takes a download and four steps. Follow them in order.
 
 ## Download the image { #download }
 
-The current release is **1.0.0**
-([release notes](https://github.com/ajfriesen/DashboardAssistant/releases/tag/v1.0.0)).
+The current release is **1.1.1**
+([release notes](https://github.com/ajfriesen/DashboardAssistant/releases/tag/v1.1.1)).
 There is one image per board:
 
 | Board | Image |
 |---|---|
-| x86_64 (mini-PC, NUC) | [`dashboard-assistant-x86_64-1.0.0.raw.zst`](https://download.dashboardassistant.org/release/x86_64/dashboard-assistant-x86_64-1.0.0.raw.zst) |
-| Raspberry Pi 4 | [`dashboard-assistant-rpi4-1.0.0.raw.zst`](https://download.dashboardassistant.org/release/rpi4/dashboard-assistant-rpi4-1.0.0.raw.zst) |
-| Raspberry Pi 5 | [`dashboard-assistant-rpi5-1.0.0.raw.zst`](https://download.dashboardassistant.org/release/rpi5/dashboard-assistant-rpi5-1.0.0.raw.zst) |
+| x86_64 (mini-PC, NUC) | [`dashboard-assistant-x86_64-1.1.1.raw.zst`](https://download.dashboardassistant.org/release/x86_64/dashboard-assistant-x86_64-1.1.1.raw.zst) |
+| Raspberry Pi 4 | [`dashboard-assistant-rpi4-1.1.1.raw.zst`](https://download.dashboardassistant.org/release/rpi4/dashboard-assistant-rpi4-1.1.1.raw.zst) |
+| Raspberry Pi 5 | [`dashboard-assistant-rpi5-1.1.1.raw.zst`](https://download.dashboardassistant.org/release/rpi5/dashboard-assistant-rpi5-1.1.1.raw.zst) |
 
 Every image is zstd-compressed and several GB even so. All three boards use the
 same image format and the same flashing steps. x86_64 targets need to boot
