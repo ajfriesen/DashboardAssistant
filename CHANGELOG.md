@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.1](https://github.com/ajfriesen/DashboardAssistant/compare/v1.1.0...v1.1.1) (2026-11-11)
+
+
+### Bug Fixes
+
+* **core:** start the kiosk at Home Assistant's URL after a first pairing ([#82](https://github.com/ajfriesen/DashboardAssistant/issues/82)) ([6533664](https://github.com/ajfriesen/DashboardAssistant/commit/65336640251eb5708ed6cae70279112d140bf2d0))
+
+
+### Documentation
+
+* list each 1.1.0 change once in the changelog ([#81](https://github.com/ajfriesen/DashboardAssistant/issues/81)) ([8e543a4](https://github.com/ajfriesen/DashboardAssistant/commit/8e543a4eab7423f6e559214be68d55127d00d7a9))
+
 ## [1.1.0](https://github.com/ajfriesen/DashboardAssistant/compare/v1.0.0...v1.1.0) (2026-11-10)
 
 
