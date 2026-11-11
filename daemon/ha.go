@@ -610,6 +610,8 @@ func (h *HAHub) handleKioskLogin(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, err)
 			return
 		}
+		// Before the relaunch below asks the daemon where to start.
+		h.pages.HAURLChanged()
 		applied = append(applied, "ha_url")
 	}
 	// Being handed a login means Home Assistant has added this device, so mark it

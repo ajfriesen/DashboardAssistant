@@ -438,15 +438,20 @@ def bench_ha_url(on_the_bench):
 
 @pytest.fixture(scope="session")
 def bench_home_assistant(bench_host, bench_ha_url):
-    """The Bench Home Assistant, reset to its fixture and authenticated.
+    """The Bench Home Assistant, reset, authenticated and with the integration.
 
     Reset *here* rather than in a test: a long-lived mutable instance makes a
     red gate meaningless, so every run starts from the committed fixture — one
-    administrator, one token, a known dashboard, discovery on, the integration
-    installed but deliberately not configured. The unit on the bench host does
-    the waiting and exits non-zero unless Home Assistant is up, answers to the
-    fixture's token and has loaded the integration, so a slow start cannot read
-    as a failure here.
+    administrator, one token, a known dashboard, discovery on, the marketplace
+    enabled, and no integration. The unit on the bench host does the waiting
+    and exits non-zero unless Home Assistant is up and answers to the
+    fixture's token, so a slow start cannot read as a failure here.
+
+    Then the integration is installed from the marketplace, the way a user
+    installs it, and deliberately not configured: the config flow is the step
+    most likely to break for someone setting up their first device. Which
+    version is $BENCH_HA_INTEGRATION_VERSION's choice, the catalog's if unset.
+    See bench_ha.install_integration, including why it restarts Home Assistant.
     """
     reset = bench.on_bench_host(
         bench_host,
@@ -473,6 +478,13 @@ def bench_home_assistant(bench_host, bench_ha_url):
         )
 
     with bench_ha.BenchHomeAssistant(bench_ha_url, token) as client:
+        installed = bench_ha.install_integration(
+            client, bench_ha.requested_version(os.environ)
+        )
+        # The version is not otherwise visible anywhere in the run's output,
+        # and "which integration did this gate test" is the first question a
+        # red result raises.
+        print(f"Bench Home Assistant: {bench_ha.DOMAIN} {installed} installed")
         yield client
 
 

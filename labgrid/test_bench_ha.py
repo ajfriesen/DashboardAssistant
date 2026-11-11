@@ -372,3 +372,83 @@ def test_an_unknown_step_type_is_still_refused():
     """`progress` and `external` remain unknown, and must stay that way."""
     with pytest.raises(ValueError):
         ha.next_flow_action({"type": "progress"})
+
+
+# --------------------------------------------------------------------------- #
+# Installing the integration from the marketplace
+# --------------------------------------------------------------------------- #
+
+
+def test_the_marketplace_is_ready_once_running():
+    assert ha.marketplace_running({"stage": "running", "disabled_reason": None})
+
+
+def test_the_marketplace_still_starting_is_waited_for():
+    """Before `running` its list is the fixture's cache, which can predate the
+    release under test."""
+    assert not ha.marketplace_running({"stage": "startup", "disabled_reason": None})
+
+
+def test_a_disabled_marketplace_is_a_verdict_not_a_stage():
+    """Waiting out a rate limit would burn the whole timeout and then report
+    "did not appear" — the reason is the diagnosis, so it is raised."""
+    with pytest.raises(RuntimeError, match="rate_limit"):
+        ha.marketplace_running({"stage": "running", "disabled_reason": "rate_limit"})
+
+
+def catalog_repo(full_name=ha.REPOSITORY, repo_id="1311459696", installed=False):
+    return {"full_name": full_name, "id": repo_id, "installed": installed}
+
+
+def test_our_repository_is_found_in_the_catalog():
+    ours = catalog_repo()
+    assert ha.catalog_entry([catalog_repo("someone/else", "1"), ours]) == ours
+
+
+def test_the_catalog_match_ignores_case():
+    ours = catalog_repo(ha.REPOSITORY.upper())
+    assert ha.catalog_entry([ours]) == ours
+
+
+def test_a_catalog_without_us_reads_as_none():
+    assert ha.catalog_entry([catalog_repo("someone/else")]) is None
+
+
+def test_an_unset_version_means_the_catalogs():
+    assert ha.requested_version({}) is None
+    assert ha.requested_version({ha.VERSION_ENV: "  "}) is None
+
+
+def test_a_requested_version_is_taken_as_written():
+    assert ha.requested_version({ha.VERSION_ENV: " v1.1.0-rc.3\n"}) == "v1.1.0-rc.3"
+
+
+def test_a_tag_and_its_manifest_version_are_the_same_release():
+    assert ha.same_version("v1.1.0", "1.1.0")
+    assert ha.same_version("1.1.0", "1.1.0")
+
+
+def test_a_pre_release_is_not_its_final_release():
+    assert not ha.same_version("v1.1.0-rc.3", "1.1.0")
+
+
+def test_nothing_is_not_a_version():
+    assert not ha.same_version("", "")
+    assert not ha.same_version(None, None)
+
+
+def test_the_installed_integration_is_accepted():
+    assert ha.install_problem({"is_built_in": False, "version": "1.1.0"}) is None
+
+
+def test_any_version_is_accepted_when_none_was_asked_for():
+    assert ha.install_problem({"is_built_in": False, "version": "9.9.9"}) is None
+
+
+def test_the_wrong_version_is_named():
+    problem = ha.install_problem({"is_built_in": False, "version": "1.0.0"}, "v1.1.0")
+    assert problem and "v1.1.0" in problem and "1.0.0" in problem
+
+
+def test_a_built_in_of_the_same_name_is_not_the_installed_integration():
+    assert ha.install_problem({"is_built_in": True, "version": None}) is not None

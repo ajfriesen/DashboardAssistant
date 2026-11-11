@@ -121,6 +121,29 @@ func (p *Pages) SetList(list []Page) error {
 	return nil
 }
 
+// HAURLChanged re-derives the built-in page after Home Assistant's URL was
+// stored, for a device Home Assistant has not sent a list to yet. The built-in
+// page is Home Assistant at that URL (defaultPages), but the list is loaded once
+// at start — on a device that was flashed and then paired, before the URL
+// existed — so without this the running daemon keeps the .local guess, and the
+// kiosk relaunched by the login starts there with a token for another origin.
+// A list Home Assistant sent is its own and is left alone.
+func (p *Pages) HAURLChanged() {
+	if _, err := os.Stat(urlsFile); !os.IsNotExist(err) {
+		return
+	}
+	p.mu.Lock()
+	p.list = defaultPages()
+	if p.index >= len(p.list) {
+		p.index = 0
+	}
+	obs := p.observer
+	p.mu.Unlock()
+	if obs != nil {
+		obs()
+	}
+}
+
 // step moves the index by delta (wrapping), navigates to that page, and notifies.
 func (p *Pages) step(delta int) {
 	p.mu.Lock()

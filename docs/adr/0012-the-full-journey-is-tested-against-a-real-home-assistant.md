@@ -8,7 +8,7 @@ Every test stopped one step short of what the product promises. `tests/first-boo
 
 A mock would not catch the failure this exists for. The **integration** repo already tests against a fake device, correctly, at its own level, and the OS repo already tests the device with no Home Assistant at all. Between those two sits the failure a user actually hits: a **kiosk token** that never arrives, which renders a perfectly healthy *login page* — reachable, unfailed, provisioned, and useless.
 
-The Bench Home Assistant is pinned and its state is reset from a committed fixture before each run. A long-lived, mutable instance would make a red gate meaningless, and the strongest assertion available — Home Assistant's own DOM — is only safe to assert on against a frontend that cannot change underneath it. The integration is installed but left unconfigured, because the config flow is the step most likely to break for someone setting up their first device.
+The Bench Home Assistant is pinned and its state is reset from a committed fixture before each run. A long-lived, mutable instance would make a red gate meaningless, and the strongest assertion available — Home Assistant's own DOM — is only safe to assert on against a frontend that cannot change underneath it. The integration is installed but left unconfigured, because the config flow is the step most likely to break for someone setting up their first device. The suite installs it from Home Assistant's marketplace after every reset, the way a user does, so the install path is tested too and the run chooses the version.
 
 ## Consequences
 
@@ -18,3 +18,4 @@ The Bench Home Assistant is pinned and its state is reset from a committed fixtu
 - Asserting the kiosk's own DOM needs a channel off the device, and the browser's debugging port is bound to loopback. A **dev image** therefore carries a key that can sign unattended, gated exactly like its root password — release images gain nothing.
 - A release image has no shell, so its own check is the screenshot the device API already serves. That is a weaker oracle than the DOM, and it is the only one available without adding a surface to a shipped image; it exercises two shipped features rather than none.
 - The gate pairs devices and factory-resets them, so it is never pointed at a Home Assistant anybody relies on.
+- Installing from the marketplace means a run needs GitHub. A GitHub outage or rate limit fails the gate, and the failure says so on the Home Assistant side.
