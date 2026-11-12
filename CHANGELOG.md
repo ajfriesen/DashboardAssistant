@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.2.0-rc.1](https://github.com/ajfriesen/DashboardAssistant/compare/v1.1.1...v1.2.0-rc.1) (2026-11-12)
+
+
+### Features
+
+* **core:** add VNC remote access, switched from Home Assistant ([#90](https://github.com/ajfriesen/DashboardAssistant/issues/90)) ([a901384](https://github.com/ajfriesen/DashboardAssistant/commit/a901384873370f9f735f2da91f92e37845b836bb))
+
+
+### Documentation
+
+* **website:** point Getting Started at 1.1.1 ([#84](https://github.com/ajfriesen/DashboardAssistant/issues/84)) ([4494c09](https://github.com/ajfriesen/DashboardAssistant/commit/4494c09046502905ee0c0c93cbd7296222e20b23))
+
+
+### Miscellaneous
+
+* release 1.2.0-rc.1 ([33c0962](https://github.com/ajfriesen/DashboardAssistant/commit/33c096286b4310700d3c263095ab8f99d58734ee))
+
 ## [1.1.1](https://github.com/ajfriesen/DashboardAssistant/compare/v1.1.0...v1.1.1) (2026-11-11)
 
 
