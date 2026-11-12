@@ -66,6 +66,17 @@ var (
 	tlsKeyFile      = stateDir + "/tls-key.pem"      // its private key (0600 — nothing else on the device reads this)
 	screensaverFifo = stateDir + "/screensaver.fifo" // daemon writes "start <name>"/"stop"; in-session agent overlays the saver over CDP
 	screensaverFile = stateDir + "/screensaver.json" // persisted screen saver choice + idle timeout (minutes)
+
+	// VNC (see vnc.go). The FIFO and the wayvnc config path must match
+	// modules/core/vnc.nix. The config holds the session password, so it lives on
+	// tmpfs and is deleted when VNC goes off. The keys are kept, so a VNC client
+	// that remembered the server key doesn't warn on every session.
+	vncFifo        = stateDir + "/vnc.fifo"      // daemon writes "start"/"stop"; in-session agent runs wayvnc
+	vncFile        = stateDir + "/vnc.json"      // persisted auto-close timeout (minutes); on/off is never persisted
+	vncConfigFile  = runtimeDir + "/wayvnc.conf" // this session's wayvnc config, password included
+	vncRSAKeyFile  = stateDir + "/vnc-rsa-key.pem"
+	vncTLSKeyFile  = stateDir + "/vnc-tls-key.pem"
+	vncTLSCertFile = stateDir + "/vnc-tls-cert.pem"
 )
 
 const sessionUnit = "greetd.service" // the Sway kiosk session; restart relaunches it
@@ -248,6 +259,8 @@ func provisioningStatePaths() []string {
 		// should come back with a fresh identity rather than one an old pin
 		// still matches. Regenerated on the next start.
 		tlsCertFile, tlsKeyFile,
+		// VNC keys and timeout: a reset device gets a fresh VNC identity too.
+		vncFile, vncRSAKeyFile, vncTLSKeyFile, vncTLSCertFile,
 	}
 }
 

@@ -75,6 +75,7 @@ nav = [
   {"Usage" = [
      "usage/usage.md",
      "usage/audio.md",
+     "usage/remote-access.md",
      "usage/recovery.md",
   ]},
   { "In Action" = "in-action.md" },

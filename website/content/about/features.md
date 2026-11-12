@@ -23,6 +23,13 @@ icon: lucide/sparkles
   the tablet's Home Assistant identity across.
 - Audio never leaves your network, and there is no cloud account in the path.
 
+**Remote access** — see [Remote access (VNC)](../usage/remote-access.md).
+
+- Switch on a VNC server from Home Assistant to use the dashboard from your
+  computer, for example to sign in to Google Calendar.
+- Encrypted only, with a new password every session. It closes itself after a
+  timeout, and a marker on the screen shows while it is on.
+
 **Control from Home Assistant** — see the [entity reference](#home-assistant-integration).
 
 **Stays alive**
@@ -67,6 +74,8 @@ press on the tablet. It appears as a single device with these entities:
 | Page | `select` | Jump to one of your pages (edit the list under **Configure**, see [Home Assistant integration](../getting-started.md#pages)) |
 | Next / Previous page | `button` | Cycle through the dashboard URLs |
 | Sendspin player | `switch` | Turn the device's multi-room audio player on/off; carries a `status` attribute. Only on builds with the audio stack |
+| VNC | `switch` | Start or stop remote access over VNC. While on, its attributes carry the address, username, this session's password and when it closes |
+| VNC timeout | `number` | Minutes before VNC switches itself off, 0–240; 0 keeps it on until switched off |
 | Reboot / Shut down | `button` | Power-cycle the device |
 | Roll back | `button` | Boot the previous system generation. Refused when there is only one |
 | Factory reset | `button` | Forget the pairing, the settings and the Wi-Fi, reboot, and remove the entry. See [Recovery](../usage/recovery.md) |

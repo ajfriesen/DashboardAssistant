@@ -105,6 +105,11 @@ func main() {
 	// the two agree; otherwise HA shows "off", taps no longer send "stop" and the
 	// bar stays hidden. Fails harmlessly at boot, before the session is up.
 	scr.Reset()
+	vnc := NewVNC()
+	hub.SetVNC(vnc)
+	// VNC is never on after a daemon start. A wayvnc a previous daemon started
+	// would have no timer and a password nobody can see any more, so stop it.
+	vnc.Reset()
 	srv := &server{nm: nm, ha: hub, pages: pages}
 
 	// The Sendspin player's unit has no install target — this daemon owns its
@@ -124,7 +129,7 @@ func main() {
 	// Reverse channel: the in-session agents report the real display power state
 	// and touch activity here, keeping HA in sync with changes that never went
 	// through an API command (the hub observers broadcast them over SSE).
-	go watchDisplayState(disp, act, scr)
+	go watchDisplayState(disp, act, scr, vnc)
 
 	// Move the kiosk off the "Reconnecting…" splash once the device becomes READY.
 	// The launcher only reads state once at session start, so a box that booted
@@ -145,10 +150,12 @@ func main() {
 	}()
 
 	// Idle screen saver: only over a live dashboard with the panel on — never over
-	// the setup/reconnect splash, whose instructions it would hide.
+	// the setup/reconnect splash, whose instructions it would hide. Never during
+	// a VNC session either: input over VNC is not a touch, so the saver would
+	// come down on someone working remotely.
 	go func() {
 		for range time.Tick(5 * time.Second) {
-			scr.Tick(act.SecondsSince(), disp.On() && srv.deriveState() == StateReady)
+			scr.Tick(act.SecondsSince(), disp.On() && srv.deriveState() == StateReady && !vnc.On())
 		}
 	}()
 
@@ -354,7 +361,7 @@ func portOf(addr string) string {
 // FIFO is opened O_RDWR so the daemon always keeps a writer fd of its own —
 // reads then block for data instead of hitting EOF each time a writer closes,
 // and writers never get ENXIO for a missing reader. Reopens on any error.
-func watchDisplayState(disp *Display, act *Activity, scr *Screensaver) {
+func watchDisplayState(disp *Display, act *Activity, scr *Screensaver, vnc *VNC) {
 	for {
 		f, err := os.OpenFile(displayStateFifo, os.O_RDWR, 0)
 		if err != nil {
@@ -379,6 +386,8 @@ func watchDisplayState(disp *Display, act *Activity, scr *Screensaver) {
 				}
 			case line == "saver off":
 				scr.ReportOff()
+			case line == "vnc off":
+				vnc.ReportOff()
 			case strings.HasPrefix(line, "bright "):
 				if n, err := strconv.Atoi(strings.TrimSpace(line[len("bright "):])); err == nil {
 					disp.ReportBrightness(n)
