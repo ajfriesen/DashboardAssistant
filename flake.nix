@@ -244,6 +244,7 @@
       # .github/workflows/vm-tests.yml too, or it never runs on a PR.
       checks.${system} = {
         first-boot = import ./tests/first-boot.nix { inherit pkgs version; };
+        vnc = import ./tests/vnc.nix { inherit pkgs version; };
 
         # Flash-wear flags on the browser command line. This is an eval-time
         # check rather than an assertion in first-boot.nix because that test

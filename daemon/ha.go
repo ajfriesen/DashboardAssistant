@@ -108,6 +108,13 @@ func (h *HAHub) SetScreensaver(s *Screensaver) {
 	s.SetObserver(func() { h.broadcast() })
 }
 
+// SetVNC gives the hub the VNC server, set after construction like
+// SetScreensaver, and wires its observer to the SSE broadcast.
+func (h *HAHub) SetVNC(v *VNC) {
+	h.vnc = v
+	v.SetObserver(func() { h.broadcast() })
+}
+
 // stateSnapshot is the full device state the API serves (GET /state) and pushes
 // over SSE. It folds in every value the MQTT bridge used to publish as separate
 // topics; the integration maps each field to an HA entity.
@@ -172,7 +179,9 @@ type stateSnapshot struct {
 	// integration creates no audio entity there (same pattern as the
 	// Present flags on battery/temperature).
 	Sendspin *sendspinState `json:"sendspin,omitempty"`
-	Host     struct {
+	// Omitted entirely on builds without VNC, like Sendspin.
+	VNC  *vncState `json:"vnc,omitempty"`
+	Host struct {
 		IP     string `json:"ip"`
 		Uptime int    `json:"uptime"`
 		CPU    int    `json:"cpu"`
@@ -215,6 +224,18 @@ type sendspinState struct {
 	State string `json:"state,omitempty"`
 }
 
+// vncState is VNC's slice of the snapshot. The password is only present while
+// VNC is on, and changes every session. ClosesAt is a Unix time, absent when
+// VNC is off or never closes by itself.
+type vncState struct {
+	On       bool   `json:"on"`
+	Username string `json:"username"`
+	Password string `json:"password,omitempty"`
+	Port     int    `json:"port"`
+	Timeout  int    `json:"timeout"` // auto-close minutes; 0 = never
+	ClosesAt int64  `json:"closes_at,omitempty"`
+}
+
 // HAHub owns the capability objects and the live SSE subscribers, and caches the
 // latest screenshot. It replaces the MQTT bridge/manager: the same object
 // observers that used to trigger MQTT republishes now trigger an SSE broadcast.
@@ -235,6 +256,7 @@ type HAHub struct {
 	// profiles, and the two reset paths must not drift apart on that.
 	nm  *NetworkManager
 	scr *Screensaver
+	vnc *VNC
 
 	mu   sync.Mutex
 	subs map[chan []byte]struct{}
@@ -378,6 +400,8 @@ func (h *HAHub) snapshot() stateSnapshot {
 		s.Sendspin = &sendspinState{On: h.snd.On(), State: h.snd.Actual()}
 	}
 
+	s.VNC = h.vncSnapshot()
+
 	s.Host.IP = primaryIP()
 	if up, err := readUptime(); err == nil {
 		s.Host.Uptime = up
@@ -419,6 +443,24 @@ func (h *HAHub) snapshot() stateSnapshot {
 }
 
 // routes builds the authenticated API mux served on the LAN listener.
+// vncSnapshot is the snapshot's vnc section, nil on a build without VNC.
+func (h *HAHub) vncSnapshot() *vncState {
+	if h.vnc == nil || !h.vnc.Available() {
+		return nil
+	}
+	s := &vncState{
+		On:       h.vnc.On(),
+		Username: vncUsername,
+		Password: h.vnc.Password(),
+		Port:     h.vnc.Port(),
+		Timeout:  h.vnc.Timeout(),
+	}
+	if at := h.vnc.ClosesAt(); !at.IsZero() {
+		s.ClosesAt = at.Unix()
+	}
+	return s
+}
+
 func (h *HAHub) routes() http.Handler {
 	mux := http.NewServeMux()
 	// Unauthenticated on purpose: the gate is the pairing window, not a token the
@@ -440,6 +482,7 @@ func (h *HAHub) routes() http.Handler {
 	mux.HandleFunc("/api/ha/rotation", h.auth(h.handleRotation))
 	mux.HandleFunc("/api/ha/screensaver", h.auth(h.handleScreensaver))
 	mux.HandleFunc("/api/ha/sendspin", h.auth(h.handleSendspin))
+	mux.HandleFunc("/api/ha/vnc", h.auth(h.handleVNC))
 	mux.HandleFunc("/api/ha/power", h.auth(h.handlePower))
 	mux.HandleFunc("/api/ha/reset", h.auth(h.handleReset))
 	mux.HandleFunc("/api/ha/rollback", h.auth(h.handleRollback))
@@ -673,6 +716,7 @@ func (h *HAHub) handleInfo(w http.ResponseWriter, r *http.Request) {
 		"has_temperature": hasTemp,
 		"has_btrfs":       hasBtrfs,
 		"has_sendspin":    h.snd.Available(),
+		"has_vnc":         h.vnc != nil && h.vnc.Available(),
 		// The first page is the device's home: it starts there and the Home
 		// button goes there. Before, both used the kiosk login's ha_url, so the
 		// integration keeps sending a home in it to a device without this.
@@ -852,6 +896,46 @@ func (h *HAHub) handleSendspin(w http.ResponseWriter, r *http.Request) {
 	if err := h.snd.Set(req.On); err != nil {
 		writeErr(w, err)
 		return
+	}
+	writeJSON(w, http.StatusOK, h.snapshot())
+}
+
+// handleVNC sets the auto-close timeout in minutes ({"timeout": 15}, 0 = never)
+// and/or switches VNC on or off ({"on": true}), in that order. Switching on also
+// wakes the panel and dismisses the screen saver: wayvnc shows what the screen
+// shows, and a dark panel would give the viewer nothing to work with.
+func (h *HAHub) handleVNC(w http.ResponseWriter, r *http.Request) {
+	if h.vnc == nil || !h.vnc.Available() {
+		http.Error(w, "vnc not available", http.StatusNotFound)
+		return
+	}
+	var req struct {
+		On      *bool `json:"on"`
+		Timeout *int  `json:"timeout"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if req.Timeout != nil {
+		h.vnc.SetTimeout(*req.Timeout)
+	}
+	if req.On != nil {
+		if err := h.vnc.Set(*req.On); err != nil {
+			writeErr(w, err)
+			return
+		}
+		if *req.On {
+			if h.disp != nil {
+				if err := h.disp.Set(true); err != nil {
+					log.Printf("vnc: wake display: %v", err)
+				}
+			}
+			if h.scr != nil {
+				if err := h.scr.Stop(); err != nil {
+					log.Printf("vnc: stop screen saver: %v", err)
+				}
+			}
+		}
 	}
 	writeJSON(w, http.StatusOK, h.snapshot())
 }

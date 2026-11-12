@@ -13,6 +13,7 @@
 }:
 let
   autoLogin = config.dashboardAssistant.kiosk.autoLogin;
+  vnc = config.dashboardAssistant.vnc;
   # On-screen keyboard, packaged from source (not in nixpkgs). See packages/vboard/.
   vboard = pkgs.callPackage ../../packages/vboard/vboard.nix { };
   # Fallback dashboard target if runtime.env is somehow missing. Normal config
@@ -1084,6 +1085,23 @@ let
   # loaders.cache that registers image/svg+xml.
   sponsorLogo = ../../website/content/brand/apple-touch-icon-180.png;
 
+  # "Remote access" marker, shown while VNC is on so people at the device know
+  # someone may be watching. The VNC agent (modules/core/vnc.nix) sets the flag
+  # file and sends SIGRTMIN+9, which makes waybar re-run this script. Empty
+  # output hides the module.
+  vncIndicator = pkgs.writeShellScript "ha-kiosk-vnc-indicator" ''
+    [ -e "''${XDG_RUNTIME_DIR:-/tmp}/ha-vnc-on" ] && echo "$1" || true
+  '';
+  vncModule = label: lib.optionalString vnc.enable ''
+    "custom/vnc": {
+      "exec": "${vncIndicator} '${label}'",
+      "signal": 9,
+      "interval": "once",
+      "tooltip": false
+    },
+  '';
+  vncModuleRef = lib.optionalString vnc.enable ''"custom/vnc", '';
+
   waybarConfig = pkgs.writeText "ha-kiosk-waybar.json" ''
     {
       "layer": "bottom",
@@ -1091,7 +1109,8 @@ let
       "height": 50,
       "modules-left": ["custom/home"],
       "modules-center": ["custom/prev", "custom/sponsor", "custom/next"],
-      "modules-right": ["custom/kbd"],
+      "modules-right": [${vncModuleRef}"custom/kbd"],
+      ${vncModule "●  Remote access"}
       "custom/kbd": {
         "format": "⌨  Keyboard",
         "tooltip": false,
@@ -1133,7 +1152,8 @@ let
       "height": 50,
       "modules-left": ["custom/home"],
       "modules-center": ["custom/prev", "custom/sponsor", "custom/next"],
-      "modules-right": ["custom/kbd"],
+      "modules-right": [${vncModuleRef}"custom/kbd"],
+      ${vncModule "●"}
       "custom/kbd":     { "format": "⌨", "tooltip": false, "on-click": "${oskToggle}" },
       "custom/home":    { "format": "🏠", "tooltip": false, "on-click": "${navHome}" },
       "custom/prev":    { "format": "◀", "tooltip": false, "on-click": "${pagePrev}" },
@@ -1194,6 +1214,14 @@ let
        Prev/Next sideways; the pill background comes from the shared rule above,
        which keeps this button looking like its four neighbours. Sized 26px into
        the 50px bar (see the OSK offset note keyed to that height). */
+    /* Remote access marker: not a button, so no :active state, and red so it
+       reads as a warning rather than as one more control. */
+    #custom-vnc {
+      padding: 0 16px;
+      margin: 5px;
+      background-color: #b91c1c;
+      border-radius: 10px;
+    }
     #custom-sponsor {
       padding: 0 20px;
       min-width: 32px;
@@ -1306,6 +1334,9 @@ let
 
     # Re-powers the display on the next input event after the Off button blanks it.
     exec ${wakeAgent}
+    ${lib.optionalString vnc.enable ''
+      # Runs wayvnc while Home Assistant has VNC switched on (modules/core/vnc.nix).
+      exec ${vnc.agent}''}
 
     # Detect the brightness backend once (backlight / DDC / software) and stash
     # it for the Dim/Brighter buttons before the bar can be tapped.
