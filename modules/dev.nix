@@ -27,7 +27,11 @@
   # has no ttyS0 and an unsatisfiable console= is how you lose the one you have:
   # the *last* console= on the cmdline wins, so appending this on a Pi would
   # silence the UART that works. rpi5.nix uses mkBefore for the same reason.
-  boot.kernelParams = lib.optional (config.nixpkgs.hostPlatform.isx86) "console=ttyS0,115200n8";
+  boot.kernelParams = [
+    # The bench identity; see "Pin the machine ID" below.
+    "systemd.machine_id=0a03370b18534ab8b73e645ac4f95dee"
+  ]
+  ++ lib.optional (config.nixpkgs.hostPlatform.isx86) "console=ttyS0,115200n8";
 
   dashboardAssistant.debug.rootAuthorizedKeys = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINY2u6VzTMl9DchTo/PojqTibpE3LRxUouwlZ4RSiYjp andrej@gridscale.io"
@@ -78,12 +82,17 @@
   # on one Home Assistant would fight over the same device and entity unique_ids.
   # That is why this lives here and not in modules/core.
   #
-  # mode forces a copied regular file rather than the usual symlink into the Nix
-  # store: systemd wants to be able to treat /etc/machine-id as a real file.
-  environment.etc."machine-id" = {
-    text = "0a03370b18534ab8b73e645ac4f95dee\n";
-    mode = "0444";
-  };
+  # On the kernel command line, not in environment.etc: NixOS deletes a managed
+  # /etc file when a switch goes to a config that does not declare it, and an
+  # update from Home Assistant switches a dev image to the *release* config.
+  # That wiped the bench board's machine-id mid-update, D-Bus could not start
+  # without it, and the switch hung. systemd writes a valid systemd.machine_id=
+  # into /etc/machine-id as a plain file on every boot (machine-id-setup.c), so
+  # the pin holds across reflashes and a switch leaves it alone. Checked by
+  # machine-id-is-not-managed-by-nixos in flake.nix and
+  # tests/update-keeps-machine-id.nix.
+  #
+  # Set together with the serial console above, in the one boot.kernelParams.
 
   # Put the journal back to full fidelity on dev images. modules/core/flash-wear.nix
   # sets this to "info" to spare the SD card on release devices, but the whole
