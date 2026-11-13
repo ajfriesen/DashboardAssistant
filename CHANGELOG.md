@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.0-rc.2](https://github.com/ajfriesen/DashboardAssistant/compare/v1.2.0-rc.1...v1.2.0-rc.2) (2026-11-13)
+
+
+### Bug Fixes
+
+* **core:** draw the device-info button as an SVG, not a missing glyph ([#93](https://github.com/ajfriesen/DashboardAssistant/issues/93)) ([cbd203f](https://github.com/ajfriesen/DashboardAssistant/commit/cbd203f6c0894ad9204ef0d0149a0eb067f6ea1d))
+* **core:** let updates from 1.0.0 and 1.1.x install without building on the device ([#94](https://github.com/ajfriesen/DashboardAssistant/issues/94)) ([ff061a6](https://github.com/ajfriesen/DashboardAssistant/commit/ff061a6266069369808ea4dff41f9b49f066c2ce))
+* **core:** stop the VNC marker refresh from killing the bottom bar ([#91](https://github.com/ajfriesen/DashboardAssistant/issues/91)) ([5f30a03](https://github.com/ajfriesen/DashboardAssistant/commit/5f30a0355a24dd8f0bd6185bf4107986439f294a))
+
 ## [1.2.0-rc.1](https://github.com/ajfriesen/DashboardAssistant/compare/v1.1.1...v1.2.0-rc.1) (2026-11-12)
 
 
