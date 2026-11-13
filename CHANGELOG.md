@@ -1,11 +1,23 @@
 # Changelog
 
-## [1.2.0](https://github.com/ajfriesen/DashboardAssistant/compare/v1.2.0-rc.2...v1.2.0) (2026-11-13)
+## [1.2.0](https://github.com/ajfriesen/DashboardAssistant/compare/v1.1.1...v1.2.0) (2026-11-13)
 
 
-### Miscellaneous
+### Features
 
-* release 1.2.0 ([0f033b7](https://github.com/ajfriesen/DashboardAssistant/commit/0f033b714dfaa802fb76270a689b79a7809571ea))
+* **core:** add VNC remote access, switched from Home Assistant ([#90](https://github.com/ajfriesen/DashboardAssistant/issues/90)) ([a901384](https://github.com/ajfriesen/DashboardAssistant/commit/a901384873370f9f735f2da91f92e37845b836bb))
+
+
+### Bug Fixes
+
+* **core:** draw the device-info button as an SVG, not a missing glyph ([#93](https://github.com/ajfriesen/DashboardAssistant/issues/93)) ([cbd203f](https://github.com/ajfriesen/DashboardAssistant/commit/cbd203f6c0894ad9204ef0d0149a0eb067f6ea1d))
+* **core:** let updates from 1.0.0 and 1.1.x install without building on the device ([#94](https://github.com/ajfriesen/DashboardAssistant/issues/94)) ([ff061a6](https://github.com/ajfriesen/DashboardAssistant/commit/ff061a6266069369808ea4dff41f9b49f066c2ce))
+* **core:** stop the VNC marker refresh from killing the bottom bar ([#91](https://github.com/ajfriesen/DashboardAssistant/issues/91)) ([5f30a03](https://github.com/ajfriesen/DashboardAssistant/commit/5f30a0355a24dd8f0bd6185bf4107986439f294a))
+
+
+### Documentation
+
+* **website:** point Getting Started at 1.1.1 ([#84](https://github.com/ajfriesen/DashboardAssistant/issues/84)) ([4494c09](https://github.com/ajfriesen/DashboardAssistant/commit/4494c09046502905ee0c0c93cbd7296222e20b23))
 
 ## [1.2.0-rc.2](https://github.com/ajfriesen/DashboardAssistant/compare/v1.2.0-rc.1...v1.2.0-rc.2) (2026-11-13)
 

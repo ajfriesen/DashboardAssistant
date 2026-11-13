@@ -40,9 +40,8 @@ Every board builds from a pinned `nixos-unstable` ([ADR 0008](adr/0008-every-boa
 
 1. On a branch: `nix flake update nixpkgs-unstable`
 2. VM tests green in CI, and `just hw-test` green on the bench
-3. Cut a pre-release (see below)
-4. Run the pre-release on a real x86 device for a few days
-5. Merge
+3. Run the branch's `dev/` image (CI publishes one per commit, [ops/README.md](../ops/README.md)) on a real x86 device for a few days
+4. Merge
 
 ## Releasing
 
@@ -54,19 +53,20 @@ The commit type decides the version bump:
 - `fix:` / `docs:` / `chore:` / `refactor:` / … → patch
 - `feat!:` or a `BREAKING CHANGE:` footer → major
 
-**Every release starts as a candidate.** release-please keeps one release PR open and always proposes a release candidate (`release-please-config.json`: `"versioning": "prerelease"`, `"prerelease": true`). Merging the PR bumps the version in `flake.nix`, updates `CHANGELOG.md`, tags the release and uploads the images. Versions with a SemVer hyphen go to the R2 `pre-release/` channel ([ADR 0007](adr/0007-releases-come-from-commits-and-images-live-in-r2.md), [ops/README.md](../ops/README.md)).
+release-please keeps one release PR open with the next version. Merging it bumps the version in `flake.nix`, updates `CHANGELOG.md`, tags the release and uploads the images. The notes list every commit since the previous release.
 
-| `main` is on | Commits since | Release PR |
-|---|---|---|
-| `1.2.0-rc.1` | any `fix:` or `feat:` | `1.2.0-rc.2` |
-| `1.2.0` | `fix:` | `1.2.1-rc.1` |
-| `1.2.0` | `feat:` | `1.3.0-rc.1` |
-| `1.2.1-rc.1` | `feat:` | `1.3.0-rc.1` |
+**Every release starts as a candidate** ([ADR 0011](adr/0011-a-release-is-promoted-after-the-release-gate.md)). The new GitHub release is marked a pre-release and not latest, so no device is offered it as an update. Then:
 
-**To cut the final release:** `just release-final`. It pushes an empty `Release-As: 1.2.0` commit to `main` (it asks first), and release-please retitles its PR to `release 1.2.0`. Merge that PR. Any other version works the same way by hand:
+1. **Test the update from Home Assistant.** The integration's release picker lists candidates as `vX.Y.Z (pre-release)`; pick it on a test device. To prove the upgrade devices in the field take, flash that device with the release they run first.
+2. **Run the release gate:** `BENCH_CANDIDATE=vX.Y.Z just hw-test`.
+3. **Promote it:** `gh release edit vX.Y.Z --prerelease=false --latest`. Devices now see the update.
+
+A candidate that fails is never promoted; the fix ships as the next patch version. Test before merging with dev images (`just hw-test`, `just deploy-rpi5-dev HOST`, or CI's `dev/` builds), not release candidates.
+
+A version with a SemVer hyphen still works for early access, by hand. Its images go to the R2 `pre-release/` channel ([ADR 0007](adr/0007-releases-come-from-commits-and-images-live-in-r2.md), [ops/README.md](../ops/README.md)):
 
 ```sh
 git commit --allow-empty -m "chore: release 1.3.0-rc.1" -m "Release-As: 1.3.0-rc.1"
 ```
 
-A merged release, candidate or final, is still held back from devices until the bench gate passes and it is promoted ([ADR 0011](adr/0011-a-release-is-promoted-after-the-release-gate.md)).
+The final release after such a candidate only lists the commits since the candidate.
