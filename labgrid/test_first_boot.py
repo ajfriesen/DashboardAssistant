@@ -500,14 +500,21 @@ def test_nix_builds_outside_the_tmpfs(shell):
     as much RAM as we hand it and no binary cache to miss.
     """
     assert shell.run_check("findmnt -no FSTYPE /tmp") == ["tmpfs"]
-    # Last line, not the whole output: nix writes diagnostics to stderr and the
-    # shell hands both back interleaved, so an offline device prefixes this with
-    # "warning: you don't have Internet access; disabling some network-dependent
-    # features" and an exact comparison fails on a setting that is in fact right.
-    build_dir = shell.run_check("nix config show build-dir 2>/dev/null | tail -1")
-    assert build_dir == ["/var/tmp"], build_dir
-    # /var/tmp has to be on real storage, or the setting bought nothing.
-    assert shell.run_check("findmnt -no FSTYPE -T /var/tmp") == ["btrfs"]
+    # Nix's default build-dir, /nix/var/nix/builds, is left alone: it is on the
+    # /nix filesystem. 1.0.0 pointed build-dir at the world-writable /var/tmp,
+    # which Nix refuses, so every on-device build failed and every update with
+    # it. A real build proves it, where reading the setting back would not.
+    _, _, code = shell.run("grep -q '^build-dir' /etc/nix/nix.conf")
+    assert code != 0, "nix.conf sets build-dir; leave it at Nix's default"
+    assert shell.run_check("findmnt -no FSTYPE -T /nix/var/nix") == ["btrfs"]
+    probe = (
+        'derivation { name = "build-dir-probe"; system = builtins.currentSystem; '
+        'builder = "/bin/sh"; args = [ "-c" "echo ok > $out" ]; }'
+    )
+    shell.run_check(
+        f"nix-build --no-out-link --option substituters '' -E '{probe}'",
+        timeout=120,
+    )
 
 
 @pytest.mark.needs_display
