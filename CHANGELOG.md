@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/ajfriesen/DashboardAssistant/compare/v1.2.0...v1.2.1) (2026-11-13)
+
+
+### Documentation
+
+* **website:** point Getting Started at 1.2.0 ([#101](https://github.com/ajfriesen/DashboardAssistant/issues/101)) ([c7fa0d4](https://github.com/ajfriesen/DashboardAssistant/commit/c7fa0d418e1331cadf1a36affe3ba070dc41e09a))
+
 ## [1.2.0](https://github.com/ajfriesen/DashboardAssistant/compare/v1.1.1...v1.2.0) (2026-11-13)
 
 
