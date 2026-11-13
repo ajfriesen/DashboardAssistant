@@ -175,5 +175,22 @@ pkgs.testers.runNixOSTest {
         machine.wait_for_open_port(5900)
         machine.succeed("pkill -x wayvnc")
         retry(lambda _: api("GET", "state")["vnc"]["on"] is False, timeout_seconds=30)
+
+    with subtest("refreshing the marker never kills a process without a handler"):
+        # The agent signals the bar's PID with SIGRTMIN+9, whose default action
+        # is to terminate. A waybar that is still starting up has no handler
+        # yet, and on a real device that killed the whole bar at boot. Stand in
+        # for it with a kiosk-owned process that has no handler.
+        bar_pid = "/run/headless-kiosk/ha-kiosk-waybar.pid"
+        machine.succeed(
+            f"runuser -u kiosk -- setsid sh -c 'echo $$ > {bar_pid}; exec sleep 1000' >/dev/null 2>&1 &"
+        )
+        machine.wait_until_succeeds(f"test -s {bar_pid}")
+        pid = machine.succeed(f"cat {bar_pid}").strip()
+        api("POST", "vnc", {"on": True})
+        machine.wait_for_open_port(5900)
+        api("POST", "vnc", {"on": False})
+        machine.wait_for_closed_port(5900)
+        machine.succeed(f"kill -0 {pid}")
   '';
 }

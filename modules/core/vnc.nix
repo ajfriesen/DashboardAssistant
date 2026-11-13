@@ -47,13 +47,25 @@ let
 
     # The flag file and signal drive the "Remote access" marker on the bar
     # (kiosk.nix); waybar re-runs the module's script on SIGRTMIN+9.
+    #
+    # SIGRTMIN+9's default action is to terminate, so it only goes to a PID
+    # that has installed a handler for it (its bit in SigCgt). A waybar still
+    # starting up has none yet: signalling it then killed the bar for the rest
+    # of the session. The check also spares whatever reused a stale PID.
     flag="''${XDG_RUNTIME_DIR:-/tmp}/ha-vnc-on"
+    sig=$(kill -l RTMIN+9)
     bar() {
       pid=$(${pkgs.coreutils}/bin/cat "''${XDG_RUNTIME_DIR:-/tmp}/ha-kiosk-waybar.pid" 2>/dev/null)
-      [ -n "$pid" ] && kill -RTMIN+9 "$pid" 2>/dev/null || true
+      [ -n "$pid" ] || return 0
+      mask=$(${pkgs.gawk}/bin/awk '/^SigCgt:/ { print $2 }' "/proc/$pid/status" 2>/dev/null)
+      [ -n "$mask" ] || return 0
+      if (( (16#$mask >> (sig - 1)) & 1 )); then
+        kill -s "$sig" "$pid" 2>/dev/null || true
+      fi
     }
+    # No bar() here: this runs as the session starts, next to a waybar that is
+    # starting too, and a fresh bar reads the (now absent) flag by itself.
     ${pkgs.coreutils}/bin/rm -f "$flag"
-    bar
     ${report} vnc off
 
     keep=""
