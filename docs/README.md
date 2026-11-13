@@ -54,12 +54,19 @@ The commit type decides the version bump:
 - `fix:` / `docs:` / `chore:` / `refactor:` / … → patch
 - `feat!:` or a `BREAKING CHANGE:` footer → major
 
-**To cut a release:** release-please keeps one release PR open (e.g. `chore(main): release 1.1.0`). It bumps the version in `flake.nix` and updates `CHANGELOG.md`. Merging it tags the release, publishes the GitHub Release and uploads the x86_64 image to the R2 `release/` channel ([ADR 0007](adr/0007-releases-come-from-commits-and-images-live-in-r2.md), [ops/README.md](../ops/README.md)).
+**Every release starts as a candidate.** release-please keeps one release PR open and always proposes a release candidate (`release-please-config.json`: `"versioning": "prerelease"`, `"prerelease": true`). Merging the PR bumps the version in `flake.nix`, updates `CHANGELOG.md`, tags the release and uploads the images. Versions with a SemVer hyphen go to the R2 `pre-release/` channel ([ADR 0007](adr/0007-releases-come-from-commits-and-images-live-in-r2.md), [ops/README.md](../ops/README.md)).
 
-**To cut a pre-release:**
+| `main` is on | Commits since | Release PR |
+|---|---|---|
+| `1.2.0-rc.1` | any `fix:` or `feat:` | `1.2.0-rc.2` |
+| `1.2.0` | `fix:` | `1.2.1-rc.1` |
+| `1.2.0` | `feat:` | `1.3.0-rc.1` |
+| `1.2.1-rc.1` | `feat:` | `1.3.0-rc.1` |
+
+**To cut the final release:** `just release-final`. It pushes an empty `Release-As: 1.2.0` commit to `main` (it asks first), and release-please retitles its PR to `release 1.2.0`. Merge that PR. Any other version works the same way by hand:
 
 ```sh
-git commit --allow-empty -m "chore: release 1.1.0-rc.1" -m "Release-As: 1.1.0-rc.1"
+git commit --allow-empty -m "chore: release 1.3.0-rc.1" -m "Release-As: 1.3.0-rc.1"
 ```
 
-Push it, then merge the release PR on GitHub. Versions with a SemVer hyphen go to the `pre-release/` channel.
+A merged release, candidate or final, is still held back from devices until the bench gate passes and it is promoted ([ADR 0011](adr/0011-a-release-is-promoted-after-the-release-gate.md)).
