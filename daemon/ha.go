@@ -480,6 +480,7 @@ func (h *HAHub) routes() http.Handler {
 	mux.HandleFunc("/api/ha/zoom", h.auth(h.handleZoom))
 	mux.HandleFunc("/api/ha/theme", h.auth(h.handleTheme))
 	mux.HandleFunc("/api/ha/rotation", h.auth(h.handleRotation))
+	mux.HandleFunc("/api/ha/timezone", h.auth(h.handleTimezone))
 	mux.HandleFunc("/api/ha/screensaver", h.auth(h.handleScreensaver))
 	mux.HandleFunc("/api/ha/sendspin", h.auth(h.handleSendspin))
 	mux.HandleFunc("/api/ha/vnc", h.auth(h.handleVNC))

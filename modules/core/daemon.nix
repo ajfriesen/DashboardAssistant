@@ -77,6 +77,10 @@ in
       # DMI serial for the hardware-serial sensor.
       ExecStartPre = "+${dmiDump}";
       ExecStart = "${dashboard-assistant-api}/bin/dashboard-assistant-api";
+      # Go looks for the tz database in /usr/share/zoneinfo, which NixOS does not
+      # have. Point it at the one timedated uses, so the daemon accepts exactly
+      # the zones the system can set (daemon/timezone.go).
+      Environment = "ZONEINFO=${pkgs.tzdata}/share/zoneinfo";
       Restart = "on-failure";
       RestartSec = 2;
 
@@ -127,7 +131,7 @@ in
     };
   };
 
-  # Let the daemon manage *only* the greetd session unit (the Sway kiosk) and the
+  # Let the daemon set the timezone, and manage *only* the greetd session unit (the Sway kiosk) and the
   # dashboard-assistant-rollback@ recovery units — nothing else on the system. Restarting greetd
   # relaunches the kiosk; starting dashboard-assistant-rollback@<n> rolls back and reboots. The
   # reboot / power-off actions back the HA power buttons (see daemon/power.go).
@@ -145,6 +149,11 @@ in
         // ids instead of the plain one — grant the whole family by prefix.
         if (action.id.indexOf("org.freedesktop.login1.reboot") == 0 ||
             action.id.indexOf("org.freedesktop.login1.power-off") == 0) {
+          return polkit.Result.YES;
+        }
+        // The zone Home Assistant pushes (daemon/timezone.go). Not the clock
+        // itself (set-time) and not NTP (set-ntp): only where the device is.
+        if (action.id == "org.freedesktop.timedate1.set-timezone") {
           return polkit.Result.YES;
         }
       }
