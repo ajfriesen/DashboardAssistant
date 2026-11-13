@@ -1,6 +1,7 @@
 """Unit tests for bench.py's image handling — no bench, no board, no network."""
 
 import os
+import re
 
 import pytest
 
@@ -209,3 +210,59 @@ def test_a_local_resource_is_not_mistaken_for_a_remote_one():
 
 def test_a_target_with_no_remote_resources_at_all_reads_as_none():
     assert bench.host_resource([]) is None
+
+
+# --------------------------------------------------------------------------- #
+# Block maps: write only the blocks an image actually uses
+
+
+def _sparse_image(path, size=4 << 20):
+    """A file with data at the start and at 1 MiB, and a hole everywhere else —
+    the shape of a disko image, whose free space was never written."""
+    with open(path, "wb") as handle:
+        handle.write(b"\xaa" * 4096)
+        handle.seek(1 << 20)
+        handle.write(b"\xbb" * 4096)
+        handle.truncate(size)
+    return str(path)
+
+
+@pytest.mark.skipif(not bench.shutil.which("bmaptool"), reason="needs bmaptool")
+def test_a_block_map_is_written_beside_a_link_to_the_image(tmp_path):
+    """labgrid looks for `<image>.bmap` next to the image, and the image is in
+    the read-only Nix store — so the map goes next to a link instead."""
+    image = _sparse_image(tmp_path / "image.raw")
+
+    mapped = bench.block_mapped_image(image, cache_dir=str(tmp_path / "cache"))
+
+    assert os.path.realpath(mapped) == os.path.realpath(image)
+    assert os.path.basename(mapped) == "image.raw"
+    bmap = open(mapped + ".bmap", encoding="utf-8").read()
+    mapped_blocks = int(re.search(r"<MappedBlocksCount>\s*(\d+)", bmap)[1])
+    total_blocks = int(re.search(r"<BlocksCount>\s*(\d+)", bmap)[1])
+    assert 0 < mapped_blocks < total_blocks, (mapped_blocks, total_blocks)
+
+
+@pytest.mark.skipif(not bench.shutil.which("bmaptool"), reason="needs bmaptool")
+def test_two_images_with_the_same_name_get_their_own_maps(tmp_path):
+    """Every board image is called dashboard-assistant-rpi5.raw; only the store
+    path tells two builds apart. Sharing a map would write the wrong blocks."""
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    first = _sparse_image(tmp_path / "a" / "image.raw")
+    second = _sparse_image(tmp_path / "b" / "image.raw", size=8 << 20)
+    cache = str(tmp_path / "cache")
+
+    one = bench.block_mapped_image(first, cache_dir=cache)
+    two = bench.block_mapped_image(second, cache_dir=cache)
+
+    assert os.path.dirname(one) != os.path.dirname(two)
+    assert os.path.realpath(two) == os.path.realpath(second)
+
+
+def test_without_bmaptool_there_is_no_block_map(tmp_path, monkeypatch):
+    """No bmaptool here means no map, and the flash falls back to dd."""
+    image = _sparse_image(tmp_path / "image.raw")
+    monkeypatch.setattr(bench.shutil, "which", lambda name: None)
+
+    assert bench.block_mapped_image(image, cache_dir=str(tmp_path / "cache")) is None

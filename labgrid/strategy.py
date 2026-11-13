@@ -3,7 +3,7 @@
 Encodes the flash-and-boot dance once, so tests can just ask for what they need:
 
     off      board de-energised, console released
-    flashed  card taken by the host, image dd'd onto it, card handed to the board
+    flashed  card taken by the host, image written onto it, card handed to the board
     booted   board powered up, the whole boot captured — no login attempted
     shell    logged in over the UART
 
@@ -18,6 +18,7 @@ DashboardAssistantStrategy with labgrid's target factory.
 import enum
 
 import attr
+from labgrid.driver.usbstoragedriver import Mode
 from labgrid.factory import target_factory
 from labgrid.step import step
 from labgrid.strategy import Strategy, StrategyError
@@ -117,7 +118,17 @@ class DashboardAssistantStrategy(Strategy):
             # had to force that off; there is no such knob, or need, now.)
             # USBStorageDriver waits for the medium to enumerate after the mode
             # switch, so no sleep here.
-            self.storage.write_image(self.image)
+            #
+            # With a block map, bmaptool writes only the blocks the image uses
+            # (about two thirds of a Pi image) and verifies them; the bench host
+            # needs bmaptool for that. Without a map it is the whole-image dd.
+            import bench
+
+            mapped = bench.block_mapped_image(self.image)
+            if mapped:
+                self.storage.write_image(mapped, mode=Mode.BMAPTOOL)
+            else:
+                self.storage.write_image(self.image)
             self.target.deactivate(self.storage)
             # ...and hand the card back to the board.
             self.mux.set_mode("dut")

@@ -21,4 +21,5 @@ ha.yaml
 /labgrid/resources.yaml
 # Serial transcripts captured by `just hw-test`
 /labgrid/logs/
+/labgrid/.bmap-cache/
 __pycache__/

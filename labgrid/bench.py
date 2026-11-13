@@ -5,6 +5,7 @@ and preflight.py (run as scripts from here).
 """
 
 import glob
+import hashlib
 import json
 import os
 import re
@@ -91,6 +92,53 @@ def find_image():
     if not matches:
         return None
     return max(matches, key=os.path.getmtime)
+
+
+# Block maps for the images the bench flashes, keyed per image. Small XML files
+# and symlinks; safe to delete at any time.
+BMAP_CACHE = os.path.join(HERE, ".bmap-cache")
+
+
+def block_mapped_image(image, cache_dir=BMAP_CACHE):
+    """A path to `image` with a block map beside it, or None.
+
+    A disko image is mostly holes: the v1.2.0 Pi 5 dev image is 5.0 GiB, of
+    which 3.2 GiB is data. `bmaptool copy` writes only the mapped blocks and
+    checks each range against the map's checksum, where dd writes every byte
+    and checks nothing. labgrid's USBStorageDriver uses it when it finds
+    `<image>.bmap` beside the image, but the image sits in the read-only Nix
+    store, so the map goes beside a symlink to it instead.
+
+    Keyed by the image's real path, size and mtime, because every board image
+    has the same file name and only its store path tells two builds apart.
+    Returns None when this machine has no bmaptool or creating the map fails;
+    the caller then flashes with dd.
+    """
+    if shutil.which("bmaptool") is None:
+        return None
+    real = os.path.realpath(image)
+    stat = os.stat(real)
+    key = hashlib.sha256(
+        f"{real}\0{stat.st_size}\0{stat.st_mtime_ns}".encode()
+    ).hexdigest()[:16]
+    directory = os.path.join(cache_dir, key)
+    os.makedirs(directory, exist_ok=True)
+    link = os.path.join(directory, os.path.basename(real))
+    bmap = link + ".bmap"
+    if not os.path.islink(link):
+        os.symlink(real, link)
+    if not os.path.exists(bmap):
+        partial = bmap + ".partial"
+        done = subprocess.run(
+            ["bmaptool", "create", "-o", partial, real],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if done.returncode != 0:
+            return None
+        os.replace(partial, bmap)
+    return link
 
 
 # Where `just build-disk-image-dev` leaves the uncompressed x86_64 image. Same disko
