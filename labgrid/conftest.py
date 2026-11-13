@@ -677,9 +677,12 @@ def wired_link_down(shell):
         shell.run(f"ip link set {wire} up")
         # Give DHCP a moment to put the address back, so the next test does not
         # inherit a board that is technically up and not yet addressed.
+        # The shell's own timeout has to outlast the 60 s wait: at labgrid's
+        # default 30 s, a DHCP server slower than that failed the teardown.
         shell.run(
             f"timeout 60 sh -c 'until ip -4 addr show {wire} "
-            "| grep -q \"inet \"; do sleep 1; done'"
+            "| grep -q \"inet \"; do sleep 1; done'",
+            timeout=75,
         )
 
 

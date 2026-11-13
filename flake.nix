@@ -661,6 +661,10 @@
           # `pass` + `gnupg` pair that used to sit here backed a provider choice
           # nothing had ever actually been stored in.
           pkgs.secretspec
+          # Writes the block map that lets the bench flash only the blocks an
+          # image uses (labgrid/bench.py, block_mapped_image). The bench host
+          # needs its own bmaptool for the copy itself.
+          pkgs.bmaptool
           # `just qemu-run` boots the raw disk image, which is UEFI-only (the
           # bootloader lives in an EFI system partition), so QEMU needs firmware.
           pkgs.qemu
