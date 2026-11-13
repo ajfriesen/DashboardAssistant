@@ -244,6 +244,7 @@
       # .github/workflows/vm-tests.yml too, or it never runs on a PR.
       checks.${system} = {
         first-boot = import ./tests/first-boot.nix { inherit pkgs version; };
+        update-keeps-machine-id = import ./tests/update-keeps-machine-id.nix { inherit pkgs version; };
         vnc = import ./tests/vnc.nix { inherit pkgs version; };
 
         # Flash-wear flags on the browser command line. This is an eval-time
@@ -626,6 +627,47 @@
                     fail=1
                     ;;
                 esac
+              done
+              [ "$fail" = 0 ] || exit 1
+              touch "$out"
+            '';
+
+        # /etc/machine-id is the device's identity: the daemon derives its Home
+        # Assistant node_id from it. NixOS must never manage that file. A managed
+        # /etc file is deleted when a switch goes to a config that does not
+        # declare it, and the dev images update to the release config. That
+        # deleted the bench board's machine-id mid-update, which broke D-Bus and
+        # hung the switch. On a release image, managing it would also give every
+        # device the same identity. Dev images pin theirs on the kernel command
+        # line instead, which systemd writes into /etc/machine-id as a plain
+        # file. tests/update-keeps-machine-id.nix checks the switch itself.
+        machine-id-is-not-managed-by-nixos =
+          let
+            configs = lib.mapAttrs (_: s: s.config) self.nixosConfigurations;
+            managed = lib.attrNames (lib.filterAttrs (_: c: c.environment.etc ? "machine-id") configs);
+            devUnpinned = lib.attrNames (
+              lib.filterAttrs (
+                name: c:
+                lib.hasSuffix "-dev" name
+                && !(lib.any (p: lib.hasPrefix "systemd.machine_id=" p) c.boot.kernelParams)
+              ) configs
+            );
+          in
+          pkgs.runCommand "machine-id-is-not-managed-by-nixos"
+            {
+              managed = lib.concatStringsSep " " managed;
+              devUnpinned = lib.concatStringsSep " " devUnpinned;
+            }
+            ''
+              set -euo pipefail
+              fail=0
+              for config in $managed; do
+                echo "FAIL: $config declares environment.etc.\"machine-id\". NixOS deletes a managed /etc file when a switch goes to a config that does not declare it, so an update would wipe the device's identity. Pin a dev image's machine-id with the systemd.machine_id= kernel parameter instead." >&2
+                fail=1
+              done
+              for config in $devUnpinned; do
+                echo "FAIL: $config does not pin its machine-id with systemd.machine_id=, so every reflash of a bench board shows up in Home Assistant as a new device. See modules/dev.nix." >&2
+                fail=1
               done
               [ "$fail" = 0 ] || exit 1
               touch "$out"
