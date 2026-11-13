@@ -504,8 +504,6 @@ def test_nix_builds_outside_the_tmpfs(shell):
     # /nix filesystem. 1.0.0 pointed build-dir at the world-writable /var/tmp,
     # which Nix refuses, so every on-device build failed and every update with
     # it. A real build proves it, where reading the setting back would not.
-    _, _, code = shell.run("grep -q '^build-dir' /etc/nix/nix.conf")
-    assert code != 0, "nix.conf sets build-dir; leave it at Nix's default"
     assert shell.run_check("findmnt -no FSTYPE -T /nix/var/nix") == ["btrfs"]
     probe = (
         'derivation { name = "build-dir-probe"; system = builtins.currentSystem; '
@@ -515,6 +513,8 @@ def test_nix_builds_outside_the_tmpfs(shell):
         f"nix-build --no-out-link --option substituters '' -E '{probe}'",
         timeout=120,
     )
+    _, _, code = shell.run("grep -q '^build-dir' /etc/nix/nix.conf")
+    assert code != 0, "nix.conf sets build-dir; leave it at Nix's default"
 
 
 @pytest.mark.needs_display
