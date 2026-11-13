@@ -245,6 +245,7 @@
       checks.${system} = {
         first-boot = import ./tests/first-boot.nix { inherit pkgs version; };
         update-keeps-machine-id = import ./tests/update-keeps-machine-id.nix { inherit pkgs version; };
+        timezone = import ./tests/timezone.nix { inherit pkgs version; };
         vnc = import ./tests/vnc.nix { inherit pkgs version; };
 
         # Flash-wear flags on the browser command line. This is an eval-time
