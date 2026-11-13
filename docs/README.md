@@ -63,3 +63,5 @@ git commit --allow-empty -m "chore: release 1.1.0-rc.1" -m "Release-As: 1.1.0-rc
 ```
 
 Push it, then merge the release PR on GitHub. Versions with a SemVer hyphen go to the `pre-release/` channel.
+
+While `main` is on a pre-release, the next release PR bumps the pre-release number (`1.2.0-rc.1` → `1.2.0-rc.2`), not the version (`release-please-config.json` sets `"versioning": "prerelease"`). To go final, `Release-As: 1.2.0` the same way.
