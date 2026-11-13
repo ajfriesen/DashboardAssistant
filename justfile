@@ -465,3 +465,29 @@ options:
     sort_by(.name)[] |
     "\(.name)   (\(.type), default: \(.default))\n    \((.description // "") | gsub("[[:space:]]+";" ") | ltrimstr(" ") | if length>180 then .[0:180]+"…" else . end)\n"
   '
+
+# Cut the final release of the current candidate. release-please bumps the
+# candidate on its own (1.2.0-rc.1 -> rc.2, see release-please-config.json) and
+# never proposes a final version, so this pushes the empty `Release-As` commit
+# that makes it: 1.2.0-rc.3 -> 1.2.0. The commit is built straight on top of
+# origin/main, so it works from any branch and leaves the working tree alone.
+# Then merge the release PR it produces; the release is still held back as a
+# candidate until the bench gate passes (docs/adr/0011).
+[doc('Turn the current release candidate into its final version')]
+release-final:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  git fetch -q origin main
+  current=$(git show origin/main:.release-please-manifest.json | jq -r '.["."]')
+  case "$current" in
+    *-*) ;;
+    *) echo "main is on $current, not a release candidate — nothing to finalise" >&2; exit 1 ;;
+  esac
+  final=${current%%-*}
+  echo "origin/main is on $current; this pushes 'Release-As: $final' to main."
+  read -r -p "Push it? [y/N] " answer
+  [ "$answer" = y ] || { echo "not pushed"; exit 1; }
+  commit=$(git commit-tree "origin/main^{tree}" -p origin/main \
+    -m "chore: release $final" -m "Release-As: $final")
+  git push origin "$commit:refs/heads/main"
+  echo "pushed — release-please now retitles its PR to release $final"
