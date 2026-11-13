@@ -37,7 +37,7 @@
     }
     .hint { color: #6c7a89; font-size: .85rem; margin-top: .5rem; }
 
-    /* Read-only device info, behind the ⓘ in the corner. This is the only
+    /* Read-only device info, behind the info button in the corner. This is the only
        introspection the tablet screen offers: the old ⚙ Config panel could roll
        the system back and printed the API token; recovery now runs from Home
        Assistant. Nothing here changes the device, and nothing here is a secret. */
@@ -50,6 +50,10 @@
       cursor: pointer; touch-action: manipulation;
     }
     .infobtn:active { color: #e8edf2; }
+    /* An inline SVG, not the circled-i character it replaces: the image ships a
+       trimmed font set with no circled i, so the character drew as an empty
+       box. currentColor keeps the button's grey and its :active colour. */
+    .infobtn svg { width: 1.5rem; height: 1.5rem; }
     .panel {
       position: fixed; inset: 0; z-index: 6; overflow-y: auto;
       background: #10151c; padding: 4.5rem 6vw 3rem;
@@ -91,7 +95,7 @@
 
   <p class="hint">Tap 🏠 Home on the bar below to return to your dashboard.</p>
 
-  <button id="infoOpen" class="infobtn" type="button" aria-label="Device information">ⓘ</button>
+  <button id="infoOpen" class="infobtn" type="button" aria-label="Device information"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 11v6"/><circle cx="12" cy="7.5" r="0.6" fill="currentColor"/></svg></button>
 
   <div id="infoPanel" class="panel hidden">
     <button id="infoClose" class="infobtn" type="button" aria-label="Close">✕</button>

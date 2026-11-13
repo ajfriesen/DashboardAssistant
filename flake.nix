@@ -419,6 +419,52 @@
         # agent) and a reader in Go (the daemon), with nothing coupling them.
         # If they drift, the HA image entity silently serves nothing — and on
         # the old path it silently wore the card instead.
+        # Every character the daemon's own pages show must exist in a font the
+        # image ships. cleanup.nix trims the font set to save space, and a
+        # character none of those fonts has renders as an empty box: the ⓘ
+        # device-info button on the sponsor page did, unnoticed, because a dev
+        # machine with more fonts draws it fine. Asks fontconfig loaded with the
+        # release image's own fonts.packages, so a change on either side counts.
+        web-glyphs-have-fonts =
+          let
+            release = self.nixosConfigurations.dashboard-assistant-x86-disk.config;
+          in
+          pkgs.runCommand "web-glyphs-have-fonts"
+            {
+              web = ./daemon/web;
+              FONTCONFIG_FILE = pkgs.makeFontsConf { fontDirectories = release.fonts.packages; };
+              nativeBuildInputs = [
+                pkgs.fontconfig
+                pkgs.python3
+              ];
+            }
+            ''
+              set -euo pipefail
+              export HOME=$TMPDIR
+              python3 - <<'PY'
+              import os, pathlib, subprocess, sys, unicodedata
+              chars = {}
+              for f in pathlib.Path(os.environ["web"]).rglob("*.html"):
+                  for ch in f.read_text():
+                      cp = ord(ch)
+                      # ASCII is in every font; variation selectors and joiners
+                      # modify a neighbour and have no glyph of their own.
+                      if cp < 128 or 0xFE00 <= cp <= 0xFE0F or cp in (0x200D, 0x200C):
+                          continue
+                      chars.setdefault(ch, set()).add(f.name)
+              missing = []
+              for ch, files in sorted(chars.items()):
+                  out = subprocess.run(["fc-list", f":charset={ord(ch):x}", "family"],
+                                       capture_output=True, text=True, check=True).stdout
+                  if not out.strip():
+                      missing.append(f"U+{ord(ch):04X} {ch} {unicodedata.name(ch, '?')} in {', '.join(sorted(files))}")
+              for m in missing:
+                  print(f"FAIL: no shipped font has {m}; it renders as an empty box. Use an inline SVG, or a character a shipped font has.", file=sys.stderr)
+              sys.exit(1 if missing else 0)
+              PY
+              touch $out
+            '';
+
         screenshot-path-agreement =
           pkgs.runCommand "screenshot-path-agreement"
             {
