@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/ajfriesen/DashboardAssistant/compare/v1.2.0-rc.2...v1.2.0) (2026-11-13)
+
+
+### Miscellaneous
+
+* release 1.2.0 ([0f033b7](https://github.com/ajfriesen/DashboardAssistant/commit/0f033b714dfaa802fb76270a689b79a7809571ea))
+
 ## [1.2.0-rc.2](https://github.com/ajfriesen/DashboardAssistant/compare/v1.2.0-rc.1...v1.2.0-rc.2) (2026-11-13)
 
 
