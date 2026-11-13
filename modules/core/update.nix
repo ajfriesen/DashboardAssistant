@@ -204,6 +204,20 @@ in
       # tag self-labels correctly.
       system.nixos.tags = [ "dashboard-assistant-${version}" ];
 
+      # Let a device download the whole system from the binary cache, so an
+      # update builds nothing on the device. NixOS marks the system toplevel
+      # `allowSubstitutes = false` (it is cheap to build), so without this every
+      # update builds the toplevel and the few dozen small files under it
+      # locally, even though CI has pushed all of it (.github/workflows/boards.yml).
+      #
+      # This has to be set in the release being *updated to*: the update runs on
+      # the device's old script and old nix.conf. 1.0.0 and 1.1.x point Nix's
+      # build-dir at the world-writable /var/tmp, which Nix refuses, so those
+      # devices cannot build anything at all — downloading the finished toplevel
+      # is their only way onto a newer release. Checked by
+      # updates-need-no-local-build in flake.nix.
+      system.systemBuilderArgs.allowSubstitutes = true;
+
       # Merges with the daemon service's other environment settings (daemon.nix).
       systemd.services.dashboard-assistant-daemon.environment = {
         UPDATE_REPO = cfg.repo;

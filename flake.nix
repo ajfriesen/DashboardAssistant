@@ -537,6 +537,53 @@
               [ "$fail" = 0 ] || exit 1
               touch "$out"
             '';
+
+        # An update must not need to build anything on the device. A device runs
+        # its *own* update script with its *own* nix.conf, so a release cannot
+        # repair a broken build setting on the devices updating to it — it can
+        # only avoid needing a build at all. NixOS marks the system toplevel
+        # `allowSubstitutes = false`, which makes every update build it (and the
+        # few dozen small files under it) locally even when the cache has all of
+        # it. 1.0.0 and 1.1.x point build-dir at the world-writable /var/tmp,
+        # which Nix refuses, so on those devices any local build fails the
+        # update. See modules/core/update.nix.
+        updates-need-no-local-build =
+          let
+            boards = {
+              x86 = self.nixosConfigurations.dashboard-assistant-x86-disk.config;
+              rpi4 = self.nixosConfigurations.dashboard-assistant-rpi4.config;
+              rpi5 = self.nixosConfigurations.dashboard-assistant-rpi5.config;
+            };
+            substitutable = lib.mapAttrs (
+              _: c: lib.boolToString (c.system.build.toplevel.drvAttrs.allowSubstitutes or true)
+            ) boards;
+            buildDir = lib.mapAttrs (_: c: toString (c.nix.settings.build-dir or "")) boards;
+          in
+          pkgs.runCommand "updates-need-no-local-build"
+            {
+              substitutable = lib.concatStringsSep " " (lib.mapAttrsToList (b: v: "${b}:${v}") substitutable);
+              buildDirs = lib.concatStringsSep " " (lib.mapAttrsToList (b: v: "${b}:${v}") buildDir);
+            }
+            ''
+              set -euo pipefail
+              fail=0
+              for board in $substitutable; do
+                [ "''${board#*:}" = true ] || {
+                  echo "FAIL: the ''${board%%:*} system toplevel is not substitutable — every update would build it on the device, and a device on 1.0.0 or 1.1.x cannot build anything. See system.systemBuilderArgs in modules/core/update.nix." >&2
+                  fail=1
+                }
+              done
+              for board in $buildDirs; do
+                case "''${board#*:}" in
+                  /tmp | /tmp/* | /var/tmp | /var/tmp/*)
+                    echo "FAIL: the ''${board%%:*} image sets nix build-dir to the world-writable ''${board#*:}, which Nix refuses — every on-device build fails. Leave build-dir at Nix's default (/nix/var/nix/builds)." >&2
+                    fail=1
+                    ;;
+                esac
+              done
+              [ "$fail" = 0 ] || exit 1
+              touch "$out"
+            '';
       };
 
       devShells.${system}.default = pkgs.mkShell {

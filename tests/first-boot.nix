@@ -91,9 +91,14 @@ pkgs.testers.runNixOSTest {
     # ...and Nix must not build inside it. One substituter miss during an
     # on-device update would otherwise try to build in RAM on a 2 GB Pi and die
     # with ENOSPC mid-switch — the one way this work could brick a device
-    # rather than just wear it.
-    machine.succeed("grep -qx 'build-dir = /var/tmp' /etc/nix/nix.conf")
-    assert machine.succeed("nix config show build-dir").strip() == "/var/tmp"
+    # rather than just wear it. Nix's own default build-dir
+    # (/nix/var/nix/builds) is on the /nix filesystem, so it is left alone:
+    # 1.0.0 pointed it at the world-writable /var/tmp, which Nix refuses, and
+    # every on-device build — so every update — failed.
+    # A real build, not a read-back of the setting: that is what failed.
+    probe = 'derivation { name = "build-dir-probe"; system = builtins.currentSystem; builder = "/bin/sh"; args = [ "-c" "echo ok > $out" ]; }'
+    machine.succeed(f"nix-build --no-out-link --option substituters \"\" -E '{probe}'")
+    machine.fail("grep -q '^build-dir' /etc/nix/nix.conf")
 
     # Reclaim tuning for a box whose only swap is compressed RAM
     # (modules/core/memory.nix). Not a flash saving in itself, but it is what
