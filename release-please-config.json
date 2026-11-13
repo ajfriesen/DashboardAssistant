@@ -4,9 +4,6 @@
   "packages": {
     ".": {
       "release-type": "simple",
-      "versioning": "prerelease",
-      "prerelease": true,
-      "prerelease-type": "rc.1",
       "package-name": "dashboard-assistant-os",
       "include-component-in-tag": false,
       "changelog-path": "CHANGELOG.md",
