@@ -227,13 +227,16 @@ in
       # with ENOSPC in the middle of a switch, on a wall-mounted device. That is the
       # one way this module could turn a wear optimisation into a brick.
       #
-      # `build-dir` is Nix's own setting for exactly this (>= 2.27; this flake pins
-      # 2.34.8) and is narrower than the usual folk remedy of overriding TMPDIR on
-      # nix-daemon.service — it moves build directories only, not every tool's
-      # scratch space. /var/tmp is on the same btrfs filesystem as /nix, so nix's
-      # min-free / max-free floor (modules/core/storage.nix) still sees the same
-      # free-space pool, and systemd's own tmp.conf ages /var/tmp at 30 days.
-      nix.settings.build-dir = "/var/tmp";
+      # Nix no longer builds there: since 2.30 its default build-dir is
+      # /nix/var/nix/builds, root-owned and on the same btrfs filesystem as /nix,
+      # so nix's min-free / max-free floor (modules/core/storage.nix) sees the
+      # same free-space pool. So build-dir is deliberately left at that default.
+      #
+      # Do NOT point it at /var/tmp, which 1.0.0 and 1.1.x did: /var/tmp is
+      # world-writable, Nix refuses a world-writable build directory ("Path
+      # "/var/tmp" is world-writable or a symlink"), and every on-device build
+      # then fails — which made every update from those releases fail. The
+      # updates-need-no-local-build check in flake.nix guards this.
 
       # Hourly, matching armbian-ramlog's default. OnBootSec gives the boot a chance
       # to settle first (and makes the first sync land while a freshly-flashed board
