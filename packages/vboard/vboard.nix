@@ -60,6 +60,14 @@ stdenv.mkDerivation (finalAttrs: {
     # The kiosk's OSK toggle sets VBOARD_FONT_PX on narrow outputs.
     substituteInPlace vboard/window.py \
       --replace-fail 'font-size: 19px;' 'font-size: {int(os.environ.get("VBOARD_FONT_PX", "19"))}px;'
+
+    # Make the default layout env-tunable (VBOARD_LAYOUT, default the upstream
+    # "en"). The kiosk deletes settings.conf before every launch, and vboard only
+    # reads a layout from it alongside its colour settings, so the default is
+    # the one place the kiosk can set it. The kiosk sets it from the device
+    # locale, matching Sway's keyboard layout (kiosk.nix, regionEnv).
+    substituteInPlace vboard/constants.py \
+      --replace-fail 'DEFAULT_KEYBOARD_LAYOUT = "en"' 'DEFAULT_KEYBOARD_LAYOUT = __import__("os").environ.get("VBOARD_LAYOUT", "en")'
   '';
 
   nativeBuildInputs = [

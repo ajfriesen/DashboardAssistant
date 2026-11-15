@@ -76,7 +76,11 @@
   # `unavailable` forever. The profiles/minimal.nix this used to cite does not
   # touch networking.wireless at all.
 
-  time.timeZone = "UTC";
+  # null, not "UTC": NixOS then leaves /etc/localtime to systemd-timedated
+  # instead of pinning it, so the daemon can set the timezone Home Assistant
+  # sends (daemon/region.go). The daemon puts it back on UTC when nothing was
+  # sent, e.g. after a factory reset.
+  time.timeZone = null;
 
   # Shared group for the state dir under /var/lib/dashboard-assistant: the daemon
   # (dashboard-assistant) writes runtime.env, the kiosk reads it. See daemon.nix / kiosk.nix.

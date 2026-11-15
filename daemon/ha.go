@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -115,6 +116,13 @@ func (h *HAHub) SetVNC(v *VNC) {
 	v.SetObserver(func() { h.broadcast() })
 }
 
+// SetRegion gives the hub the timezone and locale, set after construction like
+// SetScreensaver, and wires its observer to the SSE broadcast.
+func (h *HAHub) SetRegion(r *Region) {
+	h.region = r
+	r.SetObserver(func() { h.broadcast() })
+}
+
 // stateSnapshot is the full device state the API serves (GET /state) and pushes
 // over SSE. It folds in every value the MQTT bridge used to publish as separate
 // topics; the integration maps each field to an HA entity.
@@ -180,8 +188,11 @@ type stateSnapshot struct {
 	// Present flags on battery/temperature).
 	Sendspin *sendspinState `json:"sendspin,omitempty"`
 	// Omitted entirely on builds without VNC, like Sendspin.
-	VNC  *vncState `json:"vnc,omitempty"`
-	Host struct {
+	VNC *vncState `json:"vnc,omitempty"`
+	// Absent on builds before it, which is how the integration knows whether
+	// it can set them.
+	Region RegionPrefs `json:"region"`
+	Host   struct {
 		IP     string `json:"ip"`
 		Uptime int    `json:"uptime"`
 		CPU    int    `json:"cpu"`
@@ -254,9 +265,10 @@ type HAHub struct {
 	snd   *Sendspin
 	// Set after construction (SetNetwork): factory reset needs to drop saved Wi-Fi
 	// profiles, and the two reset paths must not drift apart on that.
-	nm  *NetworkManager
-	scr *Screensaver
-	vnc *VNC
+	nm     *NetworkManager
+	scr    *Screensaver
+	vnc    *VNC
+	region *Region
 
 	mu   sync.Mutex
 	subs map[chan []byte]struct{}
@@ -401,6 +413,7 @@ func (h *HAHub) snapshot() stateSnapshot {
 	}
 
 	s.VNC = h.vncSnapshot()
+	s.Region = h.region.Prefs()
 
 	s.Host.IP = primaryIP()
 	if up, err := readUptime(); err == nil {
@@ -483,6 +496,7 @@ func (h *HAHub) routes() http.Handler {
 	mux.HandleFunc("/api/ha/screensaver", h.auth(h.handleScreensaver))
 	mux.HandleFunc("/api/ha/sendspin", h.auth(h.handleSendspin))
 	mux.HandleFunc("/api/ha/vnc", h.auth(h.handleVNC))
+	mux.HandleFunc("/api/ha/region", h.auth(h.handleRegion))
 	mux.HandleFunc("/api/ha/power", h.auth(h.handlePower))
 	mux.HandleFunc("/api/ha/reset", h.auth(h.handleReset))
 	mux.HandleFunc("/api/ha/rollback", h.auth(h.handleRollback))
@@ -843,6 +857,25 @@ func (h *HAHub) handlePages(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.pages.Replace(req.Pages); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, h.snapshot())
+}
+
+// handleRegion sets the timezone and locale ({"timezone": "Europe/Berlin",
+// "locale": "de-DE"}), which Home Assistant sends from its own settings. A
+// timezone or locale the device does not recognise is refused with 400.
+func (h *HAHub) handleRegion(w http.ResponseWriter, r *http.Request) {
+	var req RegionPrefs
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if err := h.region.Set(req); err != nil {
+		if errors.Is(err, errBadRegion) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		writeErr(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, h.snapshot())
