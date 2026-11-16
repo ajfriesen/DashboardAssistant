@@ -413,6 +413,24 @@
               touch "$out"
             '';
 
+        # vboard draws labels, but xkb decides what a key types, so the labels of
+        # every layout the kiosk pairs with an xkb layout (kiosk.nix, regionEnv;
+        # keep the pairs below in step) must match it key for key.
+        vboard-layouts =
+          pkgs.runCommand "vboard-layouts"
+            {
+              nativeBuildInputs = [
+                pkgs.libxkbcommon
+                pkgs.python3
+              ];
+            }
+            ''
+              python3 -I ${./packages/vboard/check-layouts.py} \
+                ${self.packages.${system}.vboard}/share/vboard/vboard/layouts \
+                en=us de=de fr=fr sv=se
+              touch "$out"
+            '';
+
         # Every board on one nixpkgs (docs/adr/0008). The VM tests above only
         # ever evaluate x86, so a board quietly put back on another channel —
         # a second nixpkgs input wired into mkRpi4System, say — would pass every

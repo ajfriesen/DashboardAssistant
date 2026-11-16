@@ -112,7 +112,8 @@ let
   #                       language from this (underscores, like gettext)
   #   XKB_DEFAULT_LAYOUT  Sway's keyboard layout; vboard injects physical
   #                       keycodes, so this is what decides the typed character
-  #   VBOARD_LAYOUT       vboard's key labels, which assume that layout
+  #   VBOARD_LAYOUT       vboard's key labels, which assume that layout; the
+  #                       vboard-layouts check (flake.nix) holds them to it
   # Only languages vboard has a layout for get one; the rest stay on US. So does
   # Russian, deliberately: the ru layout has no Latin letters, so URLs and
   # passwords could no longer be typed. DA_REGION exists for the kiosk-region
