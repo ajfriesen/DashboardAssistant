@@ -113,7 +113,7 @@ class DashboardAssistantStrategy(Strategy):
             self.target.activate(self.storage)
             # Whole-image dd, partition table included. disko emits a single
             # uncompressed .raw, which is what write_image needs — it does not
-            # decompress, so it would happily dd a .zst onto the card verbatim.
+            # decompress, so it would happily dd a .xz onto the card verbatim.
             # (The sd-image builder used to produce .img.zst and the dev image
             # had to force that off; there is no such knob, or need, now.)
             # USBStorageDriver waits for the medium to enumerate after the mode

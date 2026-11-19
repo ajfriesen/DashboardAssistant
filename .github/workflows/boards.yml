@@ -35,9 +35,9 @@ name: boards
 # R2 layout. The board — x86_64, rpi4, rpi5 — is both the directory and part of
 # the filename, so an image stays identifiable once it is downloaded and out of
 # its folder:
-#   release/<board>/dashboard-assistant-<board>-<version>.raw.zst  (immutable, per release)
+#   release/<board>/dashboard-assistant-<board>-<version>.raw.xz   (immutable, per release)
 #   pre-release/<board>/…                                          (same, for a hyphened SemVer tag)
-#   dev/<board>/dashboard-assistant-<board>-<commit>.raw.zst       (branch build)
+#   dev/<board>/dashboard-assistant-<board>-<commit>.raw.xz        (branch build)
 #
 # There is deliberately no `latest` object. Publishing an object never makes it
 # the image people flash: a release is held back as a candidate until the
