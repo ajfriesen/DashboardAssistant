@@ -36,13 +36,13 @@ let
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "vboard";
-  version = "2.5.0";
+  version = "2.7.0";
 
   src = fetchFromGitHub {
     owner = "archisman-panigrahi";
     repo = "vboard";
     rev = "v${finalAttrs.version}";
-    hash = "sha256-oM2i+dB3i8Frc41Db1WCN5DhD6lvQ3aP+VwQXeCsHxc=";
+    hash = "sha256-Pl3xLzaFscLX7myOqE/hIvfYwIy5NbfxN2Ur4K1f3nc=";
   };
 
   # Nix installs meson projects straight into $out (no DESTDIR), so the upstream
@@ -61,6 +61,16 @@ stdenv.mkDerivation (finalAttrs: {
     # The kiosk's OSK toggle sets VBOARD_FONT_PX on narrow outputs.
     substituteInPlace vboard/window.py \
       --replace-fail 'font-size: 19px;' 'font-size: {int(os.environ.get("VBOARD_FONT_PX", "19"))}px;'
+
+    # No links out of the keyboard. Since 2.6 its on-screen Options dialog
+    # (☰ → Options) has "Report bugs", which opens the issue tracker in the
+    # default browser, and "About", whose dialog links to the homepage. On a
+    # kiosk either would hand a guest a browser window outside the dashboard.
+    # The buttons stay; they just open nothing.
+    substituteInPlace vboard/window.py \
+      --replace-fail 'Gio.AppInfo.launch_default_for_uri(BUG_REPORT_URL, None)' 'pass' \
+      --replace-fail 'about_dialog.set_website("https://github.com/archisman-panigrahi/vboard")' 'pass' \
+      --replace-fail 'about_dialog.set_website_label("Homepage")' 'pass'
 
     # Make the default layout env-tunable (VBOARD_LAYOUT, default the upstream
     # "en"). The kiosk deletes settings.conf before every launch, and vboard only
