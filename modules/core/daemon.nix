@@ -51,6 +51,12 @@ let
     # expected hash from the build failure.
     vendorHash = "sha256-19KTCNhoN6RqDYQwhP+cHwLE6wTvhZsJaYBSB8UAYFs=";
 
+    # The tests check zone names against the system zoneinfo (zoneinfoDir in
+    # daemon/config.go), which the build sandbox has none of.
+    preCheck = ''
+      export ZONEINFO=${pkgs.tzdata}/share/zoneinfo
+    '';
+
     meta.mainProgram = "dashboard-assistant-api";
   };
 in
@@ -130,7 +136,8 @@ in
   # Let the daemon manage *only* the greetd session unit (the Sway kiosk) and the
   # dashboard-assistant-rollback@ recovery units — nothing else on the system. Restarting greetd
   # relaunches the kiosk; starting dashboard-assistant-rollback@<n> rolls back and reboots. The
-  # reboot / power-off actions back the HA power buttons (see daemon/power.go).
+  # reboot / power-off actions back the HA power buttons (see daemon/power.go), and
+  # set-timezone the timezone Home Assistant sends (daemon/region.go).
   security.polkit.extraConfig = ''
     polkit.addRule(function(action, subject) {
       if (subject.user == "dashboard-assistant") {
@@ -147,6 +154,8 @@ in
             action.id.indexOf("org.freedesktop.login1.power-off") == 0) {
           return polkit.Result.YES;
         }
+        // The timezone Home Assistant sends (daemon/region.go).
+        if (action.id == "org.freedesktop.timedate1.set-timezone") return polkit.Result.YES;
       }
     });
   '';

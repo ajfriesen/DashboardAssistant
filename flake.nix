@@ -366,6 +366,96 @@
               touch "$out"
             '';
 
+        # The device locale as the kiosk turns it into Chromium's language and the
+        # keyboard layout, by running the real snippet against the region.json the
+        # daemon writes (daemon/region.go). Sway's layout and vboard's key labels
+        # must agree, or the keyboard types other characters than it shows.
+        # Eval-time for the same reason as kiosk-urls: no VM test starts the
+        # kiosk session.
+        kiosk-region =
+          let
+            kiosk = self.nixosConfigurations.dashboard-assistant-x86-disk.config.dashboardAssistant.kiosk;
+          in
+          pkgs.runCommand "kiosk-region"
+            {
+              inherit (kiosk) launcher region languagePrefs session;
+              nativeBuildInputs = [ pkgs.jq ];
+            }
+            ''
+              set -euo pipefail
+              fail=0
+              expect() {
+                got=$(env -i DA_REGION="$2" ${pkgs.runtimeShell} -c \
+                  '. "$0"; printf "%s|%s|%s|%s" "$LOCALE" "$LANGUAGE" "$XKB_DEFAULT_LAYOUT" "$VBOARD_LAYOUT"' "$region")
+                [ "$got" = "$3" ] || {
+                  echo "FAIL: $1: got '$got', want '$3'" >&2
+                  fail=1
+                }
+              }
+              locale() { printf '{"timezone":"UTC","locale":"%s"}\n' "$1" > region.json; }
+
+              expect "nothing set yet" /nonexistent "en-US|en_US|us|en"
+              locale de-DE; expect "German" region.json "de-DE|de_DE|de|de"
+              locale de-AT; expect "German in Austria" region.json "de-AT|de_AT|de|de"
+              locale fr; expect "French" region.json "fr|fr|fr|fr"
+              locale sv-SE; expect "Swedish, whose xkb layout is se" region.json "sv-SE|sv_SE|se|sv"
+              locale ru-RU; expect "Russian keeps a Latin keyboard" region.json "ru-RU|ru_RU|us|en"
+              locale nl-NL; expect "a language vboard has no layout for" region.json "nl-NL|nl_NL|us|en"
+
+              # Chromium regenerates intl.accept_languages from
+              # intl.selected_languages at startup, and navigator.language (so
+              # Home Assistant's language) follows them: writing only the first
+              # leaves Home Assistant in English (seen on the bench).
+              echo '{"intl":{"accept_languages":"en-US,en","selected_languages":"en-US,en"},"other":1}' > Preferences
+              env -i LOCALE=de-DE "$languagePrefs" Preferences
+              got=$(jq -c '[.intl.accept_languages, .intl.selected_languages, .other]' Preferences)
+              [ "$got" = '["de-DE","de-DE",1]' ] || {
+                echo "FAIL: the profile's languages after a switch to de-DE: got $got" >&2
+                fail=1
+              }
+              env -i LOCALE=de-DE "$languagePrefs" missing || {
+                echo "FAIL: a profile Chromium has not created yet must be left alone" >&2
+                fail=1
+              }
+              [ ! -e missing ] || {
+                echo "FAIL: a Preferences file was created where Chromium had none" >&2
+                fail=1
+              }
+              grep -qF "$languagePrefs" "$launcher" || {
+                echo "FAIL: the kiosk launcher no longer writes the device locale into Chromium's profile." >&2
+                fail=1
+              }
+
+              grep -qF "$region" "$launcher" || {
+                echo "FAIL: the kiosk launcher no longer starts Chromium in the device locale." >&2
+                fail=1
+              }
+              grep -qF "$region" "$session" || {
+                echo "FAIL: the kiosk session no longer starts Sway and vboard in the device's keyboard layout." >&2
+                fail=1
+              }
+              [ "$fail" = 0 ] || exit 1
+              touch "$out"
+            '';
+
+        # vboard draws labels, but xkb decides what a key types, so the labels of
+        # every layout the kiosk pairs with an xkb layout (kiosk.nix, regionEnv;
+        # keep the pairs below in step) must match it key for key.
+        vboard-layouts =
+          pkgs.runCommand "vboard-layouts"
+            {
+              nativeBuildInputs = [
+                pkgs.libxkbcommon
+                pkgs.python3
+              ];
+            }
+            ''
+              python3 -I ${./packages/vboard/check-layouts.py} \
+                ${self.packages.${system}.vboard}/share/vboard/vboard/layouts \
+                en=us de=de fr=fr sv=se
+              touch "$out"
+            '';
+
         # Every board on one nixpkgs (docs/adr/0008). The VM tests above only
         # ever evaluate x86, so a board quietly put back on another channel —
         # a second nixpkgs input wired into mkRpi4System, say — would pass every

@@ -110,6 +110,8 @@ func main() {
 	// VNC is never on after a daemon start. A wayvnc a previous daemon started
 	// would have no timer and a password nobody can see any more, so stop it.
 	vnc.Reset()
+	region := NewRegion()
+	hub.SetRegion(region)
 	srv := &server{nm: nm, ha: hub, pages: pages}
 
 	// The Sendspin player's unit has no install target — this daemon owns its
@@ -117,6 +119,9 @@ func main() {
 	// In a goroutine because it talks to systemd over D-Bus and must not delay
 	// the listeners below.
 	go snd.Reconcile()
+	// Same for the timezone: region.json is the one copy, and a factory reset
+	// deletes it to put the device back on UTC.
+	go region.Reconcile()
 
 	// Home Assistant API: an authenticated LAN listener the first-party HACS
 	// integration polls and subscribes to (SSE). Runs on its own port, separate

@@ -24,6 +24,7 @@
   librsvg,
   libayatana-appindicator,
   python3,
+  jq,
 }:
 
 let
@@ -70,9 +71,27 @@ stdenv.mkDerivation (finalAttrs: {
       --replace-fail 'Gio.AppInfo.launch_default_for_uri(BUG_REPORT_URL, None)' 'pass' \
       --replace-fail 'about_dialog.set_website("https://github.com/archisman-panigrahi/vboard")' 'pass' \
       --replace-fail 'about_dialog.set_website_label("Homepage")' 'pass'
+
+    # Make the default layout env-tunable (VBOARD_LAYOUT, default the upstream
+    # "en"). The kiosk deletes settings.conf before every launch, and vboard only
+    # reads a layout from it alongside its colour settings, so the default is
+    # the one place the kiosk can set it. The kiosk sets it from the device
+    # locale, matching Sway's keyboard layout (kiosk.nix, regionEnv).
+    substituteInPlace vboard/constants.py \
+      --replace-fail 'DEFAULT_KEYBOARD_LAYOUT = "en"' 'DEFAULT_KEYBOARD_LAYOUT = __import__("os").environ.get("VBOARD_LAYOUT", "en")'
+
+    # Upstream's French layout labels the bottom row one key off from AZERTY:
+    # no key shows "w" (xkb fr types it from Z), and M , . / show what the key
+    # to their right types. xkb fr also has nothing on Shift+². Relabel them to
+    # what xkb fr types, which the vboard-layouts check verifies key by key.
+    jq '.labels += {"Z": "w", "M": ",", ",": ";", ".": ":", "/": "!"}
+      | .shifted += {"M": "?", ",": ".", ".": "/", "/": "§"}
+      | del(.shifted["`"])' vboard/layouts/fr.json > fr.json
+    mv fr.json vboard/layouts/fr.json
   '';
 
   nativeBuildInputs = [
+    jq
     meson
     ninja
     pkg-config

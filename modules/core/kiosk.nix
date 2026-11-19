@@ -101,6 +101,54 @@ let
     : "''${FIRST_PAGE:=$HA_URL}"
   '';
 
+  # The locale Home Assistant set (daemon/region.go writes region.json), and
+  # what follows from it. Sourced by the session (sessionStart), so Sway and the
+  # on-screen keyboard start in the matching layout, and by the launcher, which
+  # starts Chromium in it. A locale change restarts the whole session, so both
+  # re-read it. Without a region.json the device is on en-US, which also undoes
+  # an earlier locale after a factory reset.
+  #   LOCALE              BCP 47 tag, e.g. de-DE
+  #   LANGUAGE            the same for Chromium, which on Linux takes its UI
+  #                       language from this (underscores, like gettext)
+  #   XKB_DEFAULT_LAYOUT  Sway's keyboard layout; vboard injects physical
+  #                       keycodes, so this is what decides the typed character
+  #   VBOARD_LAYOUT       vboard's key labels, which assume that layout; the
+  #                       vboard-layouts check (flake.nix) holds them to it
+  # Only languages vboard has a layout for get one; the rest stay on US. So does
+  # Russian, deliberately: the ru layout has no Latin letters, so URLs and
+  # passwords could no longer be typed. DA_REGION exists for the kiosk-region
+  # check.
+  # Writes the device locale into Chromium's profile: $1 is its Preferences
+  # file, LOCALE comes from regionEnv. Run by the launcher while the browser is
+  # down; a profile not created yet is left for Chromium to seed.
+  #
+  # Both keys, because selected_languages is the one Chromium keeps: at startup
+  # it rebuilds accept_languages from it, so writing accept_languages alone is
+  # undone before the first page loads. Together they are navigator.language
+  # and the Accept-Language header, which is what Home Assistant's frontend
+  # picks its language from (the kiosk-region check).
+  languagePrefs = pkgs.writeShellScript "ha-kiosk-language-prefs" ''
+    prefs=$1
+    [ -f "$prefs" ] || exit 0
+    ${lib.getExe pkgs.jq} --arg l "$LOCALE" '.intl.accept_languages = $l | .intl.selected_languages = $l' \
+      "$prefs" > "$prefs.tmp" && ${pkgs.coreutils}/bin/mv "$prefs.tmp" "$prefs" \
+      || ${pkgs.coreutils}/bin/rm -f "$prefs.tmp"
+  '';
+
+  regionEnv = pkgs.writeText "ha-kiosk-region.sh" ''
+    LOCALE=$(${lib.getExe pkgs.jq} -r '.locale // empty' \
+      "''${DA_REGION:-/var/lib/dashboard-assistant/region.json}" 2>/dev/null || true)
+    : "''${LOCALE:=en-US}"
+    LANGUAGE=$(echo "$LOCALE" | ${pkgs.coreutils}/bin/tr - _)
+    case "''${LOCALE%%-*}" in
+      de) XKB_DEFAULT_LAYOUT=de VBOARD_LAYOUT=de ;;
+      fr) XKB_DEFAULT_LAYOUT=fr VBOARD_LAYOUT=fr ;;
+      sv) XKB_DEFAULT_LAYOUT=se VBOARD_LAYOUT=sv ;;
+      *) XKB_DEFAULT_LAYOUT=us VBOARD_LAYOUT=en ;;
+    esac
+    export LOCALE LANGUAGE XKB_DEFAULT_LAYOUT VBOARD_LAYOUT
+  '';
+
   kioskLauncher = pkgs.writeShellScript "ha-kiosk-launch" ''
     set -eu
     . ${kioskUrls}
@@ -213,6 +261,14 @@ let
     # measurably, pin it back with MESA_SHADER_CACHE_DIR=$HOME/.cache/mesa.
     export XDG_CACHE_HOME="''${XDG_RUNTIME_DIR:-/tmp}/kiosk-cache"
     ${pkgs.coreutils}/bin/mkdir -p "$XDG_CACHE_HOME"
+
+    # Chromium's language (regionEnv). LANGUAGE sets its UI language and Intl's
+    # default; navigator.language, and so Home Assistant's frontend, follow the
+    # profile's language list instead, which Chromium seeds once when it creates
+    # the profile. So a later change is written into it while the browser is
+    # down (it was stopped above).
+    . ${regionEnv}
+    ${languagePrefs} "$chromeProfile/Default/Preferences"
 
     # --disable-gpu-shader-disk-cache: Chromium's GPU shader caches (GPUCache,
     # DawnGraphiteCache, DawnWebGPUCache) live in the PROFILE, not under
@@ -1356,7 +1412,13 @@ let
   # dbus-run-session gives the whole session a bus, which vboard needs to
   # register its Gtk.Application on (and for its tray, if any); greetd starts it
   # as the kiosk user with no login prompt.
-  sessionCommand = "${pkgs.dbus}/bin/dbus-run-session -- ${pkgs.sway}/bin/sway --config ${swayConfig}";
+  # sessionStart reads the locale first, so Sway's keyboard layout and every
+  # child of the session (vboard, the launcher) inherit it.
+  sessionStart = pkgs.writeShellScript "ha-kiosk-session" ''
+    . ${regionEnv}
+    exec ${pkgs.dbus}/bin/dbus-run-session -- ${pkgs.sway}/bin/sway --config ${swayConfig}
+  '';
+  sessionCommand = "${sessionStart}";
 in
 {
   options.dashboardAssistant.kiosk.autoLogin = lib.mkOption {
@@ -1393,6 +1455,27 @@ in
     description = "The shell snippet that resolves the kiosk's HA_URL and FIRST_PAGE, for checks to run.";
   };
 
+  options.dashboardAssistant.kiosk.region = lib.mkOption {
+    type = lib.types.package;
+    internal = true;
+    readOnly = true;
+    description = "The shell snippet that turns the device locale into the kiosk's language and keyboard layout, for checks to run.";
+  };
+
+  options.dashboardAssistant.kiosk.languagePrefs = lib.mkOption {
+    type = lib.types.package;
+    internal = true;
+    readOnly = true;
+    description = "The script that writes the device locale into Chromium's profile, for checks to run.";
+  };
+
+  options.dashboardAssistant.kiosk.session = lib.mkOption {
+    type = lib.types.package;
+    internal = true;
+    readOnly = true;
+    description = "The script greetd starts the kiosk session with, for checks to inspect.";
+  };
+
   options.dashboardAssistant.kiosk.brightness.method = lib.mkOption {
     type = lib.types.enum [
       "auto"
@@ -1414,6 +1497,9 @@ in
   config = {
     dashboardAssistant.kiosk.launcher = kioskLauncher;
     dashboardAssistant.kiosk.urls = kioskUrls;
+    dashboardAssistant.kiosk.region = regionEnv;
+    dashboardAssistant.kiosk.languagePrefs = languagePrefs;
+    dashboardAssistant.kiosk.session = sessionStart;
 
     programs.sway.enable = true;
 

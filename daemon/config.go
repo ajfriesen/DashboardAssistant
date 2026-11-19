@@ -66,6 +66,14 @@ var (
 	tlsKeyFile      = stateDir + "/tls-key.pem"      // its private key (0600 — nothing else on the device reads this)
 	screensaverFifo = stateDir + "/screensaver.fifo" // daemon writes "start <name>"/"stop"; in-session agent overlays the saver over CDP
 	screensaverFile = stateDir + "/screensaver.json" // persisted screen saver choice + idle timeout (minutes)
+	regionFile      = stateDir + "/region.json"      // timezone + locale from Home Assistant; the kiosk launcher reads the locale
+
+	// The system's IANA zones, the directory systemd-timedated checks a
+	// SetTimezone against (NixOS points it at /etc/zoneinfo). The daemon reads
+	// the same directory, so it refuses exactly the zones timedated would.
+	// ZONEINFO is Go's own override; the package build points it at tzdata for
+	// the tests, which run where /etc/zoneinfo does not exist.
+	zoneinfoDir = envOr("ZONEINFO", "/etc/zoneinfo")
 
 	// VNC (see vnc.go). The FIFO and the wayvnc config path must match
 	// modules/core/vnc.nix. The config holds the session password, so it lives on
@@ -249,6 +257,8 @@ func provisioningStatePaths() []string {
 	return []string{
 		markerFile, runtimeEnv, tokenFile, apiTokenFile, pairedMarker,
 		onlineMarker, urlsFile, zoomFile, themeFile, rotationFile, screensaverFile,
+		// The timezone goes back to UTC on the next start (Region.Reconcile).
+		regionFile,
 		// The recorded seed-file hash goes too, so a reset device re-imports
 		// the card it is sitting on instead of ignoring it. Without this a
 		// factory reset would appear to work and then come back unprovisioned

@@ -189,6 +189,29 @@ pkgs.testers.runNixOSTest {
     # nothing else on the device needs it.
     machine.succeed("test \"$(stat -c %a /var/lib/dashboard-assistant/tls-key.pem)\" = 600")
 
+    # The timezone Home Assistant sends reaches the system. The unit tests cannot
+    # see this: timedated only accepts a change because time.timeZone = null,
+    # and the unprivileged daemon may only ask because of its polkit rule.
+    def timezone():
+        return machine.succeed("timedatectl show -p Timezone --value").strip()
+
+    def set_region(tz):
+        return machine.succeed(
+            "curl -sS -o /tmp/region.json -w '%{http_code}' -X POST"
+            " http://localhost:8081/api/ha/region"
+            " -H \"Authorization: Bearer $(cat /var/lib/dashboard-assistant/api-token)\""
+            f" -d '{{\"timezone\": \"{tz}\", \"locale\": \"de-DE\"}}'"
+        )
+
+    assert timezone() == "UTC", timezone()
+    assert set_region("Europe/Berlin") == "200"
+    region = json.loads(machine.succeed("cat /tmp/region.json"))["region"]
+    assert region == {"timezone": "Europe/Berlin", "locale": "de-DE"}, region
+    assert timezone() == "Europe/Berlin", timezone()
+    # ...and one the device does not know is refused, not half-applied.
+    assert set_region("Mars/Olympus_Mons") == "400"
+    assert timezone() == "Europe/Berlin", timezone()
+
     # No seed file on this boot. The importer is no longer gated on the
     # provisioned marker (it is gated on the seed file's content hash instead),
     # so it must have run — and must have done nothing, quietly.
@@ -277,6 +300,8 @@ pkgs.testers.runNixOSTest {
     # whole point of hashing the contents instead of re-applying unconditionally.
     reboot()
     machine.succeed("journalctl -b -u dashboard-assistant-boot-import | grep -q unchanged")
+    # The timezone set before the reboot is still the system's.
+    assert timezone() == "Europe/Berlin", timezone()
 
     # Boot 3: edit the file on the boot medium. It is imported again -- this is
     # re-provisioning in place, which the old provisioned-marker gate made
