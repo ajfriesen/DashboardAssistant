@@ -270,3 +270,38 @@ func TestRegionPrefsOnNilRegionReportsDefaults(t *testing.T) {
 		t.Fatalf("Prefs = %+v, want %+v", got, defaultRegion)
 	}
 }
+
+// Zone names are checked against the system's zoneinfo, the directory
+// timedated reads, not a copy built into the daemon: a name the device knows
+// is accepted even if Go has never heard of it, and one missing from the
+// system is refused before timedated would refuse it.
+func TestTimezonesComeFromTheSystemZoneinfo(t *testing.T) {
+	utc, err := os.ReadFile(filepath.Join(zoneinfoDir, "UTC"))
+	if err != nil {
+		t.Fatalf("read system UTC zone: %v", err)
+	}
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "Test"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "Test", "Zone"), utc, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	old := zoneinfoDir
+	zoneinfoDir = dir
+	t.Cleanup(func() { zoneinfoDir = old })
+
+	for tz, want := range map[string]bool{
+		"Test/Zone":     true,
+		"Europe/Berlin": false, // not in this zoneinfo
+		"Test":          false, // a directory, not a zone
+		"../Test/Zone":  false,
+		"/etc/passwd":   false,
+		"":              false,
+		"Local":         false,
+	} {
+		if got := validTimezone(tz); got != want {
+			t.Errorf("validTimezone(%q) = %v, want %v", tz, got, want)
+		}
+	}
+}

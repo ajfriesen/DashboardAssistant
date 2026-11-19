@@ -68,6 +68,13 @@ var (
 	screensaverFile = stateDir + "/screensaver.json" // persisted screen saver choice + idle timeout (minutes)
 	regionFile      = stateDir + "/region.json"      // timezone + locale from Home Assistant; the kiosk launcher reads the locale
 
+	// The system's IANA zones, the directory systemd-timedated checks a
+	// SetTimezone against (NixOS points it at /etc/zoneinfo). The daemon reads
+	// the same directory, so it refuses exactly the zones timedated would.
+	// ZONEINFO is Go's own override; the package build points it at tzdata for
+	// the tests, which run where /etc/zoneinfo does not exist.
+	zoneinfoDir = envOr("ZONEINFO", "/etc/zoneinfo")
+
 	// VNC (see vnc.go). The FIFO and the wayvnc config path must match
 	// modules/core/vnc.nix. The config holds the session password, so it lives on
 	// tmpfs and is deleted when VNC goes off. The keys are kept, so a VNC client

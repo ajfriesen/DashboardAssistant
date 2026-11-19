@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
-	_ "time/tzdata" // validate timezone names without depending on the host's zoneinfo
 
 	"github.com/godbus/dbus/v5"
 )
@@ -187,13 +187,21 @@ func canonicalLocale(tag string) string {
 	return strings.Join(sub, "-")
 }
 
-// validTimezone reports whether tz names an IANA zone. LoadLocation also
-// accepts "" and "Local", which name none.
+// validTimezone reports whether tz names a zone in the system's zoneinfo
+// (zoneinfoDir), the one timedated will accept. Not Go's embedded copy: Home
+// Assistant offers the zones its own tzdata knows, and when the device's
+// differs the answer has to be the device's, or a zone the daemon passed would
+// fail in timedated. A name has to stay inside the directory, and the file has
+// to parse as a zone.
 func validTimezone(tz string) bool {
-	if tz == "" || tz == "Local" {
+	if !filepath.IsLocal(tz) || tz == "Local" {
 		return false
 	}
-	_, err := time.LoadLocation(tz)
+	b, err := os.ReadFile(filepath.Join(zoneinfoDir, tz))
+	if err != nil {
+		return false
+	}
+	_, err = time.LoadLocationFromTZData(tz, b)
 	return err == nil
 }
 

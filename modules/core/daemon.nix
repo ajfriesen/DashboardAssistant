@@ -51,6 +51,12 @@ let
     # expected hash from the build failure.
     vendorHash = "sha256-19KTCNhoN6RqDYQwhP+cHwLE6wTvhZsJaYBSB8UAYFs=";
 
+    # The tests check zone names against the system zoneinfo (zoneinfoDir in
+    # daemon/config.go), which the build sandbox has none of.
+    preCheck = ''
+      export ZONEINFO=${pkgs.tzdata}/share/zoneinfo
+    '';
+
     meta.mainProgram = "dashboard-assistant-api";
   };
 in
