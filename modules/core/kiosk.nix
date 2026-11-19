@@ -118,6 +118,23 @@ let
   # Russian, deliberately: the ru layout has no Latin letters, so URLs and
   # passwords could no longer be typed. DA_REGION exists for the kiosk-region
   # check.
+  # Writes the device locale into Chromium's profile: $1 is its Preferences
+  # file, LOCALE comes from regionEnv. Run by the launcher while the browser is
+  # down; a profile not created yet is left for Chromium to seed.
+  #
+  # Both keys, because selected_languages is the one Chromium keeps: at startup
+  # it rebuilds accept_languages from it, so writing accept_languages alone is
+  # undone before the first page loads. Together they are navigator.language
+  # and the Accept-Language header, which is what Home Assistant's frontend
+  # picks its language from (the kiosk-region check).
+  languagePrefs = pkgs.writeShellScript "ha-kiosk-language-prefs" ''
+    prefs=$1
+    [ -f "$prefs" ] || exit 0
+    ${lib.getExe pkgs.jq} --arg l "$LOCALE" '.intl.accept_languages = $l | .intl.selected_languages = $l' \
+      "$prefs" > "$prefs.tmp" && ${pkgs.coreutils}/bin/mv "$prefs.tmp" "$prefs" \
+      || ${pkgs.coreutils}/bin/rm -f "$prefs.tmp"
+  '';
+
   regionEnv = pkgs.writeText "ha-kiosk-region.sh" ''
     LOCALE=$(${lib.getExe pkgs.jq} -r '.locale // empty' \
       "''${DA_REGION:-/var/lib/dashboard-assistant/region.json}" 2>/dev/null || true)
@@ -245,18 +262,13 @@ let
     export XDG_CACHE_HOME="''${XDG_RUNTIME_DIR:-/tmp}/kiosk-cache"
     ${pkgs.coreutils}/bin/mkdir -p "$XDG_CACHE_HOME"
 
-    # Chromium's language (regionEnv): LANGUAGE is also what navigator.language,
-    # Intl and the Home Assistant frontend's language follow. The
-    # Accept-Language list is a profile preference instead, seeded once when the
-    # profile is created, so a later change is written into it while the browser
-    # is down (it was stopped above).
+    # Chromium's language (regionEnv). LANGUAGE sets its UI language and Intl's
+    # default; navigator.language, and so Home Assistant's frontend, follow the
+    # profile's language list instead, which Chromium seeds once when it creates
+    # the profile. So a later change is written into it while the browser is
+    # down (it was stopped above).
     . ${regionEnv}
-    chromePrefs="$chromeProfile/Default/Preferences"
-    if [ -f "$chromePrefs" ]; then
-      ${lib.getExe pkgs.jq} --arg l "$LOCALE" '.intl.accept_languages = $l' \
-        "$chromePrefs" > "$chromePrefs.tmp" && ${pkgs.coreutils}/bin/mv "$chromePrefs.tmp" "$chromePrefs" \
-        || ${pkgs.coreutils}/bin/rm -f "$chromePrefs.tmp"
-    fi
+    ${languagePrefs} "$chromeProfile/Default/Preferences"
 
     # --disable-gpu-shader-disk-cache: Chromium's GPU shader caches (GPUCache,
     # DawnGraphiteCache, DawnWebGPUCache) live in the PROFILE, not under
@@ -1450,6 +1462,13 @@ in
     description = "The shell snippet that turns the device locale into the kiosk's language and keyboard layout, for checks to run.";
   };
 
+  options.dashboardAssistant.kiosk.languagePrefs = lib.mkOption {
+    type = lib.types.package;
+    internal = true;
+    readOnly = true;
+    description = "The script that writes the device locale into Chromium's profile, for checks to run.";
+  };
+
   options.dashboardAssistant.kiosk.session = lib.mkOption {
     type = lib.types.package;
     internal = true;
@@ -1479,6 +1498,7 @@ in
     dashboardAssistant.kiosk.launcher = kioskLauncher;
     dashboardAssistant.kiosk.urls = kioskUrls;
     dashboardAssistant.kiosk.region = regionEnv;
+    dashboardAssistant.kiosk.languagePrefs = languagePrefs;
     dashboardAssistant.kiosk.session = sessionStart;
 
     programs.sway.enable = true;
