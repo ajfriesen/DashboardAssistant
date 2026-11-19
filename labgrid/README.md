@@ -737,7 +737,7 @@ sudo sh -c 'echo 0 > /sys/bus/usb/devices/1-1/authorized; echo 1 > /sys/bus/usb/
   `No module named labgrid.util` is this, not a broken install.
 - `write_image` does not decompress. disko emits a single uncompressed `.raw`,
   which is what the harness wants; pointing `--image` at a compressed release
-  artifact (`.raw.zst`, as published to R2) would dd the compressed bytes onto
+  artifact (`.raw.xz`, as published to R2) would dd the compressed bytes onto
   the card.
 - Run from the repo root: image discovery is relative to it.
 - The image crosses the network once per build, not once per flash —

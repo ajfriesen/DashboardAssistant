@@ -287,14 +287,19 @@ jobs:
             --out-link result-image
 
       # disko emits a single uncompressed .raw. Compressed here rather than in
-      # the image derivation: it keeps a ~4 GiB zstd pass out of every local
-      # `just build-*`.
+      # the image derivation: it keeps a ~4 GiB compression pass out of every
+      # local `just build-*`.
+      #
+      # xz, not zstd: balenaEtcher and Raspberry Pi Imager flash a .xz
+      # directly, while a .zst has to be decompressed by hand first. zstd
+      # compresses a little better and much faster, but the image is for the
+      # people flashing it, not for this runner.
       - name: Compress the image
         run: |
           set -euo pipefail
           raw=$(ls result-image/*.raw)
-          nix run nixpkgs#zstd -- -T0 -19 --long=27 "$raw" -o image.raw.zst
-          ls -l image.raw.zst
+          nix run nixpkgs#xz -- -T0 -6 --stdout "$raw" > image.raw.xz
+          ls -l image.raw.xz
 
       # Publish the immutable per-build object, attaching provenance metadata
       # (x-amz-meta-*) — readable with `aws s3api head-object` or an HTTP HEAD
@@ -317,7 +322,7 @@ jobs:
           PUBLIC_URL: ${{ vars.R2_PUBLIC_URL }}
         run: |
           set -euo pipefail
-          img=image.raw.zst
+          img=image.raw.xz
           nixos=$(nix eval --raw --accept-flake-config \
             ".#nixosConfigurations.$ATTR.config.system.nixos.version")
           baked=$(nix eval --raw --accept-flake-config \
@@ -337,7 +342,7 @@ jobs:
             id="${GITHUB_SHA::7}"
           fi
           dir="$channel/$BOARD"
-          name="dashboard-assistant-$BOARD-$id.raw.zst"
+          name="dashboard-assistant-$BOARD-$id.raw.xz"
           sha=$(sha256sum "$img" | cut -d' ' -f1)
           built=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           # `ref` is the tag on a release build and the branch on a dev one, so
@@ -345,7 +350,7 @@ jobs:
           meta="board=$BOARD,arch=$ARCH,channel=$channel,version=$version,ref=$GITHUB_REF_NAME,commit=$GITHUB_SHA,nixos-version=$nixos,built=$built,sha256=$sha,run-url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           aws s3 cp "$img" "s3://$BUCKET/$dir/$name" \
             --endpoint-url "$R2_ENDPOINT" \
-            --content-type application/zstd \
+            --content-type application/x-xz \
             --metadata "$meta"
           size=$(du -h "$img" | cut -f1)
           {

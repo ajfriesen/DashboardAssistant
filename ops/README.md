@@ -11,13 +11,14 @@ Every image the workflows publish is keyed by channel and board, with the board 
 identifiable once it's out of its folder:
 
 ```
-release/<board>/dashboard-assistant-<board>-<version>.{raw,img}.zst
-release/<board>/latest.{raw,img}.zst          # newest full release
+release/<board>/dashboard-assistant-<board>-<version>.raw.xz
 pre-release/<board>/…                         # hyphened SemVer tag, e.g. v0.2.0-rc.1
-dev/<board>/dashboard-assistant-<board>-<commit>.{raw,img}.zst
+dev/<board>/dashboard-assistant-<board>-<commit>.raw.xz
 ```
 
-`dev/` holds branch builds (`.raw.zst` on x86_64, `.img.zst` on the Pis), keyed by
+Releases up to 1.2.0 were published as `.raw.zst`; those objects stay as they are.
+
+`dev/` holds branch builds, keyed by
 the short commit and with no `latest` pointer — nothing outside a release tag may
 become the image people flash. Images are never attached to the Actions run
 itself; GitHub artifacts are far too slow at these sizes.
