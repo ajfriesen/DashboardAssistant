@@ -747,15 +747,37 @@ let
     ${pkgs.sway}/bin/swaymsg output '*' transform "$t" >/dev/null 2>&1 || true
   '';
 
-  # Re-assert the persisted rotation once at session start — the compositor always
-  # comes up at 0°. A missing file or an empty/0°/invalid value is a no-op
+  # Session start, in the one order that works: pin the output scale, re-assert
+  # the persisted rotation, then start the bar, which sizes itself to the result.
+  # As separate `exec` lines these ran in parallel and the bar could measure the
+  # output before either change landed.
+  #
+  # The scale. Left to itself Sway picks 1 or 2, and it re-picks on every
+  # rotation from the *rotated* height (2 needs an output at least 1200px tall,
+  # and more than 192 DPI): the Touch Display 2, a 720x1280 panel at ~210 DPI,
+  # got 2x in portrait and 1x in landscape, so rotating it halved the bar, its
+  # text and the dashboard (#111). An explicitly set scale is never re-picked.
+  # The compositor always comes up at 0°, so the scale Sway chose by now is the
+  # panel's native one; any high-DPI output gets pinned at 1.5, the same size
+  # in every orientation. 1.5 rather than 2 because the Touch Display 2 at 2x is
+  # a 640x360 screen in landscape, too cramped for a dashboard; at 1.5 it is
+  # 853x480, close to the original Touch Display. Ordinary outputs stay at 1.
+  #
+  # The rotation: a missing file or an empty/0°/invalid value is a no-op
   # (swayRotate ignores it). Unlike zoom/theme this needs no per-navigation
   # restore: an output transform is a compositor property, untouched by page loads.
-  rotationRestore = pkgs.writeShellScript "ha-rotation-restore" ''
+  displayRestore = pkgs.writeShellScript "ha-display-restore" ''
     set -u
-    [ -r ${rotationFile} ] || exit 0
-    d=$(${pkgs.coreutils}/bin/cat ${rotationFile} 2>/dev/null | ${pkgs.coreutils}/bin/tr -d '[:space:]')
-    ${swayRotate} "$d"
+    ${pkgs.sway}/bin/swaymsg -t get_outputs 2>/dev/null \
+      | ${lib.getExe pkgs.jq} -r '.[] | select(.active and .scale > 1) | .name' \
+      | while read -r name; do
+          ${pkgs.sway}/bin/swaymsg output "$name" scale 1.5 >/dev/null 2>&1 || true
+        done
+    if [ -r ${rotationFile} ]; then
+      d=$(${pkgs.coreutils}/bin/cat ${rotationFile} 2>/dev/null | ${pkgs.coreutils}/bin/tr -d '[:space:]')
+      ${swayRotate} "$d"
+    fi
+    exec ${waybarStart}
   '';
 
   # Rotation agent: the daemon writes "rotate <deg>" to the rotation FIFO (backing
@@ -770,8 +792,8 @@ let
     while IFS=' ' read -r cmd arg <&3; do
       case "$cmd" in
         # Apply the transform, then relaunch the bar so its layout (labelled vs
-        # compact portrait) matches the new orientation. Backgrounded so the
-        # agent loop keeps reading the FIFO.
+        # compact) matches the new output width. Backgrounded so the agent loop
+        # keeps reading the FIFO.
         rotate)
           # Close the OSK across a rotation: its geometry AND its font scale
           # (oskToggle picks GDK_DPI_SCALE at launch from the output width) are
@@ -780,7 +802,7 @@ let
           # below instead of reshaping it.
           ${pkgs.sway}/bin/swaymsg "[app_id=\"${oskAppId}\"] kill" >/dev/null 2>&1 || true
           ${swayRotate} "$arg" >/dev/null 2>&1 || true
-          ${waybarStart} "$arg" >/dev/null 2>&1 &
+          ${waybarStart} >/dev/null 2>&1 &
           ;;
       esac
     done
@@ -1059,14 +1081,15 @@ let
 
     # vboard's homogeneous key grid has a hard minimum width of ~900px at its
     # built-in 19px key font (the word-labeled modifier keys set the column
-    # width), which fits the 960px landscape logical width but overflows the
-    # 600px portrait one — GTK silently ignores a resize below its minimum and
+    # width), which fits a 960px landscape logical width but overflows the
+    # 853px of a Touch Display 2 in landscape (at the 1.5 scale displayRestore
+    # pins) and the 600px of a 1024x600 panel in portrait — GTK silently ignores a resize below its minimum and
     # the right third of the keyboard hangs off-screen. The font is a CSS
     # pixel size, immune to GDK_DPI_SCALE (points only, tried and disproven
     # on-device), so our vboard package patches it to honour VBOARD_FONT_PX
-    # (packages/vboard). Applied only on narrow outputs so landscape keeps the
-    # full-size keys.
-    if [ "$ow" -lt 700 ]; then
+    # (packages/vboard). Applied only on outputs too narrow for the full-size
+    # keys, so wide landscape outputs keep them.
+    if [ "$ow" -lt 900 ]; then
       VBOARD_FONT_PX=11 ${vboard}/bin/vboard >/dev/null 2>&1 &
     else
       ${vboard}/bin/vboard >/dev/null 2>&1 &
@@ -1195,14 +1218,17 @@ let
     }
   '';
 
-  # Compact portrait variant of the bar. Same modules and on-click actions as
-  # waybarConfig, but icon-only formats: rotated 90°/270° the screen's short edge
-  # is too narrow for the labelled buttons, and waybar can't wrap to a second row,
-  # so the labels would clip. waybarStart picks this config for portrait rotations.
-  # Keep the module set / on-click handlers in sync with waybarConfig above — only
-  # the "format" strings differ here.
-  waybarConfigPortrait = pkgs.writeText "ha-kiosk-waybar-portrait.json" ''
+  # Compact variant of the bar. Same modules and on-click actions as
+  # waybarConfig, but icon-only formats and tighter pills (the "compact" name is
+  # a CSS class on the bar window, see waybarStyle): on a narrow output the
+  # labelled buttons don't fit, and waybar can't wrap to a second row, so they
+  # would run off the right-hand edge and take the Keyboard button with them.
+  # waybarStart picks this config by output width, not rotation. Keep the module
+  # set / on-click handlers in sync with waybarConfig above — only the "format"
+  # strings differ here.
+  waybarConfigCompact = pkgs.writeText "ha-kiosk-waybar-compact.json" ''
     {
+      "name": "compact",
       "layer": "bottom",
       "position": "bottom",
       "height": 50,
@@ -1287,15 +1313,34 @@ let
       background-position: center;
       background-size: 26px 26px;
     }
+    /* Compact bar (waybarConfigCompact): icon-only pills, packed tight enough
+       that all six (with the Remote access marker) fit a 360px-wide output,
+       the Touch Display 2 in its native portrait orientation at scale 2. */
+    window#waybar.compact #custom-home,
+    window#waybar.compact #custom-prev,
+    window#waybar.compact #custom-next,
+    window#waybar.compact #custom-kbd,
+    window#waybar.compact #custom-vnc {
+      padding: 0 10px;
+      margin: 5px 3px;
+    }
+    window#waybar.compact #custom-sponsor {
+      padding: 0 8px;
+      margin: 5px 3px;
+    }
   '';
 
-  # (Re)start the bottom bar with the config matching the current rotation:
-  # the compact icon-only bar for portrait (90°/270°, where the labelled bar
-  # would overflow the short edge), the labelled bar otherwise. The rotation
-  # comes from the arg, else from the persisted rotationFile (so the initial
-  # session launch — after rotationRestore has already applied the transform —
-  # comes up in the right layout). Called via `exec` for the initial launch and
-  # backgrounded from rotationAgent on a live rotation change.
+  # (Re)start the bottom bar with the config matching the output's width: the
+  # labelled bar where it fits, the compact icon-only bar otherwise. Width, not
+  # rotation: the width is what the bar has to fit into, and rotation alone
+  # misjudges panels that are natively portrait. The Touch Display 2 is one
+  # (720x1280, and Sway scales it 2x), so unrotated it is a 360px-wide screen
+  # that the rotation check took for landscape (#110). The width is Sway's
+  # logical one, after transform and scale, the same number oskToggle reads.
+  # The labelled bar needs all of 800px with the Remote access marker showing
+  # (tests/kiosk-bar.nix measures it), which the original Touch Display has.
+  # Called via `exec` for the initial launch and backgrounded from
+  # rotationAgent on a live rotation change, after the new transform is set.
   #
   # Kill any previous bar via a PID file, not `pkill`: nixpkgs wraps waybar, so
   # the live process is `.waybar-wrapped`, which `pkill -x waybar` never matches
@@ -1310,15 +1355,14 @@ let
     fi
     echo $$ > "$pidfile"
 
-    deg=''${1:-}
-    if [ -z "$deg" ]; then
-      deg=$(${pkgs.coreutils}/bin/cat ${rotationFile} 2>/dev/null \
-        | ${pkgs.coreutils}/bin/tr -d '[:space:]')
+    # Unknown width falls back to compact: it fits anywhere.
+    width=$(${pkgs.sway}/bin/swaymsg -t get_outputs 2>/dev/null \
+      | ${lib.getExe pkgs.jq} -r '[.[] | select(.focused)][0].rect.width // 0')
+    if [ "''${width:-0}" -ge 800 ] 2>/dev/null; then
+      cfg=${waybarConfig}
+    else
+      cfg=${waybarConfigCompact}
     fi
-    case "$deg" in
-      90 | 270) cfg=${waybarConfigPortrait} ;;
-      *)        cfg=${waybarConfig} ;;
-    esac
     exec ${pkgs.waybar}/bin/waybar -c "$cfg" -s ${waybarStyle}
   '';
 
@@ -1379,11 +1423,12 @@ let
     exec ${themeAgent}
     exec ${themeRestore}
 
-    # Applies display-rotation changes from the HA "Rotation" select, and
-    # re-asserts the persisted angle once at session start (the compositor comes
-    # up at 0°).
+    # Applies display-rotation changes from the HA "Rotation" select. At session
+    # start, pins the output scale, re-asserts the persisted angle (the
+    # compositor comes up at 0°) and then starts the bottom button bar, which
+    # reserves an exclusive zone so Chromium tiles into the space above it.
     exec ${rotationAgent}
-    exec ${rotationRestore}
+    exec ${displayRestore}
 
     # Shows/hides the screen saver (idle timeout or the HA "Screen saver" switch).
     exec ${screensaverAgent}
@@ -1398,9 +1443,6 @@ let
     # it for the Dim/Brighter buttons before the bar can be tapped.
     exec ${brightnessResolve}
 
-    # Bottom button bar: Off / Dim / Brighter. Reserves an exclusive zone, so
-    # Chromium tiles into the remaining space above it.
-    exec ${waybarStart}
     ${lib.optionalString autoLogin ''
       # Auto-login: inject the staged HA token once the dashboard loads.
       exec ${tokenInjector}''}
@@ -1476,6 +1518,27 @@ in
     description = "The script greetd starts the kiosk session with, for checks to inspect.";
   };
 
+  options.dashboardAssistant.kiosk.displayRestore = lib.mkOption {
+    type = lib.types.package;
+    internal = true;
+    readOnly = true;
+    description = "The session-start script that pins the output scale, restores the rotation and starts the bar, for checks to run.";
+  };
+
+  options.dashboardAssistant.kiosk.osk = lib.mkOption {
+    type = lib.types.package;
+    internal = true;
+    readOnly = true;
+    description = "The on-screen keyboard toggle behind the bar's Keyboard button, for checks to run.";
+  };
+
+  options.dashboardAssistant.kiosk.bar = lib.mkOption {
+    type = lib.types.package;
+    internal = true;
+    readOnly = true;
+    description = "The script that (re)starts the bottom button bar, for checks to run.";
+  };
+
   options.dashboardAssistant.kiosk.brightness.method = lib.mkOption {
     type = lib.types.enum [
       "auto"
@@ -1500,6 +1563,9 @@ in
     dashboardAssistant.kiosk.region = regionEnv;
     dashboardAssistant.kiosk.languagePrefs = languagePrefs;
     dashboardAssistant.kiosk.session = sessionStart;
+    dashboardAssistant.kiosk.bar = waybarStart;
+    dashboardAssistant.kiosk.displayRestore = displayRestore;
+    dashboardAssistant.kiosk.osk = oskToggle;
 
     programs.sway.enable = true;
 
