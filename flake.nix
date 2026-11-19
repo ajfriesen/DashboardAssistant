@@ -246,6 +246,7 @@
         first-boot = import ./tests/first-boot.nix { inherit pkgs version; };
         update-keeps-machine-id = import ./tests/update-keeps-machine-id.nix { inherit pkgs version; };
         vnc = import ./tests/vnc.nix { inherit pkgs version; };
+        kiosk-bar = import ./tests/kiosk-bar.nix { inherit pkgs version; };
 
         # Flash-wear flags on the browser command line. This is an eval-time
         # check rather than an assertion in first-boot.nix because that test
