@@ -57,6 +57,10 @@
     # release image carries no key that can sign unattended, and the
     # release-has-no-unattended-access check in flake.nix is what keeps that true.
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEvE8ZMQXyChCxh021628VNVsNmpzaVBm8wG58DDBBcn bench@keepassxc (dashboard-assistant labgrid)"
+
+    # A development key, for logging into a dev board by hand. Dev images only,
+    # like everything else in this file.
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINT0ltFqQcFoOspnYjJ7yxGB/k22MERWRGrzLg1DWSrv development@dashboardassistant"
   ];
 
   # Root password for the *serial console* only: "dashboard". This is how the
