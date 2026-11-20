@@ -124,6 +124,16 @@
   color: var(--md-accent-fg-color);
 }
 
+/* A button small enough for a table row: the "Copy address" buttons in the
+   image table on Getting Started. Copying itself needs no script — the theme
+   copies the `data-clipboard-text` of whatever is clicked. */
+.md-typeset .da-btn--compact {
+  padding: 0.2rem 0.55rem;
+  font-size: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* --------------------------------------------------------------------------
    Tablet mockup + crossfading screenshots
    --------------------------------------------------------------------------
@@ -447,14 +457,6 @@
 
 .md-typeset li:has(> .twemoji:first-child) > .twemoji {
   color: var(--md-accent-fg-color);
-  margin-right: 0.15em;
-}
-
-/* Alert glyph in the announcement banner (overrides/main.html). */
-.da-announce-icon {
-  width: 1em;
-  height: 1em;
-  vertical-align: -0.15em;
   margin-right: 0.15em;
 }
 

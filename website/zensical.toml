@@ -64,22 +64,19 @@ Copyright &copy; 2026 Andrej Friesen &middot;
 # Read more: https://zensical.org/docs/setup/navigation/
 nav = [
   { "Home" = "index.md" },
-    {"About" = [
-      "about/why.md",
+  { "News" = [
+     "news/index.md",
+  ]},
+  { "Getting Started" = "getting-started.md" },
+  {"About" = [
       "about/features.md",
+      "about/use-cases.md",
       "about/faq.md",
       "about/license.md",
       "about/license-faq.md",
-  ]},
-  { "Getting Started" = "getting-started.md" },
-  {"Usage" = [
-     "usage/usage.md",
-     "usage/audio.md",
-     "usage/remote-access.md",
-     "usage/recovery.md",
+      "about/stack-for-nerds.md",
   ]},
   { "In Action" = "in-action.md" },
-  { "Stack for Nerds" = "stack-for-nerds.md" },
   {"Hardware Support" = [
      "hardware-support/index.md",
      "hardware-support/x86.md",
@@ -374,6 +371,16 @@ name = "Dashboard Assistant on Discord"
 # Read more:
 # - https://zensical.org/docs/setup/extensions/
 # ----------------------------------------------------------------------------
+# Release notes and news, in content/news/. Posts go in content/news/posts/
+# and are listed under News in the navigation by themselves. blog_dir is what
+# moves the plugin from its default content/blog/ to content/news/; everything
+# else is the plugin's default. A post with `draft: true` in its front matter
+# shows on `just website-serve` but is left out of `just website-build` and
+# the published site.
+# Read more: https://zensical.org/docs/setup/blog/
+[project.plugins.blog]
+blog_dir = "news"
+
 [project.markdown_extensions.abbr]
 [project.markdown_extensions.admonition]
 [project.markdown_extensions.attr_list]
