@@ -74,22 +74,19 @@ device is switched on but has no working sound output.
 
 ## Picking a different output
 
-Devices with more than one output — HDMI plus a USB DAC or a speaker HAT, say —
-may default to the wrong one. List what the player can see:
+Devices with more than one output, such as HDMI plus a USB DAC or a speaker
+HAT, may play to the wrong one. Pick the right one with the **Audio output**
+select on the device in Home Assistant. It lists every output the device has,
+and a USB speaker shows up there once it is plugged in.
 
-```bash
-sendspin-cli -l
-```
+The choice moves all of the device's sound: Sendspin music and sound from the
+dashboard itself, like TTS or a media card. It survives a reboot.
 
-Then set the one you want in your build, as `<backend>:<device>`:
+## Build options
 
-```nix
-dashboardAssistant.sendspin.output = "pipewire:alsa_output.usb-Generic_USB_Audio-00.analog-stereo";
-```
-
-Other options live alongside it: `name` overrides the player's name, `server`
-makes the player connect to one server instead of waiting to be found (useful
-where multicast is blocked), `bufferMs` trades latency for smoother playback,
-and
-`dashboardAssistant.sendspin.enable = false` leaves the audio stack out of the
-image entirely.
+`dashboardAssistant.sendspin.name` overrides the player's name, `server` makes
+the player connect to one server instead of waiting to be found (useful where
+multicast is blocked), `bufferMs` trades latency for smoother playback, and
+`output` pins the player to one device instead of the Audio output select
+(`sendspin-cli -l` lists them). `dashboardAssistant.sendspin.enable = false`
+leaves the audio stack out of the image entirely.
