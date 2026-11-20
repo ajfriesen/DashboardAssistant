@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.3.0](https://github.com/ajfriesen/DashboardAssistant/compare/v1.2.0...v1.3.0) (2026-11-20)
+
+
+### Features
+
+* **ci:** publish images as .raw.xz so balenaEtcher flashes them directly ([#117](https://github.com/ajfriesen/DashboardAssistant/issues/117)) ([7881e9a](https://github.com/ajfriesen/DashboardAssistant/commit/7881e9ab802116e24f97dee66bcc8df46130f195))
+* **daemon:** set the timezone and locale from Home Assistant ([#107](https://github.com/ajfriesen/DashboardAssistant/issues/107)) ([a6ec3cc](https://github.com/ajfriesen/DashboardAssistant/commit/a6ec3ccce65a3872c5d3b5ab45169298e8883a0f))
+* **kiosk:** hide the button bar from Home Assistant ([#109](https://github.com/ajfriesen/DashboardAssistant/issues/109)) ([#127](https://github.com/ajfriesen/DashboardAssistant/issues/127)) ([346597c](https://github.com/ajfriesen/DashboardAssistant/commit/346597cb2ed9d25298172d041390a893e6b93c87))
+
+
+### Bug Fixes
+
+* **kiosk:** fit the bar on the Touch Display 2 and keep its size across rotation ([#125](https://github.com/ajfriesen/DashboardAssistant/issues/125)) ([2366517](https://github.com/ajfriesen/DashboardAssistant/commit/2366517f3b5a72f40e820d207546d4068d829a76))
+
+
+### Documentation
+
+* **website:** point Getting Started at 1.2.0 ([#101](https://github.com/ajfriesen/DashboardAssistant/issues/101)) ([c7fa0d4](https://github.com/ajfriesen/DashboardAssistant/commit/c7fa0d418e1331cadf1a36affe3ba070dc41e09a))
+
 ## [1.2.0](https://github.com/ajfriesen/DashboardAssistant/compare/v1.1.1...v1.2.0) (2026-11-13)
 
 
