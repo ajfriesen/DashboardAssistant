@@ -11,18 +11,19 @@ your other speakers — the same music, in step to well under a millisecond.
 Sendspin splits into a **server** that sources the music and **players** that
 receive it. The dashboard is a player only. The server is [Music
 Assistant][ma] — install it in Home Assistant if you don't run it already.
-Nothing else on the dashboard side needs configuring: the player discovers the
-server over mDNS on your local network and connects on its own.
+Nothing else on the dashboard side needs configuring: the player announces
+itself over mDNS on your local network, and Music Assistant finds it and
+connects to it.
 
 [ma]: https://www.music-assistant.io/
 
 Audio never leaves your network, and there is no cloud account anywhere in the
 path.
 
-One server-side setting matters: Music Assistant can ask players to **pair** with
-a PIN, and can be told to *require* it. Unpaired players are allowed by default,
-which is what the dashboard relies on — it has no way to be handed a PIN. Leave
-unpaired access enabled for it under the Sendspin settings in Music Assistant.
+The connection is encrypted. Sendspin can make a server **pair** with a player
+before it plays, using a code the player shows. The dashboard doesn't ask for
+that yet: any Music Assistant on your network can play to it, with nothing to
+type.
 
 ## Using it
 
@@ -77,18 +78,18 @@ Devices with more than one output — HDMI plus a USB DAC or a speaker HAT, say 
 may default to the wrong one. List what the player can see:
 
 ```bash
-sendspin-player --list-audio-devices
+sendspin-cli -l
 ```
 
-Then set the one you want in your build:
+Then set the one you want in your build, as `<backend>:<device>`:
 
 ```nix
-dashboardAssistant.sendspin.audioDevice = "USB Audio Device";
+dashboardAssistant.sendspin.output = "pipewire:alsa_output.usb-Generic_USB_Audio-00.analog-stereo";
 ```
 
-The name has to match exactly, including any `(hw:X,Y)` suffix. Other options
-live alongside it: `name` overrides the player's name, `server` pins it to one
-server instead of discovering one (useful where multicast is blocked),
-`bufferMs` trades latency for resilience on flaky Wi-Fi, and
+Other options live alongside it: `name` overrides the player's name, `server`
+makes the player connect to one server instead of waiting to be found (useful
+where multicast is blocked), `bufferMs` trades latency for smoother playback,
+and
 `dashboardAssistant.sendspin.enable = false` leaves the audio stack out of the
 image entirely.

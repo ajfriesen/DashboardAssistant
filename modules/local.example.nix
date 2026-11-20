@@ -45,10 +45,10 @@
   # it), so you can drive the kiosk browser from host DevTools over `just qemu-ssh`
   # (tunnels 9222) without any extra option.
 
-  # Pin the Sendspin player at one server instead of browsing for
-  # _sendspin-server._tcp. Only worth setting on a network where mDNS
-  # re-discovery misbehaves — the default is to discover, and pinning this in a
-  # shipped image points every device at one operator's hostname.
+  # Make the Sendspin player connect to one server instead of advertising itself
+  # and waiting for the server to connect in. Only worth setting on a network
+  # that blocks multicast, and pinning this in a shipped image points every
+  # device at one operator's hostname.
   # dashboardAssistant.sendspin.server = "ws://homeassistant.local:8927";
 
   # DEV ONLY: allow root SSH login with these keys (needed for `just qemu-ssh` /
