@@ -1,6 +1,6 @@
 # Developer Documentation
 
-For working on Dashboard Assistant OS. Everything in this directory is for contributors and is read on GitHub; none of it is published. The public website is a separate tree, [`website/`](../website/), built with Zensical — `just website-serve` to preview it, `just website-build` to build it.
+For working on Dashboard Assistant OS. Everything in this directory is for contributors and is read on GitHub; none of it is published. The public website is a separate tree, [`website/`](../website/), built with Zensical in English and German — `just website-serve` to preview both with live reload (German under `/de/`), `just website-build` to build them.
 
 - **[`CONTEXT.md`](../CONTEXT.md)**: the project's vocabulary. Use these terms in code, commits and docs.
 - **[`adr/`](adr/)**: architecture decisions and why they were made. Read the relevant one before changing something it covers.
@@ -17,7 +17,7 @@ For working on Dashboard Assistant OS. Everything in this directory is for contr
 | `tests/` | NixOS VM tests |
 | `labgrid/` | The bench: flash and test a real Raspberry Pi 5 ([README](../labgrid/README.md)) |
 | `ops/` | R2 image bucket, release channels, secrets ([README](../ops/README.md)) |
-| `website/` | The public site at dashboardassistant.org: Zensical config, theme overrides and the pages in `website/content/` |
+| `website/` | The public site at dashboardassistant.org: Zensical config, theme overrides and the pages in `website/content/`, plus the German site (`zensical.de.toml`, pages in `website/content-de/`) served under `/de/` |
 
 ## Building and running
 

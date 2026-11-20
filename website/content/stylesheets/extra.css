@@ -124,6 +124,73 @@
   color: var(--md-accent-fg-color);
 }
 
+/* A button small enough for a table row: the "Copy address" buttons in the
+   image table on Getting Started. Copying itself needs no script — the theme
+   copies the `data-clipboard-text` of whatever is clicked. */
+.md-typeset .da-btn--compact {
+  padding: 0.2rem 0.55rem;
+  font-size: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Click-to-play video (javascripts/video-embed.js): our copy of the
+   thumbnail with a play button, swapped for the YouTube player on click. */
+.md-typeset .da-video {
+  margin: 1.5em 0;
+}
+
+.md-typeset .da-video__play,
+.md-typeset .da-video iframe {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 0.4rem;
+}
+
+.md-typeset .da-video__play {
+  position: relative;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  background: #000;
+}
+
+.md-typeset .da-video__play img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.md-typeset .da-video__play::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4.2rem;
+  height: 3rem;
+  transform: translate(-50%, -50%);
+  border-radius: 0.8rem;
+  background:
+    no-repeat center / 1.4rem
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='white' d='M7 4v16l13-8z'/%3E%3C/svg%3E"),
+    rgba(0, 0, 0, 0.75);
+  transition: background-color 0.15s;
+}
+
+.md-typeset .da-video__play:hover::after,
+.md-typeset .da-video__play:focus-visible::after {
+  background-color: #e00;
+}
+
+.md-typeset .da-video__note {
+  margin: 0.4em 0 0;
+  font-size: 0.75em;
+  color: var(--md-default-fg-color--light);
+}
+
 /* --------------------------------------------------------------------------
    Tablet mockup + crossfading screenshots
    --------------------------------------------------------------------------
@@ -447,14 +514,6 @@
 
 .md-typeset li:has(> .twemoji:first-child) > .twemoji {
   color: var(--md-accent-fg-color);
-  margin-right: 0.15em;
-}
-
-/* Alert glyph in the announcement banner (overrides/main.html). */
-.da-announce-icon {
-  width: 1em;
-  height: 1em;
-  vertical-align: -0.15em;
   margin-right: 0.15em;
 }
 

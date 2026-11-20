@@ -64,22 +64,20 @@ Copyright &copy; 2026 Andrej Friesen &middot;
 # Read more: https://zensical.org/docs/setup/navigation/
 nav = [
   { "Home" = "index.md" },
-    {"About" = [
-      "about/why.md",
+  { "News" = [
+     "news/index.md",
+     "news/in-the-media.md",
+  ]},
+  { "Getting Started" = "getting-started.md" },
+  {"About" = [
       "about/features.md",
+      "about/use-cases.md",
       "about/faq.md",
       "about/license.md",
       "about/license-faq.md",
-  ]},
-  { "Getting Started" = "getting-started.md" },
-  {"Usage" = [
-     "usage/usage.md",
-     "usage/audio.md",
-     "usage/remote-access.md",
-     "usage/recovery.md",
+      "about/stack-for-nerds.md",
   ]},
   { "In Action" = "in-action.md" },
-  { "Stack for Nerds" = "stack-for-nerds.md" },
   {"Hardware Support" = [
      "hardware-support/index.md",
      "hardware-support/x86.md",
@@ -111,7 +109,9 @@ extra_css = ["stylesheets/fonts.css", "brand/colors.css", "stylesheets/brand-the
 # page. Zensical emits extra_javascript at the end of <body>, after its own
 # bundle, which is what makes `document$` available to it — the script relies
 # on that to survive instant navigation. Do not inline it into the page.
-extra_javascript = ["javascripts/privacy-optout.js"]
+# language-picker.js makes the language picker stay on the page the reader is
+# on instead of jumping to the other language's home page.
+extra_javascript = ["javascripts/privacy-optout.js", "javascripts/language-picker.js", "javascripts/video-embed.js"]
 
 # ----------------------------------------------------------------------------
 # Section for configuring theme options
@@ -356,6 +356,17 @@ toggle.name = "Switch to light mode"
 # ----------------------------------------------------------------------------
 # The "extra" section contains miscellaneous settings.
 # ----------------------------------------------------------------------------
+# The language picker in the header. Zensical builds one language per project,
+# so German is a second project beside this one: zensical.de.toml, with its
+# pages in content-de/, built into site/de/. Each entry links to that
+# language's home page.
+# Read more: https://zensical.org/docs/setup/language/
+[project.extra]
+alternate = [
+  { name = "English", link = "/", lang = "en" },
+  { name = "Deutsch", link = "/de/", lang = "de" },
+]
+
 [[project.extra.social]]
 icon = "fontawesome/brands/github"
 link = "https://github.com/ajfriesen/DashboardAssistant"
@@ -374,6 +385,16 @@ name = "Dashboard Assistant on Discord"
 # Read more:
 # - https://zensical.org/docs/setup/extensions/
 # ----------------------------------------------------------------------------
+# Release notes and news, in content/news/. Posts go in content/news/posts/
+# and are listed under News in the navigation by themselves. blog_dir is what
+# moves the plugin from its default content/blog/ to content/news/; everything
+# else is the plugin's default. A post with `draft: true` in its front matter
+# shows on `just website-serve` but is left out of `just website-build` and
+# the published site.
+# Read more: https://zensical.org/docs/setup/blog/
+[project.plugins.blog]
+blog_dir = "news"
+
 [project.markdown_extensions.abbr]
 [project.markdown_extensions.admonition]
 [project.markdown_extensions.attr_list]

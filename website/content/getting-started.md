@@ -5,82 +5,63 @@ icon: lucide/rocket
 # Getting Started
 
 Going from a spare mini-PC or Raspberry Pi to a working Home Assistant dashboard
-takes a download and four steps. Follow them in order.
+takes four steps. Follow them in order.
 
-## Download the image { #download }
+## Pick your image { #download }
 
-The current release is **1.2.0**
-([release notes](https://github.com/ajfriesen/DashboardAssistant/releases/tag/v1.2.0)).
-There is one image per board:
+The current release is **1.3.0**
+([release notes](https://github.com/ajfriesen/DashboardAssistant/releases/tag/v1.3.0)).
+There is one image per board. **Copy address** puts the address of yours on the
+clipboard; you paste it into the flashing tool in the next step.
 
-| Board | Image |
-|---|---|
-| x86_64 (mini-PC, NUC) | [`dashboard-assistant-x86_64-1.2.0.raw.zst`](https://download.dashboardassistant.org/release/x86_64/dashboard-assistant-x86_64-1.2.0.raw.zst) |
-| Raspberry Pi 4 | [`dashboard-assistant-rpi4-1.2.0.raw.zst`](https://download.dashboardassistant.org/release/rpi4/dashboard-assistant-rpi4-1.2.0.raw.zst) |
-| Raspberry Pi 5 | [`dashboard-assistant-rpi5-1.2.0.raw.zst`](https://download.dashboardassistant.org/release/rpi5/dashboard-assistant-rpi5-1.2.0.raw.zst) |
+| Board | Image | |
+|---|---|---|
+| x86_64 (mini-PC, NUC) | [`dashboard-assistant-x86_64-1.3.0.raw.xz`](https://download.dashboardassistant.org/release/x86_64/dashboard-assistant-x86_64-1.3.0.raw.xz) | <button type="button" class="da-btn da-btn--ghost da-btn--compact" data-clipboard-text="https://download.dashboardassistant.org/release/x86_64/dashboard-assistant-x86_64-1.3.0.raw.xz">:lucide-copy: Copy address</button> |
+| Raspberry Pi 4 | [`dashboard-assistant-rpi4-1.3.0.raw.xz`](https://download.dashboardassistant.org/release/rpi4/dashboard-assistant-rpi4-1.3.0.raw.xz) | <button type="button" class="da-btn da-btn--ghost da-btn--compact" data-clipboard-text="https://download.dashboardassistant.org/release/rpi4/dashboard-assistant-rpi4-1.3.0.raw.xz">:lucide-copy: Copy address</button> |
+| Raspberry Pi 5 | [`dashboard-assistant-rpi5-1.3.0.raw.xz`](https://download.dashboardassistant.org/release/rpi5/dashboard-assistant-rpi5-1.3.0.raw.xz) | <button type="button" class="da-btn da-btn--ghost da-btn--compact" data-clipboard-text="https://download.dashboardassistant.org/release/rpi5/dashboard-assistant-rpi5-1.3.0.raw.xz">:lucide-copy: Copy address</button> |
 
-Every image is zstd-compressed and several GB even so. All three boards use the
-same image format and the same flashing steps. x86_64 targets need to boot
-**UEFI**; see the [x86_64 requirements](hardware-support/x86.md).
-
-!!! tip "Verify the download"
-    If a flash fails midway, download the image again and check its size before
-    retrying.
+There is nothing to download by hand: the flashing tool fetches the image
+itself. To keep a copy of the file anyway, follow the link in the table.
+x86_64 machines need to boot **UEFI**; see the
+[x86_64 requirements](hardware-support/x86.md).
 
 ## 1. Flash the image { #flash }
 
-Write the image to the target's disk: an x86_64 image goes to the SSD or
-internal disk, a Raspberry Pi image goes to the SD card. To reach the disk you
-need an SD-card reader, a SATA-to-USB adapter, an NVMe/USB enclosure, or direct
-access to the machine's internal disk.
+Flashing writes the image to the disk the device will boot from: an SD card for
+a Raspberry Pi, the SSD or internal disk for an x86_64 machine. Connect that
+disk to your computer with an SD-card reader, a SATA-to-USB adapter or an
+NVMe/USB enclosure. If the disk cannot come out of an x86_64 machine,
+[flash it from a live USB](hardware-support/x86.md#installing-onto-an-internal-disk)
+instead.
 
-!!! danger "Double-check the target device"
-    `dd` writes with no confirmation. Flashing the wrong disk will **erase it**.
-    List your disks first and confirm the device node before running the command.
+!!! warning "Flashing erases the disk"
+    Everything on the SD card or disk you pick is overwritten. Unplug other USB
+    drives and card readers first, so the right one is the only choice.
 
-=== "Linux"
+The steps are the same on Windows, macOS and Linux.
 
-    Identify the target disk. An SD card is usually `/dev/mmcblkX` in a
-    built-in slot and `/dev/sdX` in a USB reader:
+1. Download [balenaEtcher](https://etcher.balena.io/) and start it.
+2. Choose **Flash from URL**.
 
-    ```bash
-    lsblk -o NAME,SIZE,MODEL,TRAN
-    ```
+    ![balenaEtcher's start screen, with the Flash from URL button highlighted](img/etcher-flash-from-url.png){ width="640" loading=lazy }
 
-    Decompress and write it in one pipe (replace `/dev/sdX` with your device):
+3. Paste the address of your board's image and choose **OK**.
 
-    ```bash
-    zstd -dc dashboard-assistant-*.zst \
-      | sudo dd of=/dev/sdX bs=4M conv=fsync oflag=direct status=progress
-    sync
-    ```
+    ![balenaEtcher's Use Image URL dialog with the address of an image pasted in](img/etcher-image-url.png){ width="640" loading=lazy }
 
-=== "macOS"
+4. Choose **Select target**, tick the SD card or disk to write to, and confirm
+   with **Select**. Etcher hides the disk your computer runs from, so what is
+   listed is what you plugged in.
 
-    Identify the target disk:
+    ![balenaEtcher's target list with one removable drive ticked](img/etcher-select-target.png){ width="640" loading=lazy }
 
-    ```bash
-    diskutil list
-    ```
+5. Check that the image and the target are the ones you mean, then choose
+   **Flash!**. Etcher downloads the image, writes it and checks the result.
+   The image is several GB, so this takes a while.
 
-    Unmount it (don't eject), then decompress and write to the *raw* device node
-    (`/dev/rdiskN` is faster than `/dev/diskN`):
+    ![balenaEtcher with the image and the target chosen and the Flash! button enabled](img/etcher-flash.png){ width="640" loading=lazy }
 
-    ```bash
-    diskutil unmountDisk /dev/diskN
-    zstd -dc dashboard-assistant-*.zst \
-      | sudo dd of=/dev/rdiskN bs=4m
-    ```
-
-    `zstd` is available via [Homebrew](https://brew.sh/): `brew install zstd`.
-
-=== "Windows / GUI"
-
-    1. Download [balenaEtcher](https://etcher.balena.io/).
-    2. Decompress the `.zst` file with [7-Zip](https://www.7-zip.org/) (or
-       `zstd -d`) to get the raw `.raw` image.
-    3. In Etcher, choose **Flash from file**, select the image, pick the
-       target drive, and flash.
+If flashing stops partway, start it again.
 
 On Ethernet, move the disk into the target machine (or leave it in place) and
 boot it. For Wi-Fi, write a seed file first.
@@ -255,7 +236,7 @@ are on different networks or VLANs.
     a new Home Assistant instance, press its **Factory reset** button first,
     which also removes its entry. A device whose entry was deleted without a
     reset has to be reflashed before it pairs again. See
-    [Recovery](usage/recovery.md).
+    [Recovery](about/use-cases.md#recovery).
 
 !!! info "The connection is encrypted"
     Home Assistant talks to the display over TLS, and remembers the display's
@@ -274,7 +255,7 @@ Behind the scenes, the integration creates a dedicated **non-admin Home
 Assistant user** for the device (named after it, visible under
 **Settings → People**) and logs the device's browser in with it, which is why the display
 never shows a login screen. The user is removed again if you delete the
-integration. If the [Music Assistant](usage/audio.md) add-on is installed, a
+integration. If the [Music Assistant](about/use-cases.md#audio) add-on is installed, a
 **Music Assistant** page is added to the device's page list automatically,
 already signed in.
 
@@ -303,9 +284,9 @@ Open **Settings → Devices & services → Dashboard Assistant** and click
 
 Saving sends the list to the device straight away.
 
-That's it. The [Usage](usage/usage.md) guide covers the on-device controls, the
+That's it. [Use cases](about/use-cases.md) covers the on-device controls, the
 integration's entities, one-tap OS updates and rolling back if an update ever
-misbehaves. If something looks off, [Recovery](usage/recovery.md) covers rolling
+misbehaves. If something looks off, [Recovery](about/use-cases.md#recovery) covers rolling
 back and resetting the device.
 
-[Read the usage guide&nbsp;→](usage/usage.md){ .da-btn .da-btn--ghost }
+[Read the use cases&nbsp;→](about/use-cases.md){ .da-btn .da-btn--ghost }
