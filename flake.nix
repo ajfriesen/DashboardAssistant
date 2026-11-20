@@ -208,6 +208,10 @@
         # modules/core/sendspin.nix pulls it in via callPackage.
         sendspin-cli = pkgs.callPackage ./packages/sendspin-cpp-cli/sendspin-cpp-cli.nix { };
 
+        # zensical (the website's site generator) — nixpkgs' package bumped to a
+        # newer release; the dev shell uses this one (`nix build .#zensical`).
+        zensical = pkgs.callPackage ./packages/zensical/zensical.nix { };
+
         # Raspberry Pi SD-card images, cross-built *from this x86 host*: the
         # aarch64 system compiles under binfmt while disko's image-builder VM
         # runs natively on x86 (see dashboardAssistant.diskImage.builderPkgs).
@@ -900,7 +904,8 @@
           pkgs.jq
           pkgs.websocat
           # Static site generator for the website in website/ (`just website-serve`).
-          pkgs.zensical
+          # Newer than nixpkgs' — see packages/zensical/zensical.nix.
+          self.packages.${system}.zensical
           # Conventional Commits: `cz commit` for a guided message, `cz check` to
           # lint one. Matches the integration repo's dev shell.
           pkgs.commitizen
