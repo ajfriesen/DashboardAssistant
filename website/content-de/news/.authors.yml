@@ -1,0 +1,11 @@
+# Autoren der Neuigkeiten. Ein Beitrag nennt seine Autoren im Front Matter über
+# diese Schlüssel. avatar ist ein Pfad ab der Wurzel der Hauptseite, nicht ab
+# diesem Ordner: Die deutsche Seite bringt keine eigenen Bilder mit, der Avatar
+# kommt aus website/content/news/authors/. Avatare liegen wie die Schriften auf
+# der Seite selbst statt auf github.com.
+authors:
+  ajfriesen:
+    name: Andrej Friesen
+    description: Maintainer
+    avatar: /news/authors/ajfriesen.png
+    url: https://github.com/ajfriesen

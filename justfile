@@ -31,8 +31,8 @@ help:
   @echo "  hw-acquire/hw-release  Hold the bench across several runs"
   @echo
   @echo "Website (the public site at dashboardassistant.org — website/):"
-  @echo "  website-serve          Serve the website locally with live reload"
-  @echo "  website-build          Build the website into website/site/"
+  @echo "  website-serve          Serve the website, English and German, with live reload"
+  @echo "  website-build          Build the website, English and German, into website/site/"
   @echo
   @echo "Introspect:"
   @echo "  options                List the dashboardAssistant.* NixOS config options"
@@ -394,20 +394,50 @@ hw-acquire:
 hw-release:
   labgrid-client -p "$LG_PLACE" release
 
-# Serve the public website locally with live reload. Both website recipes run in
-# website/ because that is where zensical.toml lives — zensical only looks in the
-# current directory, so running it from the repository root fails with
-# "No config file found in the current folder."
-[doc('Serve the website locally with live reload')]
-website-serve *ARGS:
-  cd website && zensical serve {{ARGS}}
+# Serve the public website locally with live reload, both languages on one
+# address: English at http://localhost:8000/, German under /de/, with the
+# language picker working between them.
+#
+# The website recipes run in website/ because that is where the config files
+# live — zensical only looks in the current directory, so running it from the
+# repository root fails with "No config file found in the current folder."
+#
+# Each language is its own Zensical project, so this runs two servers. The
+# English one serves whatever is in site/, including site/de/, which the German
+# one keeps rebuilt. Browse on PORT only: the German server's own port (PORT+1)
+# has none of the styles and images it borrows from the English site. English
+# has to start first, because it empties site/ when it starts. A German page
+# needs a manual refresh after an edit; English pages reload by themselves.
+#
+# Only one copy can run per checkout, whatever the port: a second one would
+# empty the site/ the first is serving.
+[doc('Serve the website, English and German, on http://localhost:8000 with live reload')]
+website-serve PORT='8000':
+  #!/usr/bin/env bash
+  set -euo pipefail
+  cd website
+  if curl -so /dev/null http://localhost:{{PORT}}/; then
+    echo "Port {{PORT}} is already in use — stop what is running there, or pass another port." >&2
+    exit 1
+  fi
+  trap 'kill $(jobs -p) 2>/dev/null' EXIT
+  zensical serve --dev-addr localhost:{{PORT}} &
+  english=$!
+  until curl -fso /dev/null http://localhost:{{PORT}}/; do
+    kill -0 "$english" 2>/dev/null || exit 1
+    sleep 0.2
+  done
+  zensical serve --config-file zensical.de.toml --dev-addr localhost:$(({{PORT}} + 1)) &
+  wait
 
 # Build the website into website/site/, the same way
-# .github/workflows/website.yml builds what GitHub Pages serves. --clean so a renamed or deleted page cannot
-# survive in the output.
-[doc('Build the website into website/site/')]
+# .github/workflows/website.yml builds what GitHub Pages serves: English into
+# site/, then German into site/de/. The order matters — the English build
+# recreates site/, so German has to come second. --clean so a renamed or deleted
+# page cannot survive in the output.
+[doc('Build the website, English and German, into website/site/')]
 website-build *ARGS:
-  cd website && zensical build --clean {{ARGS}}
+  cd website && zensical build --clean {{ARGS}} && zensical build --clean -f zensical.de.toml {{ARGS}}
 
 # Apply the R2 bucket lifecycle policy from ops/r2-lifecycle.json (R2 speaks the
 # S3 PutBucketLifecycleConfiguration API). Needs R2_ACCOUNT_ID + R2 S3 credentials

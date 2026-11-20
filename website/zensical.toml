@@ -108,7 +108,9 @@ extra_css = ["stylesheets/fonts.css", "brand/colors.css", "stylesheets/brand-the
 # page. Zensical emits extra_javascript at the end of <body>, after its own
 # bundle, which is what makes `document$` available to it — the script relies
 # on that to survive instant navigation. Do not inline it into the page.
-extra_javascript = ["javascripts/privacy-optout.js"]
+# language-picker.js makes the language picker stay on the page the reader is
+# on instead of jumping to the other language's home page.
+extra_javascript = ["javascripts/privacy-optout.js", "javascripts/language-picker.js"]
 
 # ----------------------------------------------------------------------------
 # Section for configuring theme options
@@ -353,6 +355,17 @@ toggle.name = "Switch to light mode"
 # ----------------------------------------------------------------------------
 # The "extra" section contains miscellaneous settings.
 # ----------------------------------------------------------------------------
+# The language picker in the header. Zensical builds one language per project,
+# so German is a second project beside this one: zensical.de.toml, with its
+# pages in content-de/, built into site/de/. Each entry links to that
+# language's home page.
+# Read more: https://zensical.org/docs/setup/language/
+[project.extra]
+alternate = [
+  { name = "English", link = "/", lang = "en" },
+  { name = "Deutsch", link = "/de/", lang = "de" },
+]
+
 [[project.extra.social]]
 icon = "fontawesome/brands/github"
 link = "https://github.com/ajfriesen/DashboardAssistant"
