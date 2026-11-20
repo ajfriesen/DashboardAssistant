@@ -112,6 +112,7 @@ func main() {
 	vnc.Reset()
 	region := NewRegion()
 	hub.SetRegion(region)
+	hub.SetAudio(NewAudio())
 	srv := &server{nm: nm, ha: hub, pages: pages}
 
 	// The Sendspin player's unit has no install target — this daemon owns its
