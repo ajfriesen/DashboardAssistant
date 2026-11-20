@@ -13,6 +13,10 @@ A small bar gives you touch controls without leaving the kiosk:
   devices *(experimental)*.
 - **Touch to wake** — tapping the screen wakes the display when it has slept.
 
+Turn off the **Button bar** switch in Home Assistant to hide the bar and give
+the dashboard the whole screen. Its buttons go with it, so the on-screen
+keyboard can't be opened while the bar is hidden.
+
 ## From Home Assistant
 
 Install the **Dashboard Assistant** integration
@@ -23,6 +27,7 @@ can:
 
 - Turn the **display** on/off and set **brightness**.
 - Adjust **zoom** and flip **dark mode**.
+- Show or hide the **button bar**.
 - **Rotate** the display to 0, 90, 180 or 270°.
 - Show the **screen saver** now, pick its style, or set how long the panel
   waits without a touch before it starts (10 minutes by default; 0 turns it

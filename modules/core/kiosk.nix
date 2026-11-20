@@ -54,6 +54,11 @@ let
   # rotation is a compositor-level Sway output transform. See rotationAgent below.
   rotationFifo = "/var/lib/dashboard-assistant/rotation.fifo";
   rotationFile = "/var/lib/dashboard-assistant/rotation";
+  # Button bar: the daemon creates barHiddenFile while the HA "Button bar"
+  # switch is off, then writes "restart" to the FIFO so barAgent relaunches the
+  # bar, which reads the marker. Paths must match daemon/config.go.
+  barFifo = "/var/lib/dashboard-assistant/bar.fifo";
+  barHiddenFile = "/var/lib/dashboard-assistant/bar-hidden";
   # Screenshot: the daemon pokes the FIFO (it has no Wayland access of its own)
   # and the in-session grim agent answers with a frame at screenshotFile.
   #
@@ -808,6 +813,22 @@ let
     done
   '';
 
+  # Button bar agent: the daemon writes "restart" to the bar FIFO after the HA
+  # "Button bar" switch changes barHiddenFile, and this in-session loop
+  # relaunches the bar, which shows or stays hidden by the marker. Held open
+  # read-write and de-orphaned on start, exactly like the other agents.
+  barAgent = pkgs.writeShellScript "ha-bar-agent" ''
+    for pid in $(${pkgs.procps}/bin/pgrep -f ha-bar-agent); do
+      [ "$pid" = "$$" ] || kill "$pid" 2>/dev/null || true
+    done
+    exec 3<> ${barFifo}
+    while IFS=' ' read -r cmd <&3; do
+      case "$cmd" in
+        restart) ${waybarStart} >/dev/null 2>&1 & ;;
+      esac
+    done
+  '';
+
   # Show or hide a screen saver over the live page via Chromium's loopback CDP
   # port. The saver's HTML comes from the daemon (/screensaver/<name>) and is laid
   # over the page as a srcdoc iframe in a fixed full-screen div: an overlay, not a
@@ -1346,12 +1367,20 @@ let
   # the live process is `.waybar-wrapped`, which `pkill -x waybar` never matches
   # (that left orphaned bars stacking on every rotation). `exec` keeps this
   # shell's PID, so $$ recorded here is the waybar PID the next launch kills.
+  #
+  # Every launch comes through here, so this is where the HA "Button bar"
+  # switch takes effect: while barHiddenFile exists it stops the old bar and
+  # starts none, and drops the PID file so nothing signals a stale PID.
   waybarStart = pkgs.writeShellScript "ha-kiosk-waybar-start" ''
     set -u
     pidfile="''${XDG_RUNTIME_DIR:-/tmp}/ha-kiosk-waybar.pid"
     if [ -r "$pidfile" ]; then
       old=$(${pkgs.coreutils}/bin/cat "$pidfile" 2>/dev/null)
       [ -n "''${old:-}" ] && kill "$old" 2>/dev/null || true
+    fi
+    if [ -e ${barHiddenFile} ]; then
+      ${pkgs.coreutils}/bin/rm -f "$pidfile"
+      exit 0
     fi
     echo $$ > "$pidfile"
 
@@ -1429,6 +1458,9 @@ let
     # reserves an exclusive zone so Chromium tiles into the space above it.
     exec ${rotationAgent}
     exec ${displayRestore}
+
+    # Shows or hides the bottom button bar (the HA "Button bar" switch).
+    exec ${barAgent}
 
     # Shows/hides the screen saver (idle timeout or the HA "Screen saver" switch).
     exec ${screensaverAgent}
@@ -1703,6 +1735,9 @@ in
       # Rotation FIFO: the daemon writes "rotate <deg>"; the in-session rotation
       # agent reads it and applies a Sway output transform.
       "p /var/lib/dashboard-assistant/rotation.fifo 0660 dashboard-assistant dashboard-assistant - -"
+      # Button bar FIFO: the daemon writes "restart"; the in-session bar agent
+      # relaunches the bar, which reads the bar-hidden marker.
+      "p ${barFifo} 0660 dashboard-assistant dashboard-assistant - -"
       # Screenshot FIFO: the daemon pokes it; the in-session grim agent grabs the
       # whole screen. The frame itself does NOT land here — it goes to
       # /run/dashboard-assistant/screenshot.jpg (tmpfs), created by the daemon's

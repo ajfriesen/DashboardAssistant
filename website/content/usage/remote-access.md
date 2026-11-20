@@ -31,9 +31,10 @@ session ends, the old password stops working. Home Assistant keeps the password
 out of its history and out of diagnostics downloads.
 
 While VNC is on, the device shows a red **● Remote access** marker on its
-bottom bar, so anyone in front of it knows the screen may be watched. Switching
-VNC on also turns the screen on and closes the screen saver. Otherwise you
-would be looking at a dark panel.
+bottom bar, so anyone in front of it knows the screen may be watched. If you
+have hidden the bar with the **Button bar** switch, the marker is hidden too.
+Switching VNC on also turns the screen on and closes the screen saver.
+Otherwise you would be looking at a dark panel.
 
 ## Which VNC app to use
 

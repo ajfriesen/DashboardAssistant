@@ -123,6 +123,13 @@ func (h *HAHub) SetRegion(r *Region) {
 	r.SetObserver(func() { h.broadcast() })
 }
 
+// SetBar gives the hub the button bar, set after construction like
+// SetScreensaver, and wires its observer to the SSE broadcast.
+func (h *HAHub) SetBar(b *Bar) {
+	h.bar = b
+	b.SetObserver(func() { h.broadcast() })
+}
+
 // stateSnapshot is the full device state the API serves (GET /state) and pushes
 // over SSE. It folds in every value the MQTT bridge used to publish as separate
 // topics; the integration maps each field to an HA entity.
@@ -173,6 +180,11 @@ type stateSnapshot struct {
 	Theme struct {
 		Dark bool `json:"dark"`
 	} `json:"theme"`
+	// Absent on builds before the bar could be hidden, which is how the
+	// integration knows whether to offer the switch.
+	Bar struct {
+		Visible bool `json:"visible"`
+	} `json:"bar"`
 	Rotation struct {
 		Current int   `json:"current"`
 		Options []int `json:"options"`
@@ -269,6 +281,7 @@ type HAHub struct {
 	scr    *Screensaver
 	vnc    *VNC
 	region *Region
+	bar    *Bar
 
 	mu   sync.Mutex
 	subs map[chan []byte]struct{}
@@ -401,6 +414,7 @@ func (h *HAHub) snapshot() stateSnapshot {
 
 	s.Zoom = h.zoom.Level()
 	s.Theme.Dark = h.theme.Dark()
+	s.Bar.Visible = h.bar.Visible()
 	s.Rotation.Current = h.rot.Degrees()
 	s.Rotation.Options = h.rot.Options()
 	s.Screensaver.Active = h.scr.Active()
@@ -493,6 +507,7 @@ func (h *HAHub) routes() http.Handler {
 	mux.HandleFunc("/api/ha/zoom", h.auth(h.handleZoom))
 	mux.HandleFunc("/api/ha/theme", h.auth(h.handleTheme))
 	mux.HandleFunc("/api/ha/rotation", h.auth(h.handleRotation))
+	mux.HandleFunc("/api/ha/bar", h.auth(h.handleBar))
 	mux.HandleFunc("/api/ha/screensaver", h.auth(h.handleScreensaver))
 	mux.HandleFunc("/api/ha/sendspin", h.auth(h.handleSendspin))
 	mux.HandleFunc("/api/ha/vnc", h.auth(h.handleVNC))
@@ -989,6 +1004,22 @@ func (h *HAHub) handleRotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.rot.Set(req.Degrees); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, h.snapshot())
+}
+
+// handleBar shows ({"visible": true}) or hides the bottom button bar. A
+// session-not-ready failure is a server error, like handleRotation.
+func (h *HAHub) handleBar(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Visible bool `json:"visible"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if err := h.bar.Set(req.Visible); err != nil {
 		writeErr(w, err)
 		return
 	}

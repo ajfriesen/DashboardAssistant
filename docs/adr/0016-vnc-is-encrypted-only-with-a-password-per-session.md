@@ -23,4 +23,4 @@ What travels over that connection is the screen and every key typed, so a Google
 - Port 5900 is open in the firewall permanently. Nothing listens on it while VNC is off.
 - The VNC keys are kept between sessions, so a client that pinned the key doesn't warn every time. They are 0640 because wayvnc runs as the kiosk user. That is the same trust level as the kiosk token the kiosk user already reads. A factory reset deletes them.
 - Input over VNC is not a touch. The screen saver is held off during a session, but a Home Assistant automation keyed on the last-touch sensor can still turn the screen off under someone working remotely.
-- While VNC is on, the kiosk's bottom bar shows a red "Remote access" marker, so people at the device know the screen may be watched.
+- While VNC is on, the kiosk's bottom bar shows a red "Remote access" marker, so people at the device know the screen may be watched. An owner who hides the bar with the "Button bar" switch hides the marker with it. Hidden means hidden: the bar does not come back for a VNC session.
