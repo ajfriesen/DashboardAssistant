@@ -14,7 +14,7 @@ icon: lucide/sparkles
 - On-screen keyboard for text fields on touch-only devices. (Experimental)
 - Automatic login using a long-lived HA token — no tapping through the login screen.
 
-**Multi-room audio** — see [Multi-room audio](../usage/audio.md).
+**Multi-room audio** — see [Multi-room audio](use-cases.md#audio).
 
 - The dashboard is also a speaker: a built-in [Sendspin](https://www.sendspin-audio.com/)
   player joins a synchronized group alongside your other speakers.
@@ -23,7 +23,7 @@ icon: lucide/sparkles
   the tablet's Home Assistant identity across.
 - Audio never leaves your network, and there is no cloud account in the path.
 
-**Remote access** — see [Remote access (VNC)](../usage/remote-access.md).
+**Remote access** — see [Remote access (VNC)](use-cases.md#remote-access).
 
 - Switch on a VNC server from Home Assistant to use the dashboard from your
   computer, for example to sign in to Google Calendar.
@@ -37,7 +37,7 @@ icon: lucide/sparkles
 - Atomic OS updates surfaced as a Home Assistant `update` entity.
 - Recovery built in: if an update misbehaves, roll back to the previous
   generation with one button in Home Assistant — off the touchscreen, and
-  behind the device token ([Recovery](../usage/recovery.md)). (Automatic rollback on a failed boot isn't switched on yet,
+  behind the device token ([Recovery](use-cases.md#recovery)). (Automatic rollback on a failed boot isn't switched on yet,
   though every image now boots through systemd-boot, which provides it.)
 
 **Hands-off provisioning**
@@ -79,7 +79,7 @@ press on the tablet. It appears as a single device with these entities:
 | VNC timeout | `number` | Minutes before VNC switches itself off, 0–240; 0 keeps it on until switched off |
 | Reboot / Shut down | `button` | Power-cycle the device |
 | Roll back | `button` | Boot the previous system generation. Refused when there is only one |
-| Factory reset | `button` | Forget the pairing, the settings and the Wi-Fi, reboot, and remove the entry. See [Recovery](../usage/recovery.md) |
+| Factory reset | `button` | Forget the pairing, the settings and the Wi-Fi, reboot, and remove the entry. See [Recovery](use-cases.md#recovery) |
 | System update | `update` | Installed vs. latest release, with one-tap install |
 
 ### Sensors

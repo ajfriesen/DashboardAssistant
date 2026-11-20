@@ -1,0 +1,9 @@
+# News authors. A post names its authors by these keys in its front matter.
+# avatar is a path from content/, not from this folder. Avatars are served
+# from the site itself rather than github.com, like the fonts.
+authors:
+  ajfriesen:
+    name: Andrej Friesen
+    description: Maintainer
+    avatar: news/authors/ajfriesen.png
+    url: https://github.com/ajfriesen
