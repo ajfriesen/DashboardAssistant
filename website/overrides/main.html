@@ -28,7 +28,9 @@
      wordmark's weight 600 needs no extra file. #}
 
   {# The SVG favicon comes from theme.favicon; these are the raster fallbacks,
-     which the TOML has no slot for. #}
-  <link rel="icon" href="{{ 'brand/favicon-32.png' | url }}" sizes="32x32">
-  <link rel="apple-touch-icon" href="{{ 'brand/apple-touch-icon-180.png' | url }}">
+     which the TOML has no slot for. Root-absolute, not through the `url`
+     filter: the German site (/de/) has no copy of brand/ and loads these from
+     the English site at the domain root. #}
+  <link rel="icon" href="/brand/favicon-32.png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/brand/apple-touch-icon-180.png">
 {% endblock %}

@@ -30,6 +30,10 @@ jobs:
       # it configures, and the build looks for it in the current directory.
       - run: zensical build --clean
         working-directory: website
+      # German is a second project, built into site/de/. It has to run after
+      # the English build, which recreates site/.
+      - run: zensical build --clean -f zensical.de.toml
+        working-directory: website
       - uses: actions/upload-pages-artifact@v5
         with:
           path: website/site
