@@ -8,12 +8,14 @@
    So a video is shown as our own copy of its thumbnail with a play button,
    and the player is created only when the reader clicks it:
 
-     <div class="da-video" data-youtube="VIDEO_ID">
+     <div class="da-video" data-youtube="VIDEO_ID" data-start="SECONDS">
        <button type="button" class="da-video__play" aria-label="Play …">
          <img src="/img/media/….jpg" alt="">
        </button>
        <p class="da-video__note">… <a href="https://www.youtube.com/watch?v=…">…</a></p>
      </div>
+
+   `data-start` is optional: the video starts that many seconds in.
 
    The player comes from youtube-nocookie.com, YouTube's privacy-enhanced
    mode. Without JavaScript the button does nothing and the link in the note
@@ -30,8 +32,10 @@
     var id = video.getAttribute("data-youtube");
     var button = video.querySelector(".da-video__play");
     if (!id || !button) { return; }
+    var start = parseInt(video.getAttribute("data-start"), 10);
     var frame = document.createElement("iframe");
-    frame.src = "https://www.youtube-nocookie.com/embed/" + encodeURIComponent(id) + "?autoplay=1";
+    frame.src = "https://www.youtube-nocookie.com/embed/" + encodeURIComponent(id) + "?autoplay=1" +
+      (start > 0 ? "&start=" + start : "");
     frame.title = button.getAttribute("aria-label") || "YouTube video";
     frame.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
     frame.allowFullscreen = true;
