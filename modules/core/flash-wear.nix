@@ -7,7 +7,7 @@
 # The failure this exists to prevent has already happened once: sendspin-player
 # logged "Discovered server" on every mDNS hit — 398k lines, 99.6% of one boot's
 # journal, and 2.87 GB written to the SD card in a single boot. That was fixed
-# with a per-unit rate limit (modules/core/sendspin.nix:219-227); the *class* of
+# with a per-unit rate limit (LogRateLimit* in modules/core/sendspin.nix); the *class* of
 # problem was not. The journal was the biggest writer on the device and nothing
 # bounded it: NixOS pins Storage=persistent, and an unset SystemMaxUse means
 # journald will happily use 10% of the filesystem (4 GiB on the x86 SSD target).
