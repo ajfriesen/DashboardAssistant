@@ -232,5 +232,24 @@ pkgs.testers.runNixOSTest {
         # Within a pixel: at 1.5x a 40px pill lands on 60 or 61 device pixels
         # depending on where rounding falls.
         assert abs(portrait - landscape) <= 1, f"{portrait}px tall in portrait, {landscape}px in landscape"
+
+    # Home Assistant's "Button bar" switch (#109). Every bar launch (session
+    # start, rotation, screen saver dismissed) goes through the same script, so
+    # it is the one that has to honour the marker.
+    with subtest("a hidden bar stays hidden, and comes back when shown"):
+        hidden = "/var/lib/dashboard-assistant/bar-hidden"
+        machine.succeed(f"touch {hidden}")
+        as_kiosk("swaymsg exec /etc/kiosk-bar-test/display-restore")
+        machine.wait_until_succeeds(f"! test -e {pidfile}")
+        # The strip it reserved is given back to the page.
+        def page_fills_output(_):
+            ws = json.loads(as_kiosk("swaymsg -t get_workspaces"))[0]["rect"]
+            return ws["height"] == output()["rect"]["height"]
+
+        retry(page_fills_output, timeout_seconds=30)
+
+        machine.succeed(f"rm {hidden}")
+        as_kiosk("swaymsg exec /etc/kiosk-bar-test/display-restore")
+        machine.wait_until_succeeds(f"pid=$(cat {pidfile}) && grep -q waybar /proc/$pid/comm")
   '';
 }

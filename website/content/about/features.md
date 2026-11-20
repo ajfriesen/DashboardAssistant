@@ -67,6 +67,7 @@ press on the tablet. It appears as a single device with these entities:
 | Zoom | `number` | Browser zoom, 25–400 % |
 | Dark mode | `switch` | Flip the Home Assistant frontend dark/light |
 | Rotation | `select` | Rotate the display 0 / 90 / 180 / 270° |
+| Button bar | `switch` | Show or hide the bottom button bar. Hidden, the dashboard gets the whole screen, and the on-screen keyboard can't be opened |
 | Screen saver | `switch` | Show the screen saver now, or dismiss it. Also turns on by itself after the idle timeout and off on a touch |
 | Screen saver style | `select` | Which screen saver to show (clock, logo) |
 | Screen saver timeout | `number` | Minutes without a touch before the screen saver starts, 0–240; 0 turns the idle trigger off |

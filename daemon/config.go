@@ -52,6 +52,8 @@ var (
 	themeFile      = stateDir + "/theme"           // persisted dark/light choice, restored by the kiosk on launch
 	rotationFifo   = stateDir + "/rotation.fifo"   // daemon writes "rotate <deg>"; in-session agent applies a Sway output transform
 	rotationFile   = stateDir + "/rotation"        // persisted display rotation (degrees), restored by the kiosk on launch
+	barFifo        = stateDir + "/bar.fifo"        // daemon writes "restart"; in-session agent relaunches the bar, which reads barHiddenFile
+	barHiddenFile  = stateDir + "/bar-hidden"      // present while the bottom button bar is hidden
 	screenshotFifo = stateDir + "/screenshot.fifo" // daemon pokes it; the in-session grim agent grabs the whole screen
 	// Latest whole-screen JPEG written by the grim agent, read back by the daemon.
 	// On tmpfs, NOT in stateDir: the daemon reads each frame once into memory (see
@@ -256,7 +258,7 @@ func markOnline() {
 func provisioningStatePaths() []string {
 	return []string{
 		markerFile, runtimeEnv, tokenFile, apiTokenFile, pairedMarker,
-		onlineMarker, urlsFile, zoomFile, themeFile, rotationFile, screensaverFile,
+		onlineMarker, urlsFile, zoomFile, themeFile, rotationFile, barHiddenFile, screensaverFile,
 		// The timezone goes back to UTC on the next start (Region.Reconcile).
 		regionFile,
 		// The recorded seed-file hash goes too, so a reset device re-imports

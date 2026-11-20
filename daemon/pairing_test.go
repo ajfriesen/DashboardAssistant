@@ -23,7 +23,7 @@ func tempState(t *testing.T) string {
 	dir := t.TempDir()
 	old := []*string{
 		&markerFile, &runtimeEnv, &tokenFile, &apiTokenFile, &pairedMarker,
-		&onlineMarker, &urlsFile, &zoomFile, &themeFile, &rotationFile,
+		&onlineMarker, &urlsFile, &zoomFile, &themeFile, &rotationFile, &barHiddenFile,
 		&seedHashFile, &tlsCertFile, &tlsKeyFile, &screensaverFile, &regionFile,
 		&vncFile, &vncConfigFile, &vncRSAKeyFile, &vncTLSKeyFile, &vncTLSCertFile,
 	}
