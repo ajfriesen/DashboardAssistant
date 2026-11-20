@@ -40,6 +40,7 @@ nav = [
   { "Start" = "index.md" },
   { "Neuigkeiten" = [
      "news/index.md",
+     "news/in-the-media.md",
   ]},
   { "Erste Schritte" = "getting-started.md" },
   {"Über" = [
@@ -62,7 +63,7 @@ nav = [
   { "Für Unternehmen" = "business.md" },
 ]
 extra_css = ["/stylesheets/fonts.css", "/brand/colors.css", "/stylesheets/brand-theme.css", "/stylesheets/extra.css"]
-extra_javascript = ["/javascripts/privacy-optout.js", "/javascripts/language-picker.js"]
+extra_javascript = ["/javascripts/privacy-optout.js", "/javascripts/language-picker.js", "/javascripts/video-embed.js"]
 
 [project.theme]
 custom_dir = "overrides"
