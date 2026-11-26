@@ -245,9 +245,43 @@ to type. A device set up with a seed file pairs exactly the same way.
 
 [![Open your Home Assistant instance and show your integrations.](https://my.home-assistant.io/badges/integrations.svg)](https://my.home-assistant.io/redirect/integrations/)
 
-Discovery is the only way to add a device. If the card does not appear, Home
-Assistant cannot see the device's mDNS announcement, usually because the two
-are on different networks or VLANs.
+If the card does not appear, Home Assistant cannot see the device's mDNS
+announcement, usually because the two are on different networks or VLANs. Add
+the device by its address instead: see [Devices on another VLAN](#vlans).
+
+### Devices on another VLAN { #vlans }
+
+Many people keep devices like this on their own network segment, an IoT VLAN
+for example. mDNS does not cross between segments, so Home Assistant does not
+discover the device there. Everything else works across them:
+
+1. Find the device's IP address on its ⓘ screen. Give it a DHCP reservation in
+   your router, so the address does not change later.
+2. In Home Assistant, go to **Settings → Devices & services → Add integration →
+   Dashboard Assistant**, and enter the address. The device pairs the same way a
+   discovered one does, with nothing else to type.
+
+Your firewall has to let these connections through between the two segments:
+
+| From | To | Port | What for |
+|---|---|---|---|
+| Home Assistant | device | TCP 8081, 8443 | Pairing and control |
+| device | Home Assistant | TCP 8123 (or your Home Assistant port) | The dashboard |
+| Music Assistant | device | TCP 8928 | Multi-room audio, if you use it |
+| your computer | device | TCP 5900 | [VNC](usage/remote-access.md), while it is on |
+
+The device opens Home Assistant at the URL Home Assistant hands it when they
+pair: its local URL from **Settings → System → Network**. If that is a
+`.local` name such as `homeassistant.local`, the device cannot resolve it from
+another segment, so set it to an IP address or a DNS name both segments can
+resolve.
+
+Music Assistant also finds the device's speaker over mDNS. Across segments, it
+only shows up if your router repeats mDNS between them (often called an mDNS
+reflector or repeater).
+
+If the device's address changes, add it by its new address again: Home
+Assistant updates the existing entry instead of adding a second one.
 
 !!! note "A device only pairs once"
     An already-paired device refuses to hand out its token again; that is what
