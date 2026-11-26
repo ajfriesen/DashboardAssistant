@@ -1192,14 +1192,16 @@ let
   vncIndicator = pkgs.writeShellScript "ha-kiosk-vnc-indicator" ''
     [ -e "''${XDG_RUNTIME_DIR:-/tmp}/ha-vnc-on" ] && echo "$1" || true
   '';
-  vncModule = label: lib.optionalString vnc.enable ''
-    "custom/vnc": {
-      "exec": "${vncIndicator} '${label}'",
-      "signal": 9,
-      "interval": "once",
-      "tooltip": false
-    },
-  '';
+  vncModule =
+    label:
+    lib.optionalString vnc.enable ''
+      "custom/vnc": {
+        "exec": "${vncIndicator} '${label}'",
+        "signal": 9,
+        "interval": "once",
+        "tooltip": false
+      },
+    '';
   vncModuleRef = lib.optionalString vnc.enable ''"custom/vnc", '';
 
   waybarConfig = pkgs.writeText "ha-kiosk-waybar.json" ''
@@ -1648,7 +1650,115 @@ in
         DownloadRestrictions = 3;
         AllowFileSelectionDialogs = false;
         BrowserSignin = 0;
+        SyncDisabled = true;
+
+        # Everything below is browser surface a wall dashboard has no use for.
+        # Turning it off by policy also removes it from the touch context menu
+        # ("Translate", "Help me write") and stops its background work. The
+        # names and values are Chromium 154's (components/policy/resources/
+        # templates/policy_definitions); the kiosk-chromium-policies check
+        # fails if a Chromium bump drops one.
+        #
+        # AI. GenAiDefaultSettings turns off every GenAI feature that has no
+        # policy of its own; the rest are spelled out so a changed default
+        # cannot bring one back. GenAILocalFoundationalModelSettings also stops
+        # the multi-gigabyte on-device model download, on an SD card.
+        GenAiDefaultSettings = 2;
+        GenAILocalFoundationalModelSettings = 1;
+        BuiltInAIAPIsEnabled = false;
+        AIModeSettings = 1;
+        GeminiActOnWebSettings = 1;
+        GeminiSparkSettings = 1;
+        HelpMeWriteSettings = 2;
+        TabCompareSettings = 2;
+        CreateThemesSettings = 2;
+        HistorySearchSettings = 2;
+        DevToolsGenAiSettings = 2;
+        AutofillPredictionSettings = 2;
+        AutomatedPasswordChangeSettings = 2;
+
+        # Spellcheck and translate.
+        SpellcheckEnabled = false;
+        SpellCheckServiceEnabled = false;
+        TranslateEnabled = false;
+        TranslatorAPIAllowed = false;
+        LiveTranslateEnabled = false;
+
+        # Metrics, crash reports and feedback: nobody reads them for this device.
+        MetricsReportingEnabled = false;
+        UrlKeyedAnonymizedDataCollectionEnabled = false;
+        DomainReliabilityAllowed = false;
+        FeedbackSurveysEnabled = false;
+        UserFeedbackAllowed = false;
+        SafeBrowsingSurveysEnabled = false;
+
+        # No built-in PDF viewer: a PDF goes to the download path instead, and
+        # DownloadRestrictions above blocks that, so it simply does not open.
+        AlwaysOpenPdfExternally = true;
+
+        # Passwords, autofill and shopping.
         PasswordManagerEnabled = false;
+        PasswordLeakDetectionEnabled = false;
+        PasswordSharingEnabled = false;
+        PasswordManagerPasskeysEnabled = false;
+        AutofillAddressEnabled = false;
+        AutofillCreditCardEnabled = false;
+        PaymentMethodQueryEnabled = false;
+        ShoppingListEnabled = false;
+
+        # More AI and speech, outside GenAiDefaultSettings' reach. Live Caption
+        # would download speech models; image labels send images to Google.
+        VoiceTypingSettings = 2;
+        ThirdPartyAiChatSettings = 1;
+        SearchContentSharingSettings = 1;
+        SmartTabSharingSettings = 1;
+        ChromeSuggestionsSettings = 1;
+        LiveCaptionEnabled = false;
+        AccessibilityImageLabelsEnabled = false;
+
+        # Ways out of the --app window into a normal browser window: "Search
+        # Google for …" on a long-press, guest mode and new profiles, Cast,
+        # installing the page as another app, and the task manager (Shift+Esc
+        # from the on-screen keyboard), which can end the dashboard's renderer.
+        DefaultSearchProviderContextMenuAccessAllowed = false;
+        BrowserGuestModeEnabled = false;
+        BrowserAddPersonEnabled = false;
+        EnableMediaRouter = false;
+        WebAppInstallByUserEnabled = false;
+        TaskManagerEndProcessEnabled = false;
+
+        # Permission prompts nobody at a wall display answers: sites are not
+        # asked at all. The microphone and camera stay askable for a voice
+        # assistant in the browser. HttpsOnlyMode keeps a plain-http dashboard
+        # from landing on a "not secure" page that waits for a tap.
+        DefaultNotificationsSetting = 2;
+        DefaultGeolocationSetting = 2;
+        DefaultSensorsSetting = 2;
+        DefaultWebBluetoothGuardSetting = 2;
+        DefaultWebUsbGuardSetting = 2;
+        DefaultSerialGuardSetting = 2;
+        DefaultWebHidGuardSetting = 2;
+        DefaultLocalFontsSetting = 2;
+        DefaultWindowManagementSetting = 2;
+        DefaultIdleDetectionSetting = 2;
+        DefaultFileSystemReadGuardSetting = 2;
+        DefaultFileSystemWriteGuardSetting = 2;
+        HttpsOnlyMode = "disallowed";
+
+        # Background traffic and flash writes. The profile (no --user-data-dir)
+        # is on the SD card, history database included, and every page switch
+        # wrote to it. The clock comes from NTP, not a Google time service.
+        SavingBrowserHistoryDisabled = true;
+        BrowserNetworkTimeQueriesEnabled = false;
+        NetworkPredictionOptions = 2;
+        AlternateErrorPagesEnabled = false;
+        MediaRecommendationsEnabled = false;
+        PromotionsEnabled = false;
+        BackgroundModeEnabled = false;
+
+        # An x86 device on battery must not throttle the dashboard's animations
+        # and video.
+        BatterySaverModeAvailability = 0;
       };
     };
 
