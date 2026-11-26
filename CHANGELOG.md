@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.3.0](https://github.com/ajfriesen/DashboardAssistant/compare/v1.2.0...v1.3.0) (2026-11-26)
+
+
+### Features
+
+* **audio:** pick the device's audio output and microphone from Home Assistant (needs integration 1.2.0) ([9d2f0de](https://github.com/ajfriesen/DashboardAssistant/commit/9d2f0deffe4802f634f7350c4ae3fd21821ecd13))
+* **ci:** publish images as .raw.xz so balenaEtcher flashes them directly ([#117](https://github.com/ajfriesen/DashboardAssistant/issues/117)) ([7881e9a](https://github.com/ajfriesen/DashboardAssistant/commit/7881e9ab802116e24f97dee66bcc8df46130f195))
+* **daemon:** set the battery's charge thresholds from Home Assistant ([#140](https://github.com/ajfriesen/DashboardAssistant/issues/140)) ([f1ad0c3](https://github.com/ajfriesen/DashboardAssistant/commit/f1ad0c3af2fe5e655d3965c1e808d06822a57aae))
+* **daemon:** set the timezone and locale from Home Assistant ([#107](https://github.com/ajfriesen/DashboardAssistant/issues/107)) ([a6ec3cc](https://github.com/ajfriesen/DashboardAssistant/commit/a6ec3ccce65a3872c5d3b5ab45169298e8883a0f))
+* **kiosk:** give the screen saver its own brightness ([#137](https://github.com/ajfriesen/DashboardAssistant/issues/137)) ([55ea6ad](https://github.com/ajfriesen/DashboardAssistant/commit/55ea6ad10a96dfc5146b6628353d0072267e9bbd))
+* **kiosk:** hide the button bar from Home Assistant ([#109](https://github.com/ajfriesen/DashboardAssistant/issues/109)) ([#127](https://github.com/ajfriesen/DashboardAssistant/issues/127)) ([346597c](https://github.com/ajfriesen/DashboardAssistant/commit/346597cb2ed9d25298172d041390a893e6b93c87))
+* **kiosk:** reload the page from Home Assistant ([#141](https://github.com/ajfriesen/DashboardAssistant/issues/141)) ([da8f2a4](https://github.com/ajfriesen/DashboardAssistant/commit/da8f2a4e8c6a60a4dc2c29878b2b9c2380ea7672))
+* **kiosk:** turn off Chromium's unused surface, ways out and prompts by policy ([#136](https://github.com/ajfriesen/DashboardAssistant/issues/136)) ([c5d7847](https://github.com/ajfriesen/DashboardAssistant/commit/c5d78470c1451c31b0129511fc5b66941cb71fa2))
+* **sendspin:** replace sendspin-go with sendspin-cli. Music Assistant sees each device as a new player after the update: add it to your speaker groups again ([9d2f0de](https://github.com/ajfriesen/DashboardAssistant/commit/9d2f0deffe4802f634f7350c4ae3fd21821ecd13))
+
+
+### Bug Fixes
+
+* **kiosk:** fit the bar on the Touch Display 2 and keep its size across rotation ([#125](https://github.com/ajfriesen/DashboardAssistant/issues/125)) ([2366517](https://github.com/ajfriesen/DashboardAssistant/commit/2366517f3b5a72f40e820d207546d4068d829a76))
+* **kiosk:** fit the on-screen keyboard to a portrait 1024x600 panel ([#142](https://github.com/ajfriesen/DashboardAssistant/issues/142)) ([7a1cdc1](https://github.com/ajfriesen/DashboardAssistant/commit/7a1cdc1e3126b7fcb70d43d4cbc8c1cb6b5ffd84))
+* **kiosk:** rotate a USB touchscreen with the display ([#138](https://github.com/ajfriesen/DashboardAssistant/issues/138)) ([3cd6785](https://github.com/ajfriesen/DashboardAssistant/commit/3cd678555d905ba1f7063dc778f6568a795fbfac))
+
+
+### Documentation
+
+* **website:** add devices on another VLAN by address ([#139](https://github.com/ajfriesen/DashboardAssistant/issues/139)) [skip ci] ([3d01b71](https://github.com/ajfriesen/DashboardAssistant/commit/3d01b717a6c012bbfe3aa13d502604a0a50cc55e))
+* **website:** point Getting Started at 1.2.0 ([#101](https://github.com/ajfriesen/DashboardAssistant/issues/101)) ([c7fa0d4](https://github.com/ajfriesen/DashboardAssistant/commit/c7fa0d418e1331cadf1a36affe3ba070dc41e09a))
+
 ## [1.2.0](https://github.com/ajfriesen/DashboardAssistant/compare/v1.1.1...v1.2.0) (2026-11-13)
 
 
