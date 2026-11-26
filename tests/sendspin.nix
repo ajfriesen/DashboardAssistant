@@ -46,7 +46,8 @@ pkgs.testers.runNixOSTest {
     machine.wait_for_unit("dashboard-assistant-daemon.service")
     server.wait_for_unit("avahi-daemon.service")
 
-    token = machine.succeed("cat /var/lib/dashboard-assistant/api-token").strip()
+    # The unit is active before the daemon has written its token.
+    token = machine.wait_until_succeeds("cat /var/lib/dashboard-assistant/api-token").strip()
     machine.succeed(
         f"curl -fsS -X POST -H 'Authorization: Bearer {token}' "
         "-H 'Content-Type: application/json' -d '{\"on\": true}' "
