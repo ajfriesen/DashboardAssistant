@@ -519,7 +519,7 @@ rather than after ninety minutes of compiling.
 coverage.** `cache.nixos.org` does serve the pinned `nixos-unstable` revision
 every board builds from ([ADR 0008](../docs/adr/0008-every-board-builds-from-pinned-nixos-unstable.md)),
 so most of an x86 closure substitutes from upstream. What never substitutes is
-a *system closure*: the daemon, `sendspin-go`, `vboard`, the kiosk
+a *system closure*: the daemon, `sendspin-cli`, `vboard`, the kiosk
 configuration and the toplevel itself are this repository's own output, and no
 public cache has ever held them. The Pi's `linux-rpi` kernel — hours under
 emulation, on no public cache at all — is a difference of degree, not of kind.

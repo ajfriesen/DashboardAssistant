@@ -203,10 +203,10 @@
         # the kiosk module pulls it in via callPackage.
         vboard = pkgs.callPackage ./packages/vboard/vboard.nix { };
 
-        # sendspin-player (multi-room audio client) — likewise packaged from
-        # source and exposed for standalone builds (`nix build .#sendspin-player`);
+        # sendspin-cli (multi-room audio player) — likewise packaged from
+        # source and exposed for standalone builds (`nix build .#sendspin-cli`);
         # modules/core/sendspin.nix pulls it in via callPackage.
-        sendspin-player = pkgs.callPackage ./packages/sendspin-go/sendspin-go.nix { };
+        sendspin-cli = pkgs.callPackage ./packages/sendspin-cpp-cli/sendspin-cpp-cli.nix { };
 
         # Raspberry Pi SD-card images, cross-built *from this x86 host*: the
         # aarch64 system compiles under binfmt while disko's image-builder VM
@@ -247,6 +247,8 @@
         update-keeps-machine-id = import ./tests/update-keeps-machine-id.nix { inherit pkgs version; };
         vnc = import ./tests/vnc.nix { inherit pkgs version; };
         kiosk-bar = import ./tests/kiosk-bar.nix { inherit pkgs version; };
+        sendspin = import ./tests/sendspin.nix { inherit pkgs version; };
+        audio = import ./tests/audio.nix { inherit pkgs version; };
 
         # Flash-wear flags on the browser command line. This is an eval-time
         # check rather than an assertion in first-boot.nix because that test
@@ -379,7 +381,12 @@
           in
           pkgs.runCommand "kiosk-region"
             {
-              inherit (kiosk) launcher region languagePrefs session;
+              inherit (kiosk)
+                launcher
+                region
+                languagePrefs
+                session
+                ;
               nativeBuildInputs = [ pkgs.jq ];
             }
             ''

@@ -11,18 +11,19 @@ your other speakers — the same music, in step to well under a millisecond.
 Sendspin splits into a **server** that sources the music and **players** that
 receive it. The dashboard is a player only. The server is [Music
 Assistant][ma] — install it in Home Assistant if you don't run it already.
-Nothing else on the dashboard side needs configuring: the player discovers the
-server over mDNS on your local network and connects on its own.
+Nothing else on the dashboard side needs configuring: the player announces
+itself over mDNS on your local network, and Music Assistant finds it and
+connects to it.
 
 [ma]: https://www.music-assistant.io/
 
 Audio never leaves your network, and there is no cloud account anywhere in the
 path.
 
-One server-side setting matters: Music Assistant can ask players to **pair** with
-a PIN, and can be told to *require* it. Unpaired players are allowed by default,
-which is what the dashboard relies on — it has no way to be handed a PIN. Leave
-unpaired access enabled for it under the Sendspin settings in Music Assistant.
+The connection is encrypted. Sendspin can make a server **pair** with a player
+before it plays, using a code the player shows. The dashboard doesn't ask for
+that yet: any Music Assistant on your network can play to it, with nothing to
+type.
 
 ## Using it
 
@@ -73,22 +74,27 @@ device is switched on but has no working sound output.
 
 ## Picking a different output
 
-Devices with more than one output — HDMI plus a USB DAC or a speaker HAT, say —
-may default to the wrong one. List what the player can see:
+Devices with more than one output, such as HDMI plus a USB DAC or a speaker
+HAT, may play to the wrong one. Pick the right one with the **Audio output**
+select on the device in Home Assistant. It lists every output the device has,
+and a USB speaker shows up there once it is plugged in.
 
-```bash
-sendspin-player --list-audio-devices
-```
+The choice moves all of the device's sound: Sendspin music and sound from the
+dashboard itself, like TTS or a media card. It survives a reboot.
 
-Then set the one you want in your build:
+## Picking a microphone
 
-```nix
-dashboardAssistant.sendspin.audioDevice = "USB Audio Device";
-```
+The **Audio input** select next to it picks the microphone, such as a USB
+microphone, a speakerphone or a sound card's input. It stays unavailable until
+the device has one, and fills in once one is plugged in. Nothing on the device
+records from it yet; it is there for a voice assistant to use. Like the output,
+the choice survives a reboot.
 
-The name has to match exactly, including any `(hw:X,Y)` suffix. Other options
-live alongside it: `name` overrides the player's name, `server` pins it to one
-server instead of discovering one (useful where multicast is blocked),
-`bufferMs` trades latency for resilience on flaky Wi-Fi, and
-`dashboardAssistant.sendspin.enable = false` leaves the audio stack out of the
-image entirely.
+## Build options
+
+`dashboardAssistant.sendspin.name` overrides the player's name, `server` makes
+the player connect to one server instead of waiting to be found (useful where
+multicast is blocked), `bufferMs` trades latency for smoother playback, and
+`output` pins the player to one device instead of the Audio output select
+(`sendspin-cli -l` lists them). `dashboardAssistant.sendspin.enable = false`
+leaves the audio stack out of the image entirely.

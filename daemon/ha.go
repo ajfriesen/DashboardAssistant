@@ -26,6 +26,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -130,6 +131,13 @@ func (h *HAHub) SetBar(b *Bar) {
 	b.SetObserver(func() { h.broadcast() })
 }
 
+// SetAudio gives the hub the audio output and input, set after construction like
+// SetScreensaver, and wires its observer to the SSE broadcast.
+func (h *HAHub) SetAudio(a *Audio) {
+	h.audio = a
+	a.SetObserver(func() { h.broadcast() })
+}
+
 // stateSnapshot is the full device state the API serves (GET /state) and pushes
 // over SSE. It folds in every value the MQTT bridge used to publish as separate
 // topics; the integration maps each field to an HA entity.
@@ -201,6 +209,9 @@ type stateSnapshot struct {
 	Sendspin *sendspinState `json:"sendspin,omitempty"`
 	// Omitted entirely on builds without VNC, like Sendspin.
 	VNC *vncState `json:"vnc,omitempty"`
+	// Omitted on builds without the audio stack, and until the audio agent
+	// has listed the devices.
+	Audio *AudioState `json:"audio,omitempty"`
 	// Absent on builds before it, which is how the integration knows whether
 	// it can set them.
 	Region RegionPrefs `json:"region"`
@@ -282,6 +293,7 @@ type HAHub struct {
 	vnc    *VNC
 	region *Region
 	bar    *Bar
+	audio  *Audio
 
 	mu   sync.Mutex
 	subs map[chan []byte]struct{}
@@ -427,6 +439,7 @@ func (h *HAHub) snapshot() stateSnapshot {
 	}
 
 	s.VNC = h.vncSnapshot()
+	s.Audio = h.audio.State()
 	s.Region = h.region.Prefs()
 
 	s.Host.IP = primaryIP()
@@ -510,6 +523,7 @@ func (h *HAHub) routes() http.Handler {
 	mux.HandleFunc("/api/ha/bar", h.auth(h.handleBar))
 	mux.HandleFunc("/api/ha/screensaver", h.auth(h.handleScreensaver))
 	mux.HandleFunc("/api/ha/sendspin", h.auth(h.handleSendspin))
+	mux.HandleFunc("/api/ha/audio", h.auth(h.handleAudio))
 	mux.HandleFunc("/api/ha/vnc", h.auth(h.handleVNC))
 	mux.HandleFunc("/api/ha/region", h.auth(h.handleRegion))
 	mux.HandleFunc("/api/ha/power", h.auth(h.handlePower))
@@ -944,6 +958,49 @@ func (h *HAHub) handleSendspin(w http.ResponseWriter, r *http.Request) {
 	if err := h.snd.Set(req.On); err != nil {
 		writeErr(w, err)
 		return
+	}
+	writeJSON(w, http.StatusOK, h.snapshot())
+}
+
+// handleAudio makes one of the listed sinks the device's audio output
+// ({"output": "<node name>"}) and/or one of the listed sources its audio input
+// ({"input": "<node name>"}). A device the agent did not list on that side is
+// a client error, and nothing is changed.
+func (h *HAHub) handleAudio(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Output *string `json:"output"`
+		Input  *string `json:"input"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	picks := []struct {
+		kind string
+		name *string
+	}{{"output", req.Output}, {"input", req.Input}}
+	given := false
+	for _, p := range picks {
+		if p.name == nil {
+			continue
+		}
+		given = true
+		if !h.audio.Has(p.kind, *p.name) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "no audio " + p.kind + " named " + strconv.Quote(*p.name)})
+			return
+		}
+	}
+	if !given {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "give an output, an input, or both"})
+		return
+	}
+	for _, p := range picks {
+		if p.name == nil {
+			continue
+		}
+		if err := h.audio.Set(p.kind, *p.name); err != nil {
+			writeErr(w, err)
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, h.snapshot())
 }
