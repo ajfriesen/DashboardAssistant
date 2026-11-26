@@ -81,6 +81,7 @@ press on the tablet. It appears as a single device with these entities:
 | Sendspin player | `switch` | Turn the device's multi-room audio player on/off; carries a `status` attribute. Only on builds with the audio stack |
 | VNC | `switch` | Start or stop remote access over VNC. While on, its attributes carry the address, username, this session's password and when it closes |
 | VNC timeout | `number` | Minutes before VNC switches itself off, 0–240; 0 keeps it on until switched off |
+| Charge start / Charge stop | `number` | Battery percentage below which charging starts, and at which it stops, for a device that is always plugged in. Shows what the battery actually accepted, and follows a change made in the BIOS. Only when the battery supports it (for example ThinkPad, Dell and ASUS laptops and tablets); some only have a stop |
 | Reboot / Shut down | `button` | Power-cycle the device |
 | Roll back | `button` | Boot the previous system generation. Refused when there is only one |
 | Factory reset | `button` | Forget the pairing, the settings and the Wi-Fi, reboot, and remove the entry. See [Recovery](../usage/recovery.md) |

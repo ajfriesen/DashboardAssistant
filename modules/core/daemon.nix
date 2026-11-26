@@ -41,6 +41,21 @@ let
     ${pkgs.coreutils}/bin/chmod 0640 /var/lib/dashboard-assistant/dmi.env
   '';
 
+  # The battery's charge thresholds (daemon/charge.go) are root-owned sysfs
+  # attributes. Hand them to the daemon's group, as root before it starts. A
+  # udev rule on the battery's add event can miss them: the laptop drivers
+  # attach these attributes through a battery hook, after the battery is
+  # registered.
+  chargePerms = pkgs.writeShellScript "charge-threshold-perms" ''
+    for f in /sys/class/power_supply/*/charge_control_start_threshold \
+             /sys/class/power_supply/*/charge_control_end_threshold \
+             /sys/class/power_supply/*/charge_types; do
+      [ -e "$f" ] || continue
+      ${pkgs.coreutils}/bin/chgrp dashboard-assistant "$f" && ${pkgs.coreutils}/bin/chmod g+w "$f"
+    done
+    exit 0
+  '';
+
   dashboard-assistant-api = pkgs.buildGoModule {
     pname = "dashboard-assistant-api";
     version = "0.1.0";
@@ -81,7 +96,11 @@ in
     serviceConfig = {
       # Runs as root (the `+` prefix) before the daemon to capture the root-only
       # DMI serial for the hardware-serial sensor.
-      ExecStartPre = "+${dmiDump}";
+      # Also as root: give the daemon the battery's charge thresholds.
+      ExecStartPre = [
+        "+${dmiDump}"
+        "+${chargePerms}"
+      ];
       ExecStart = "${dashboard-assistant-api}/bin/dashboard-assistant-api";
       Restart = "on-failure";
       RestartSec = 2;

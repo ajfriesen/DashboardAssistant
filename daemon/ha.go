@@ -138,6 +138,13 @@ func (h *HAHub) SetAudio(a *Audio) {
 	a.SetObserver(func() { h.broadcast() })
 }
 
+// SetCharge gives the hub the battery charge thresholds, set after construction
+// like SetAudio, and wires its observer to the SSE broadcast.
+func (h *HAHub) SetCharge(c *ChargeControl) {
+	h.charge = c
+	c.SetObserver(func() { h.broadcast() })
+}
+
 // stateSnapshot is the full device state the API serves (GET /state) and pushes
 // over SSE. It folds in every value the MQTT bridge used to publish as separate
 // topics; the integration maps each field to an HA entity.
@@ -227,6 +234,9 @@ type stateSnapshot struct {
 		Present  bool `json:"present"`
 		Level    int  `json:"level"`
 		Charging bool `json:"charging"`
+		// The charge thresholds as the hardware holds them, each omitted when
+		// the battery has none: the integration creates a number per field.
+		*ChargeState
 	} `json:"battery"`
 	Temperature struct {
 		Present bool    `json:"present"`
@@ -295,6 +305,7 @@ type HAHub struct {
 	scr    *Screensaver
 	vnc    *VNC
 	region *Region
+	charge *ChargeControl
 	bar    *Bar
 	audio  *Audio
 
@@ -458,6 +469,9 @@ func (h *HAHub) snapshot() stateSnapshot {
 		s.Battery.Present = true
 		s.Battery.Level = pct
 		s.Battery.Charging = charging
+		if h.charge != nil {
+			s.Battery.ChargeState = h.charge.State()
+		}
 	}
 	if c, ok := readTemperature(); ok {
 		s.Temperature.Present = true
@@ -525,6 +539,7 @@ func (h *HAHub) routes() http.Handler {
 	mux.HandleFunc("/api/ha/theme", h.auth(h.handleTheme))
 	mux.HandleFunc("/api/ha/rotation", h.auth(h.handleRotation))
 	mux.HandleFunc("/api/ha/bar", h.auth(h.handleBar))
+	mux.HandleFunc("/api/ha/battery", h.auth(h.handleBattery))
 	mux.HandleFunc("/api/ha/screensaver", h.auth(h.handleScreensaver))
 	mux.HandleFunc("/api/ha/sendspin", h.auth(h.handleSendspin))
 	mux.HandleFunc("/api/ha/audio", h.auth(h.handleAudio))
@@ -1087,6 +1102,29 @@ func (h *HAHub) handleBar(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, h.snapshot())
 }
 
+// handleBattery sets the charge thresholds in percent: {"charge_start": 40}
+// (charging begins below it) and/or {"charge_end": 80} (it stops there). The
+// snapshot it answers with carries what the hardware accepted, which a driver
+// may have adjusted. 404 on a device whose battery has no thresholds.
+func (h *HAHub) handleBattery(w http.ResponseWriter, r *http.Request) {
+	if h.charge == nil || h.charge.State() == nil {
+		http.NotFound(w, r)
+		return
+	}
+	var req struct {
+		Start *int `json:"charge_start"`
+		End   *int `json:"charge_end"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if err := h.charge.Set(req.Start, req.End); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, h.snapshot())
+}
+
 // handleScreensaver picks the saver ({"name": "clock"}), sets the idle timeout in
 // minutes ({"timeout": 10}, 0 = never), the panel level while it shows
 // ({"brightness": 10}, 0 = leave it alone) and/or starts or stops it now
@@ -1166,6 +1204,11 @@ func (h *HAHub) handlePower(w http.ResponseWriter, r *http.Request) {
 func (h *HAHub) handleReset(w http.ResponseWriter, r *http.Request) {
 	if !requirePost(w, r) {
 		return
+	}
+	// Before the state goes: back to charging fully, which a ThinkPad's
+	// controller would otherwise not do with nothing left to change it.
+	if h.charge != nil {
+		h.charge.Reset()
 	}
 	if err := clearProvisioningState(); err != nil {
 		writeErr(w, err)

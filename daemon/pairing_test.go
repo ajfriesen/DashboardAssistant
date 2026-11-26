@@ -26,6 +26,7 @@ func tempState(t *testing.T) string {
 		&onlineMarker, &urlsFile, &zoomFile, &themeFile, &rotationFile, &barHiddenFile,
 		&seedHashFile, &tlsCertFile, &tlsKeyFile, &screensaverFile, &regionFile,
 		&vncFile, &vncConfigFile, &vncRSAKeyFile, &vncTLSKeyFile, &vncTLSCertFile,
+		&chargeFile,
 	}
 	saved := make([]string, len(old))
 	for i, p := range old {

@@ -115,6 +115,11 @@ func main() {
 	hub.SetRegion(region)
 	hub.SetBar(NewBar())
 	hub.SetAudio(NewAudio())
+	charge := NewChargeControl("/sys/class/power_supply")
+	hub.SetCharge(charge)
+	// Some drivers forget the thresholds on every boot (asus-wmi), so the
+	// ones Home Assistant set are applied again here. A no-op until it has.
+	charge.Restore()
 	srv := &server{nm: nm, ha: hub, pages: pages}
 
 	// The Sendspin player's unit has no install target — this daemon owns its
