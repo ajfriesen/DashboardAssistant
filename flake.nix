@@ -248,6 +248,7 @@
         vnc = import ./tests/vnc.nix { inherit pkgs version; };
         kiosk-bar = import ./tests/kiosk-bar.nix { inherit pkgs version; };
         screensaver-brightness = import ./tests/screensaver-brightness.nix { inherit pkgs version; };
+        touch-rotation = import ./tests/touch-rotation.nix { inherit pkgs version; };
         sendspin = import ./tests/sendspin.nix { inherit pkgs version; };
         audio = import ./tests/audio.nix { inherit pkgs version; };
 
