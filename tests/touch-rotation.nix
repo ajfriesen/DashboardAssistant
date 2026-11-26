@@ -99,8 +99,9 @@ pkgs.testers.runNixOSTest {
         serviceConfig.ExecStart = touchscreen;
       };
 
+      # Started by the test script once the touchscreen is in udev: libinput
+      # aborts Sway if it finds no input device at startup.
       systemd.services.headless-kiosk = {
-        wantedBy = [ "multi-user.target" ];
         after = [
           "seatd.service"
           "fake-touchscreen.service"
@@ -131,6 +132,12 @@ pkgs.testers.runNixOSTest {
     run = "/run/headless-kiosk"
 
     machine.start()
+    machine.wait_for_unit("fake-touchscreen.service")
+    machine.wait_until_succeeds(
+        "grep -q 'Fake USB Touchscreen' /proc/bus/input/devices"
+    )
+    machine.succeed("udevadm settle")
+    machine.succeed("systemctl start headless-kiosk.service")
     machine.wait_for_unit("headless-kiosk.service")
     machine.wait_until_succeeds(f"ls {run}/sway-ipc.*.sock")
 
