@@ -2,8 +2,10 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"syscall"
 	"testing"
 	"time"
@@ -110,4 +112,118 @@ func TestScreensaverResetStopsLeftoverSaver(t *testing.T) {
 func TestScreensaverResetWithoutSession(t *testing.T) {
 	t.Setenv("DASHBOARD_ASSISTANT_SCREENSAVER_FIFO", filepath.Join(t.TempDir(), "missing.fifo"))
 	NewScreensaver().Reset()
+}
+
+// fakeDimmer records what the screen saver asks of the display.
+type fakeDimmer struct{ calls []string }
+
+func (f *fakeDimmer) Dim(pct int) error {
+	f.calls = append(f.calls, fmt.Sprintf("dim %d", pct))
+	return nil
+}
+func (f *fakeDimmer) Undim() error { f.calls = append(f.calls, "undim"); return nil }
+
+func expectDims(t *testing.T, f *fakeDimmer, want ...string) {
+	t.Helper()
+	if !slices.Equal(f.calls, want) {
+		t.Fatalf("dimmer got %q, want %q", f.calls, want)
+	}
+	f.calls = nil
+}
+
+// Off by default, so a device updated from a release without it keeps the
+// brightness it had while the saver shows.
+func TestScreensaverBrightnessOffByDefault(t *testing.T) {
+	s, sc := newTestScreensaver(t)
+	d := &fakeDimmer{}
+	s.SetDimmer(d)
+	if s.Brightness() != 0 {
+		t.Fatalf("brightness = %d, want 0 (off)", s.Brightness())
+	}
+	if err := s.Start(); err != nil {
+		t.Fatal(err)
+	}
+	expectCmd(t, sc, "start clock")
+	expectDims(t, d)
+}
+
+func TestScreensaverDimsWhileShowing(t *testing.T) {
+	s, sc := newTestScreensaver(t)
+	d := &fakeDimmer{}
+	s.SetDimmer(d)
+	s.SetBrightness(15)
+
+	if err := s.Start(); err != nil {
+		t.Fatal(err)
+	}
+	expectCmd(t, sc, "start clock")
+	expectDims(t, d, "dim 15")
+
+	if err := s.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	expectCmd(t, sc, "stop")
+	expectDims(t, d, "undim")
+
+	// Stop runs on every touch; with no saver up it must leave the display alone.
+	if err := s.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	expectDims(t, d)
+}
+
+// Changing the level while the saver shows applies it at once, and turning it
+// off brings the normal brightness back.
+func TestScreensaverBrightnessChangeWhileShowing(t *testing.T) {
+	s, sc := newTestScreensaver(t)
+	d := &fakeDimmer{}
+	s.SetDimmer(d)
+	if err := s.Start(); err != nil {
+		t.Fatal(err)
+	}
+	expectCmd(t, sc, "start clock")
+
+	s.SetBrightness(30)
+	expectDims(t, d, "dim 30")
+	s.SetBrightness(0)
+	expectDims(t, d, "undim")
+
+	if err := s.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	expectCmd(t, sc, "stop")
+	expectDims(t, d, "undim")
+
+	// Not showing: only remembered for next time.
+	s.SetBrightness(20)
+	expectDims(t, d)
+}
+
+func TestScreensaverBrightnessPersistsAndClamps(t *testing.T) {
+	s, _ := newTestScreensaver(t)
+	s.SetBrightness(250)
+	if s.Brightness() != 100 {
+		t.Fatalf("brightness = %d, want clamped to 100", s.Brightness())
+	}
+	s.SetBrightness(-5)
+	if s.Brightness() != 0 {
+		t.Fatalf("brightness = %d, want clamped to 0", s.Brightness())
+	}
+	s.SetBrightness(12)
+	if p := loadScreensaverPrefs(); p.Brightness != 12 || p.Name != "clock" || p.Timeout != 10 {
+		t.Fatalf("persisted = %+v", p)
+	}
+}
+
+// A saver gone without a stop (daemon or session restart) may have left the
+// display dimmed, so both paths ask for the normal brightness back.
+func TestScreensaverResetAndReportOffUndim(t *testing.T) {
+	s, sc := newTestScreensaver(t)
+	d := &fakeDimmer{}
+	s.SetDimmer(d)
+	s.Reset()
+	expectCmd(t, sc, "stop")
+	expectDims(t, d, "undim")
+	s.ReportOff()
+	expectDims(t, d, "undim")
 }

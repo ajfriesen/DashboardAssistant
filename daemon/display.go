@@ -90,6 +90,24 @@ func (d *Display) SetBrightness(pct int) error {
 	return nil
 }
 
+// Dim turns the panel down to pct for the screen saver. Unlike SetBrightness it
+// is not a brightness change: the agent applies it without recording it, so
+// the level HA shows, and the one Undim and a power-on return to, stay put.
+func (d *Display) Dim(pct int) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.writeCmd("dim " + strconv.Itoa(clampPct(pct)))
+}
+
+// Undim puts the panel back to its recorded brightness after the screen saver.
+// The agent ignores it when nothing is dimmed, so it is safe to send whenever
+// a saver may have gone.
+func (d *Display) Undim() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.writeCmd("undim")
+}
+
 // ReportBrightness records the actual level reported in-session (Dim/Brighter
 // buttons or a startup resync), the brightness analogue of Report.
 func (d *Display) ReportBrightness(pct int) {

@@ -202,6 +202,9 @@ type stateSnapshot struct {
 		Current string   `json:"current"`
 		Options []string `json:"options"`
 		Timeout int      `json:"timeout"` // idle minutes before it starts; 0 = never
+		// Panel level while it shows; 0 = leave the brightness alone. The
+		// integration offers its number only when the field is there.
+		Brightness int `json:"brightness"`
 	} `json:"screensaver"`
 	// Omitted entirely on builds without the Sendspin player, so the
 	// integration creates no audio entity there (same pattern as the
@@ -433,6 +436,7 @@ func (h *HAHub) snapshot() stateSnapshot {
 	s.Screensaver.Current = h.scr.Name()
 	s.Screensaver.Options = h.scr.Options()
 	s.Screensaver.Timeout = h.scr.Timeout()
+	s.Screensaver.Brightness = h.scr.Brightness()
 
 	if h.snd.Available() {
 		s.Sendspin = &sendspinState{On: h.snd.On(), State: h.snd.Actual()}
@@ -1084,14 +1088,16 @@ func (h *HAHub) handleBar(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleScreensaver picks the saver ({"name": "clock"}), sets the idle timeout in
-// minutes ({"timeout": 10}, 0 = never) and/or starts or stops it now
+// minutes ({"timeout": 10}, 0 = never), the panel level while it shows
+// ({"brightness": 10}, 0 = leave it alone) and/or starts or stops it now
 // ({"active": true}). Any combination; applied in that order, so one request can
 // pick a saver and show it.
 func (h *HAHub) handleScreensaver(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name    *string `json:"name"`
-		Timeout *int    `json:"timeout"`
-		Active  *bool   `json:"active"`
+		Name       *string `json:"name"`
+		Timeout    *int    `json:"timeout"`
+		Brightness *int    `json:"brightness"`
+		Active     *bool   `json:"active"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
@@ -1104,6 +1110,9 @@ func (h *HAHub) handleScreensaver(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Timeout != nil {
 		h.scr.SetTimeout(*req.Timeout)
+	}
+	if req.Brightness != nil {
+		h.scr.SetBrightness(*req.Brightness)
 	}
 	if req.Active != nil {
 		var err error

@@ -11,6 +11,7 @@ icon: lucide/sparkles
 - Wake the display by touch.
 - Screen saver after a period without a touch (10 minutes by default): a
   drifting clock or the bouncing logo over the dashboard, dismissed with a tap.
+  It can dim the panel while it shows.
 - On-screen keyboard for text fields on touch-only devices. (Experimental)
 - Automatic login using a long-lived HA token — no tapping through the login screen.
 
@@ -71,6 +72,7 @@ press on the tablet. It appears as a single device with these entities:
 | Screen saver | `switch` | Show the screen saver now, or dismiss it. Also turns on by itself after the idle timeout and off on a touch |
 | Screen saver style | `select` | Which screen saver to show (clock, logo) |
 | Screen saver timeout | `number` | Minutes without a touch before the screen saver starts, 0–240; 0 turns the idle trigger off |
+| Screen saver brightness | `number` | Panel brightness while the screen saver shows, 0–100 %; 0 (the default) leaves the brightness as it is |
 | Screenshot | `button` + `image` | Capture the current web view on demand; the latest shot shows as an image you can click to enlarge |
 | Page | `select` | Jump to one of your pages (edit the list under **Configure**, see [Home Assistant integration](../getting-started.md#pages)) |
 | Next / Previous page | `button` | Cycle through the dashboard URLs |
