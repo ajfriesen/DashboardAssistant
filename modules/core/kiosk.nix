@@ -753,9 +753,16 @@ let
 
   # Apply an absolute display rotation (degrees clockwise) as a Sway output
   # transform on every output. 0° maps to Sway's "normal"; the others pass
-  # through unchanged. Rotating an output also remaps absolute (touch) input to
-  # match, so taps on a rotated panel still land under the finger. An unsupported
-  # value is ignored rather than handed to swaymsg.
+  # through unchanged. An unsupported value is ignored rather than handed to
+  # swaymsg.
+  #
+  # Then map touchscreens and pen tablets to the output, so taps on a rotated
+  # panel still land under the finger. Sway turns absolute input with the output
+  # only once it is mapped to that output, and maps it by itself only when it
+  # takes both for built in: the Pi's DSI panel and its touch controller, but
+  # not a USB touchscreen on an HDMI screen, which stayed mapped to the whole
+  # layout and kept its unrotated orientation. The type-wide rule also covers a
+  # touchscreen plugged in later. With several outputs, the first one gets it.
   swayRotate = pkgs.writeShellScript "ha-kiosk-rotate" ''
     set -u
     case "''${1:-}" in
@@ -766,6 +773,12 @@ let
       *)   exit 0 ;;
     esac
     ${pkgs.sway}/bin/swaymsg output '*' transform "$t" >/dev/null 2>&1 || true
+    out=$(${pkgs.sway}/bin/swaymsg -t get_outputs 2>/dev/null \
+      | ${lib.getExe pkgs.jq} -r '[.[] | select(.active)][0].name // empty')
+    if [ -n "$out" ]; then
+      ${pkgs.sway}/bin/swaymsg input type:touch map_to_output "$out" >/dev/null 2>&1 || true
+      ${pkgs.sway}/bin/swaymsg input type:tablet_tool map_to_output "$out" >/dev/null 2>&1 || true
+    fi
   '';
 
   # Session start, in the one order that works: pin the output scale, re-assert
@@ -1639,6 +1652,13 @@ in
     description = "The session-start script that picks the brightness backend and reads the level back, for checks to run.";
   };
 
+  options.dashboardAssistant.kiosk.rotate = lib.mkOption {
+    type = lib.types.package;
+    internal = true;
+    readOnly = true;
+    description = "The script that applies a display rotation, at session start and from the rotation agent, for checks to run.";
+  };
+
   options.dashboardAssistant.kiosk.bar = lib.mkOption {
     type = lib.types.package;
     internal = true;
@@ -1673,6 +1693,7 @@ in
     dashboardAssistant.kiosk.bar = waybarStart;
     dashboardAssistant.kiosk.displayRestore = displayRestore;
     dashboardAssistant.kiosk.osk = oskToggle;
+    dashboardAssistant.kiosk.rotate = swayRotate;
     dashboardAssistant.kiosk.displayAgent = displayAgent;
     dashboardAssistant.kiosk.brightnessResolve = brightnessResolve;
 
