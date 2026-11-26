@@ -573,7 +573,7 @@ let
     done
   '';
 
-  # Navigate the already-running kiosk browser to a URL via Chromium's loopback
+  # Navigate the already-running kiosk browser to a URL (or reload it) via Chromium's loopback
   # CDP port (same mechanism as the token injector) — no relaunch, just a
   # top-level location change. The port is always open (see the launcher), so
   # this works regardless of provisioning state.
@@ -583,8 +583,14 @@ let
     ws=$(${lib.getExe pkgs.curl} -s --max-time 2 http://localhost:9222/json 2>/dev/null \
       | ${lib.getExe pkgs.jq} -r '[.[] | select(.type=="page")][0].webSocketDebuggerUrl // empty' 2>/dev/null)
     if [ -z "$ws" ]; then exit 0; fi
-    urljson=$(${lib.getExe pkgs.jq} -cn --arg u "$url" '$u')
-    ${lib.getExe pkgs.jq} -cn --arg e "location.assign($urljson)" \
+    # "reload" (from the daemon's Pages.Reload) loads the current page again;
+    # page URLs are always http(s), so it can never be one.
+    if [ "$url" = reload ]; then
+      expr="location.reload()"
+    else
+      expr="location.assign($(${lib.getExe pkgs.jq} -cn --arg u "$url" '$u'))"
+    fi
+    ${lib.getExe pkgs.jq} -cn --arg e "$expr" \
       '{id:1,method:"Runtime.evaluate",params:{expression:$e}}' \
       | ${pkgs.coreutils}/bin/timeout 5 ${pkgs.websocat}/bin/websocat "$ws" >/dev/null 2>&1 || true
   '';
@@ -1659,6 +1665,13 @@ in
     description = "The script that applies a display rotation, at session start and from the rotation agent, for checks to run.";
   };
 
+  options.dashboardAssistant.kiosk.nav = lib.mkOption {
+    type = lib.types.package;
+    internal = true;
+    readOnly = true;
+    description = "The script that points the running kiosk browser at a URL, or reloads it, for checks to run.";
+  };
+
   options.dashboardAssistant.kiosk.bar = lib.mkOption {
     type = lib.types.package;
     internal = true;
@@ -1694,6 +1707,7 @@ in
     dashboardAssistant.kiosk.displayRestore = displayRestore;
     dashboardAssistant.kiosk.osk = oskToggle;
     dashboardAssistant.kiosk.rotate = swayRotate;
+    dashboardAssistant.kiosk.nav = cdpNav;
     dashboardAssistant.kiosk.displayAgent = displayAgent;
     dashboardAssistant.kiosk.brightnessResolve = brightnessResolve;
 

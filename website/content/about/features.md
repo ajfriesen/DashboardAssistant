@@ -76,6 +76,7 @@ press on the tablet. It appears as a single device with these entities:
 | Screenshot | `button` + `image` | Capture the current web view on demand; the latest shot shows as an image you can click to enlarge |
 | Page | `select` | Jump to one of your pages (edit the list under **Configure**, see [Home Assistant integration](../getting-started.md#pages)) |
 | Next / Previous page | `button` | Cycle through the dashboard URLs |
+| Reload page | `button` | Load the current page again, for example after editing a dashboard. Happens by itself when the device's Home Assistant user is made an administrator or loses it, so the admin parts show or go |
 | Audio output | `select` | Which output the device plays to (HDMI, headphone jack, a USB speaker): Sendspin and dashboard sound both. Only on builds with the audio stack |
 | Audio input | `select` | Which microphone the device records from (a USB microphone, a speakerphone), for a voice assistant. Unavailable until one is plugged in. Only on builds with the audio stack |
 | Sendspin player | `switch` | Turn the device's multi-room audio player on/off; carries a `status` attribute. Only on builds with the audio stack |
