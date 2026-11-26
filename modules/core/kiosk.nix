@@ -1192,14 +1192,16 @@ let
   vncIndicator = pkgs.writeShellScript "ha-kiosk-vnc-indicator" ''
     [ -e "''${XDG_RUNTIME_DIR:-/tmp}/ha-vnc-on" ] && echo "$1" || true
   '';
-  vncModule = label: lib.optionalString vnc.enable ''
-    "custom/vnc": {
-      "exec": "${vncIndicator} '${label}'",
-      "signal": 9,
-      "interval": "once",
-      "tooltip": false
-    },
-  '';
+  vncModule =
+    label:
+    lib.optionalString vnc.enable ''
+      "custom/vnc": {
+        "exec": "${vncIndicator} '${label}'",
+        "signal": 9,
+        "interval": "once",
+        "tooltip": false
+      },
+    '';
   vncModuleRef = lib.optionalString vnc.enable ''"custom/vnc", '';
 
   waybarConfig = pkgs.writeText "ha-kiosk-waybar.json" ''
@@ -1648,7 +1650,61 @@ in
         DownloadRestrictions = 3;
         AllowFileSelectionDialogs = false;
         BrowserSignin = 0;
+        SyncDisabled = true;
+
+        # Everything below is browser surface a wall dashboard has no use for.
+        # Turning it off by policy also removes it from the touch context menu
+        # ("Translate", "Help me write") and stops its background work. The
+        # names and values are Chromium 154's (components/policy/resources/
+        # templates/policy_definitions); the kiosk-chromium-policies check
+        # fails if a Chromium bump drops one.
+        #
+        # AI. GenAiDefaultSettings turns off every GenAI feature that has no
+        # policy of its own; the rest are spelled out so a changed default
+        # cannot bring one back. GenAILocalFoundationalModelSettings also stops
+        # the multi-gigabyte on-device model download, on an SD card.
+        GenAiDefaultSettings = 2;
+        GenAILocalFoundationalModelSettings = 1;
+        BuiltInAIAPIsEnabled = false;
+        AIModeSettings = 1;
+        GeminiActOnWebSettings = 1;
+        GeminiSparkSettings = 1;
+        HelpMeWriteSettings = 2;
+        TabCompareSettings = 2;
+        CreateThemesSettings = 2;
+        HistorySearchSettings = 2;
+        DevToolsGenAiSettings = 2;
+        AutofillPredictionSettings = 2;
+        AutomatedPasswordChangeSettings = 2;
+
+        # Spellcheck and translate.
+        SpellcheckEnabled = false;
+        SpellCheckServiceEnabled = false;
+        TranslateEnabled = false;
+        TranslatorAPIAllowed = false;
+        LiveTranslateEnabled = false;
+
+        # Metrics, crash reports and feedback: nobody reads them for this device.
+        MetricsReportingEnabled = false;
+        UrlKeyedAnonymizedDataCollectionEnabled = false;
+        DomainReliabilityAllowed = false;
+        FeedbackSurveysEnabled = false;
+        UserFeedbackAllowed = false;
+        SafeBrowsingSurveysEnabled = false;
+
+        # No built-in PDF viewer: a PDF goes to the download path instead, and
+        # DownloadRestrictions above blocks that, so it simply does not open.
+        AlwaysOpenPdfExternally = true;
+
+        # Passwords, autofill and shopping.
         PasswordManagerEnabled = false;
+        PasswordLeakDetectionEnabled = false;
+        PasswordSharingEnabled = false;
+        PasswordManagerPasskeysEnabled = false;
+        AutofillAddressEnabled = false;
+        AutofillCreditCardEnabled = false;
+        PaymentMethodQueryEnabled = false;
+        ShoppingListEnabled = false;
       };
     };
 

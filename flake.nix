@@ -283,6 +283,59 @@
               touch "$out"
             '';
 
+        # The kiosk's managed Chromium policies (modules/core/kiosk.nix). Chromium
+        # ignores a policy it does not know without a word, so a misspelt name,
+        # or one a Chromium bump removed, would quietly turn a feature back on.
+        # Two halves: every policy we set must be one the shipped Chromium has
+        # compiled in, and the features the kiosk turns off must stay off.
+        kiosk-chromium-policies =
+          let
+            cfg = self.nixosConfigurations.dashboard-assistant-x86-disk;
+          in
+          pkgs.runCommand "kiosk-chromium-policies"
+            {
+              policies = pkgs.writeText "policies.json" (builtins.toJSON cfg.config.programs.chromium.extraOpts);
+              chromium = "${cfg.pkgs.chromium.browser}/libexec/chromium/chromium";
+              nativeBuildInputs = [ pkgs.jq ];
+            }
+            ''
+              set -euo pipefail
+              fail=0
+              for name in $(jq -r 'keys[]' "$policies"); do
+                grep -q -a -w "$name" "$chromium" || {
+                  echo "FAIL: Chromium does not know the policy $name, so it ignores it." >&2
+                  fail=1
+                }
+              done
+              # name=value pairs the kiosk depends on: off for AI, spellcheck,
+              # translate, metrics, sync, the PDF viewer, passwords, autofill
+              # and shopping.
+              for want in \
+                GenAiDefaultSettings=2 GenAILocalFoundationalModelSettings=1 BuiltInAIAPIsEnabled=false \
+                AIModeSettings=1 GeminiActOnWebSettings=1 GeminiSparkSettings=1 HelpMeWriteSettings=2 \
+                TabCompareSettings=2 CreateThemesSettings=2 HistorySearchSettings=2 DevToolsGenAiSettings=2 \
+                AutofillPredictionSettings=2 AutomatedPasswordChangeSettings=2 \
+                SpellcheckEnabled=false SpellCheckServiceEnabled=false \
+                TranslateEnabled=false TranslatorAPIAllowed=false LiveTranslateEnabled=false \
+                MetricsReportingEnabled=false UrlKeyedAnonymizedDataCollectionEnabled=false \
+                DomainReliabilityAllowed=false FeedbackSurveysEnabled=false UserFeedbackAllowed=false \
+                SafeBrowsingSurveysEnabled=false \
+                SyncDisabled=true BrowserSignin=0 \
+                AlwaysOpenPdfExternally=true \
+                PasswordManagerEnabled=false PasswordLeakDetectionEnabled=false PasswordSharingEnabled=false \
+                PasswordManagerPasskeysEnabled=false AutofillAddressEnabled=false AutofillCreditCardEnabled=false \
+                PaymentMethodQueryEnabled=false ShoppingListEnabled=false; do
+                name=''${want%%=*} value=''${want#*=}
+                got=$(jq -c --arg n "$name" '.[$n]' "$policies")
+                [ "$got" = "$value" ] || {
+                  echo "FAIL: policy $name is $got, want $value." >&2
+                  fail=1
+                }
+              done
+              [ "$fail" = 0 ] || exit 1
+              touch "$out"
+            '';
+
         # The kiosk's fallback dashboard URL and the daemon's default page must
         # name the same Home Assistant. They are written in two languages and
         # were already out of step once — Nix said `http://homeassistant:8123/`
