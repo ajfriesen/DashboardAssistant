@@ -99,6 +99,7 @@ func main() {
 	hub := NewHAHub(loadAPIToken(), disp, pages, act, upd, zoom, theme, rot, snd)
 	hub.SetNetwork(nm)
 	scr := NewScreensaver()
+	scr.SetDimmer(disp)
 	hub.SetScreensaver(scr)
 	// A fresh daemon thinks no saver is showing, but a running kiosk session can
 	// still have one up from before this restart. Tell the agent to drop it so

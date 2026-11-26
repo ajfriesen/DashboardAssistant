@@ -32,21 +32,32 @@ const (
 // saver on the live page over CDP (see kiosk.nix). An overlay rather than a
 // navigation, so waking the screen doesn't reload the dashboard.
 //
-// The chosen saver and timeout are persisted; whether one is showing is not — a
-// session restart drops the overlay, and the agent reports "saver off" on start.
+// The chosen saver, timeout and brightness are persisted; whether one is
+// showing is not — a session restart drops the overlay, and the agent reports
+// "saver off" on start.
 type Screensaver struct {
-	mu       sync.Mutex
-	active   bool
-	name     string
-	timeout  int       // minutes; 0 disables the idle trigger
-	armed    time.Time // idle baseline, reset on stop so a manual stop isn't undone by the next idle tick
-	fifo     string
-	observer func()
+	mu         sync.Mutex
+	active     bool
+	name       string
+	timeout    int       // minutes; 0 disables the idle trigger
+	brightness int       // panel level while a saver shows, 1..100; 0 leaves the brightness alone
+	armed      time.Time // idle baseline, reset on stop so a manual stop isn't undone by the next idle tick
+	fifo       string
+	dimmer     Dimmer
+	observer   func()
+}
+
+// Dimmer turns the panel down while a saver shows and back to its normal
+// brightness after. The Display is the real one.
+type Dimmer interface {
+	Dim(pct int) error
+	Undim() error
 }
 
 type screensaverPrefs struct {
-	Name    string `json:"name"`
-	Timeout int    `json:"timeout"`
+	Name       string `json:"name"`
+	Timeout    int    `json:"timeout"`
+	Brightness int    `json:"brightness"`
 }
 
 // NewScreensaver loads the persisted prefs. The FIFO path can be overridden for
@@ -57,7 +68,34 @@ func NewScreensaver() *Screensaver {
 		fifo = v
 	}
 	p := loadScreensaverPrefs()
-	return &Screensaver{name: p.Name, timeout: p.Timeout, armed: time.Now(), fifo: fifo}
+	return &Screensaver{name: p.Name, timeout: p.Timeout, brightness: p.Brightness, armed: time.Now(), fifo: fifo}
+}
+
+// SetDimmer gives the saver the display to dim, set after construction like
+// the observer.
+func (s *Screensaver) SetDimmer(d Dimmer) {
+	s.mu.Lock()
+	s.dimmer = d
+	s.mu.Unlock()
+}
+
+// dim and undim drive the dimmer, best-effort: the saver itself is up or down
+// either way, and a display that missed it is corrected by the next change.
+// Caller holds the lock.
+func (s *Screensaver) dim(pct int) {
+	if s.dimmer != nil {
+		if err := s.dimmer.Dim(pct); err != nil {
+			fmt.Fprintf(os.Stderr, "screensaver: dim: %v\n", err)
+		}
+	}
+}
+
+func (s *Screensaver) undim() {
+	if s.dimmer != nil {
+		if err := s.dimmer.Undim(); err != nil {
+			fmt.Fprintf(os.Stderr, "screensaver: undim: %v\n", err)
+		}
+	}
 }
 
 // SetObserver registers a callback fired (outside the lock) after any change.
@@ -88,6 +126,12 @@ func (s *Screensaver) Timeout() int {
 	return s.timeout
 }
 
+func (s *Screensaver) Brightness() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.brightness
+}
+
 // Start shows the selected screen saver. Restarting one that is already showing
 // is allowed — it is how a changed selection takes effect immediately.
 func (s *Screensaver) Start() error {
@@ -97,6 +141,9 @@ func (s *Screensaver) Start() error {
 		return err
 	}
 	s.active = true
+	if s.brightness > 0 {
+		s.dim(s.brightness)
+	}
 	obs := s.observer
 	s.mu.Unlock()
 	if obs != nil {
@@ -119,6 +166,7 @@ func (s *Screensaver) Stop() error {
 	}
 	s.active = false
 	s.armed = time.Now()
+	s.undim()
 	obs := s.observer
 	s.mu.Unlock()
 	if obs != nil {
@@ -128,11 +176,13 @@ func (s *Screensaver) Stop() error {
 }
 
 // Reset tells the in-session agent to drop any saver left over from before a
-// daemon restart. Best-effort: no session yet just means nothing to drop.
+// daemon restart, and the display to undo its dimming. Best-effort: no session
+// yet just means nothing to drop.
 func (s *Screensaver) Reset() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	_ = s.writeCmd("stop")
+	s.undim()
 }
 
 // ReportOff records that the overlay is gone without driving the FIFO — the
@@ -142,6 +192,9 @@ func (s *Screensaver) ReportOff() {
 	changed := s.active
 	s.active = false
 	s.armed = time.Now()
+	// Unconditional: the agent reports this on every session start, and a
+	// display dimmed by a saver from before a daemon restart is fixed here too.
+	s.undim()
 	obs := s.observer
 	s.mu.Unlock()
 	if changed && obs != nil {
@@ -183,6 +236,27 @@ func (s *Screensaver) SetTimeout(minutes int) {
 	}
 }
 
+// SetBrightness sets the panel level while a saver shows (0 = leave the
+// brightness alone), clamped to range, and applies it at once if one is up.
+func (s *Screensaver) SetBrightness(pct int) {
+	pct = clampPct(pct)
+	s.mu.Lock()
+	s.brightness = pct
+	if s.active {
+		if pct > 0 {
+			s.dim(pct)
+		} else {
+			s.undim()
+		}
+	}
+	obs := s.observer
+	s.save()
+	s.mu.Unlock()
+	if obs != nil {
+		obs()
+	}
+}
+
 // Tick starts the screen saver once the kiosk has been idle for the timeout.
 // idle is the seconds since the last touch; eligible is false when there is no
 // point (the panel is off, or the device isn't showing a dashboard yet).
@@ -200,7 +274,7 @@ func (s *Screensaver) Tick(idle int, eligible bool) {
 
 // save persists the prefs; caller holds the lock. Best-effort, like saveZoom.
 func (s *Screensaver) save() {
-	b, _ := json.Marshal(screensaverPrefs{Name: s.name, Timeout: s.timeout})
+	b, _ := json.Marshal(screensaverPrefs{Name: s.name, Timeout: s.timeout, Brightness: s.brightness})
 	tmp := screensaverFile + ".tmp"
 	if err := os.WriteFile(tmp, append(b, '\n'), 0o664); err != nil {
 		fmt.Fprintf(os.Stderr, "screensaver: save %s: %v\n", screensaverFile, err)
@@ -238,6 +312,7 @@ func loadScreensaverPrefs() screensaverPrefs {
 		p.Name = screensaverDefault
 	}
 	p.Timeout = max(0, min(p.Timeout, screensaverMaxTimeout))
+	p.Brightness = clampPct(p.Brightness)
 	return p
 }
 

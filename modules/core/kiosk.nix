@@ -360,8 +360,24 @@ let
              ${pkgs.coreutils}/bin/touch ${displayOffFlag} 2>/dev/null || true
              ${reportDisplayState} off ;;
         # Absolute backlight level (0..100) from the HA brightness slider.
+        # Recorded always, applied only when no screen saver has the panel
+        # dimmed: then it is the level undim returns to.
         bright) ${brightnessSet} "$arg" >/dev/null 2>&1 || true
                 ${reportDisplayState} bright "$arg" ;;
+        # The screen saver's level, applied without recording it (see
+        # brightnessDimmedFile), so the HA slider keeps showing the normal one.
+        dim)   case "$arg" in ""|*[!0-9]*) continue ;; esac
+               ${pkgs.coreutils}/bin/printf '%s\n' "$arg" > ${brightnessDimmedFile} 2>/dev/null || true
+               ${brightnessApply} "$arg" >/dev/null 2>&1 || true ;;
+        # Back to the recorded level. Sent whenever a saver may have gone, so
+        # it does nothing unless something is dimmed.
+        undim) if [ -e ${brightnessDimmedFile} ]; then
+                 ${pkgs.coreutils}/bin/rm -f ${brightnessDimmedFile}
+                 pct=$(${pkgs.coreutils}/bin/cat ${brightnessLevelFile} 2>/dev/null || echo 100)
+                 case "$pct" in ""|*[!0-9]*) pct=100 ;; esac
+                 ${brightnessApply} "$pct" >/dev/null 2>&1 || true
+                 ${reportDisplayState} bright "$pct"
+               fi ;;
       esac
     done
   '';
@@ -951,6 +967,13 @@ let
   # panel stayed dark until a brightness change happened to write a non-zero
   # value. So the level is persisted on every set and re-applied after power-on.
   brightnessLevelFile = "/var/lib/dashboard-assistant/brightness-level";
+  # Present while a screen saver has the panel dimmed, holding the dimmed level.
+  # It keeps the dim out of brightnessLevelFile: a slider move while dimmed is
+  # recorded but not applied, a power-on re-applies the dim rather than the
+  # normal level, and a session restart doesn't read the dimmed backlight back
+  # as the new normal. In the state dir, not the runtime dir, so it outlives the
+  # session that made it; the daemon's undim on start clears it.
+  brightnessDimmedFile = "/var/lib/dashboard-assistant/brightness-dimmed";
 
   brightnessResolve = pkgs.writeShellScript "ha-brightness-resolve" ''
     set -u
@@ -991,9 +1014,14 @@ let
 
     # Read the current level from the hardware where possible (backlight, DDC);
     # software has no readback so assume full. Report it so the HA brightness
-    # slider starts in sync after a session restart.
+    # slider starts in sync after a session restart. Not while a screen saver
+    # has it dimmed: the hardware shows the dim, so keep the recorded level.
     init=100
-    case "$m" in
+    if [ -e ${brightnessDimmedFile} ]; then
+      init=$(${pkgs.coreutils}/bin/cat ${brightnessLevelFile} 2>/dev/null || echo 100)
+      case "$init" in ""|*[!0-9]*) init=100 ;; esac
+    else
+      case "$m" in
       backlight)
         p=$(${pkgs.brightnessctl}/bin/brightnessctl -m -d "$dev" 2>/dev/null \
           | ${pkgs.coreutils}/bin/cut -d, -f4 | ${pkgs.coreutils}/bin/tr -d '%')
@@ -1004,15 +1032,16 @@ let
         if [ "''${4:-}" != "" ] && [ "''${5:-0}" -gt 0 ] 2>/dev/null; then
           init=$(( $4 * 100 / $5 ))
         fi ;;
-    esac
+      esac
+    fi
     ${pkgs.coreutils}/bin/printf '%s\n' "$init" > ${brightnessLevelFile} 2>/dev/null || true
     ${reportDisplayState} bright "$init"
   '';
 
-  # Set an absolute level (0..100) via whichever tier the resolver picked, and
-  # record it. A missing env file defaults to software so a set before the
-  # resolver finishes still does something sane rather than erroring.
-  brightnessSet = pkgs.writeShellScript "ha-brightness-set" ''
+  # Apply an absolute level (0..100) via whichever tier the resolver picked,
+  # without recording it. A missing env file defaults to software so a set
+  # before the resolver finishes still does something sane rather than erroring.
+  brightnessApply = pkgs.writeShellScript "ha-brightness-apply" ''
     set -u
     METHOD=software
     DEVICE=""
@@ -1040,9 +1069,18 @@ let
         ${pkgs.systemd}/bin/busctl --user -- \
           set-property rs.wl-gammarelay / rs.wl.gammarelay Brightness d "$val" >/dev/null 2>&1 || true ;;
     esac
+  '';
 
-    # Record it so brightnessRestore can put the panel back after a power-on.
+  # Set a level: record it so brightnessRestore can put the panel back after a
+  # power-on, and apply it unless a screen saver has the panel dimmed, in which
+  # case it is the level undim returns to.
+  brightnessSet = pkgs.writeShellScript "ha-brightness-set" ''
+    set -u
+    pct=''${1:-}
+    case "$pct" in ""|*[!0-9]*) echo "usage: $0 <0-100>" >&2; exit 2 ;; esac
+    [ "$pct" -gt 100 ] && pct=100
     ${pkgs.coreutils}/bin/printf '%s\n' "$pct" > ${brightnessLevelFile} 2>/dev/null || true
+    [ -e ${brightnessDimmedFile} ] || ${brightnessApply} "$pct"
   '';
 
   # Re-apply the last commanded level. Called after every `output * power on`,
@@ -1064,6 +1102,11 @@ let
     [ "$pct" -lt 10 ] && pct=10
     ${brightnessSet} "$pct" >/dev/null 2>&1 || true
     ${reportDisplayState} bright "$pct"
+    # A screen saver still up keeps its dim across a power cycle.
+    if [ -e ${brightnessDimmedFile} ]; then
+      dim=$(${pkgs.coreutils}/bin/cat ${brightnessDimmedFile} 2>/dev/null)
+      case "$dim" in ""|*[!0-9]*) ;; *) ${brightnessApply} "$dim" >/dev/null 2>&1 || true ;; esac
+    fi
   '';
 
   # On-screen keyboard toggle, driven by the ⌨ Keyboard button on the bar.
@@ -1566,6 +1609,20 @@ in
     description = "The on-screen keyboard toggle behind the bar's Keyboard button, for checks to run.";
   };
 
+  options.dashboardAssistant.kiosk.displayAgent = lib.mkOption {
+    type = lib.types.package;
+    internal = true;
+    readOnly = true;
+    description = "The in-session agent that applies display power and brightness commands, for checks to run.";
+  };
+
+  options.dashboardAssistant.kiosk.brightnessResolve = lib.mkOption {
+    type = lib.types.package;
+    internal = true;
+    readOnly = true;
+    description = "The session-start script that picks the brightness backend and reads the level back, for checks to run.";
+  };
+
   options.dashboardAssistant.kiosk.bar = lib.mkOption {
     type = lib.types.package;
     internal = true;
@@ -1600,6 +1657,8 @@ in
     dashboardAssistant.kiosk.bar = waybarStart;
     dashboardAssistant.kiosk.displayRestore = displayRestore;
     dashboardAssistant.kiosk.osk = oskToggle;
+    dashboardAssistant.kiosk.displayAgent = displayAgent;
+    dashboardAssistant.kiosk.brightnessResolve = brightnessResolve;
 
     programs.sway.enable = true;
 

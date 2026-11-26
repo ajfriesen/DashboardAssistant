@@ -31,7 +31,8 @@ can:
 - **Rotate** the display to 0, 90, 180 or 270°.
 - Show the **screen saver** now, pick its style, or set how long the panel
   waits without a touch before it starts (10 minutes by default; 0 turns it
-  off). A tap dismisses it.
+  off). A tap dismisses it. Give it its own **brightness** to dim the panel
+  while it shows — see [Dimming the screen saver](#dimming-the-screen-saver).
 - Take a **screenshot** of the current view on demand.
 - Switch the active **page**, and choose the dashboard and pages (any website)
   under **Configure** on the integration card.
@@ -45,6 +46,43 @@ the panel at night or wake it on motion).
 
 See the [Home Assistant integration](../about/features.md#home-assistant-integration)
 reference for the complete entity list.
+
+### Dimming the screen saver
+
+**Screen saver brightness** sets how bright the panel is while the screen saver
+shows. The device turns the panel down when the screen saver starts and back to
+the **display** brightness when it ends, by a tap or from Home Assistant. At 0,
+the default, the screen saver leaves the brightness as it is.
+
+The display brightness stays the level the panel comes back to: moving it while
+the screen saver shows changes that level without lighting the screen saver up.
+
+To use different levels by time of day, set both from an automation. This one
+keeps the screen saver at 10 % and runs the panel at 100 % by day and 50 % at
+night:
+
+```yaml
+automation:
+  - alias: "Kitchen panel: day and night brightness"
+    triggers:
+      - trigger: time
+        at: "07:00:00"
+        id: day
+      - trigger: time
+        at: "20:00:00"
+        id: night
+    actions:
+      - action: number.set_value
+        target:
+          entity_id: number.kitchen_panel_screen_saver_brightness
+        data:
+          value: 10
+      - action: light.turn_on
+        target:
+          entity_id: light.kitchen_panel_display
+        data:
+          brightness_pct: "{{ 100 if trigger.id == 'day' else 50 }}"
+```
 
 ## Updates
 
