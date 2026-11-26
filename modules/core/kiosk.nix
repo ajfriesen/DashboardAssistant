@@ -1014,12 +1014,28 @@ let
 
     # Read the current level from the hardware where possible (backlight, DDC);
     # software has no readback so assume full. Report it so the HA brightness
-    # slider starts in sync after a session restart. Not while a screen saver
-    # has it dimmed: the hardware shows the dim, so keep the recorded level.
+    # slider starts in sync after a session restart.
+    #
+    # Not when a screen saver left the panel dimmed: the hardware shows the dim,
+    # so put the recorded level back instead. A new session has no saver up, and
+    # this can't wait for the daemon's undim: the daemon sends it when the
+    # screen saver agent reports in, which can be before the display agent holds
+    # its FIFO, and then it is lost.
     init=100
     if [ -e ${brightnessDimmedFile} ]; then
       init=$(${pkgs.coreutils}/bin/cat ${brightnessLevelFile} 2>/dev/null || echo 100)
       case "$init" in ""|*[!0-9]*) init=100 ;; esac
+      ${pkgs.coreutils}/bin/rm -f ${brightnessDimmedFile}
+      # The software dimmer was just started above; give it a moment to take
+      # its bus name, or the level is set on nothing.
+      if [ "$m" = software ]; then
+        i=0
+        while [ "$i" -lt 30 ] && ! ${pkgs.systemd}/bin/busctl --user status rs.wl-gammarelay >/dev/null 2>&1; do
+          i=$((i + 1))
+          ${pkgs.coreutils}/bin/sleep 0.1
+        done
+      fi
+      ${brightnessApply} "$init" >/dev/null 2>&1 || true
     else
       case "$m" in
       backlight)

@@ -206,5 +206,19 @@ pkgs.testers.runNixOSTest {
         machine.succeed("systemctl restart dashboard-assistant-daemon.service")
         panel_at(50)
         assert api("GET", "state")["screensaver"]["brightness"] == 20, "the level was not kept"
+
+    with subtest("a session restart puts back the brightness a saver left dimmed"):
+        # A new session has no saver up. The daemon's undim on "saver off"
+        # can race the display agent opening its FIFO, so the session start
+        # undoes the dim itself.
+        api("POST", "screensaver", {"active": True})
+        panel_at(20)
+        machine.succeed("systemctl restart headless-kiosk.service")
+        machine.wait_until_succeeds(
+            "ls -l /proc/$(pgrep -f ha-display-agent | head -1)/fd | grep -q display.fifo", timeout=60
+        )
+        panel_at(50)
+        machine.fail("test -e /var/lib/dashboard-assistant/brightness-dimmed")
+        assert slider() == 50
   '';
 }
