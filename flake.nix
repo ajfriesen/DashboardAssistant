@@ -309,7 +309,9 @@
               done
               # name=value pairs the kiosk depends on: off for AI, spellcheck,
               # translate, metrics, sync, the PDF viewer, passwords, autofill
-              # and shopping.
+              # and shopping; the ways out to a normal browser window; permission
+              # prompts nobody can answer; background traffic and flash writes;
+              # and battery saver.
               for want in \
                 GenAiDefaultSettings=2 GenAILocalFoundationalModelSettings=1 BuiltInAIAPIsEnabled=false \
                 AIModeSettings=1 GeminiActOnWebSettings=1 GeminiSparkSettings=1 HelpMeWriteSettings=2 \
@@ -324,7 +326,22 @@
                 AlwaysOpenPdfExternally=true \
                 PasswordManagerEnabled=false PasswordLeakDetectionEnabled=false PasswordSharingEnabled=false \
                 PasswordManagerPasskeysEnabled=false AutofillAddressEnabled=false AutofillCreditCardEnabled=false \
-                PaymentMethodQueryEnabled=false ShoppingListEnabled=false; do
+                PaymentMethodQueryEnabled=false ShoppingListEnabled=false \
+                VoiceTypingSettings=2 ThirdPartyAiChatSettings=1 SearchContentSharingSettings=1 \
+                SmartTabSharingSettings=1 ChromeSuggestionsSettings=1 LiveCaptionEnabled=false \
+                AccessibilityImageLabelsEnabled=false \
+                DefaultSearchProviderContextMenuAccessAllowed=false BrowserGuestModeEnabled=false \
+                BrowserAddPersonEnabled=false EnableMediaRouter=false WebAppInstallByUserEnabled=false \
+                TaskManagerEndProcessEnabled=false \
+                DefaultNotificationsSetting=2 DefaultGeolocationSetting=2 DefaultSensorsSetting=2 \
+                DefaultWebBluetoothGuardSetting=2 DefaultWebUsbGuardSetting=2 DefaultSerialGuardSetting=2 \
+                DefaultWebHidGuardSetting=2 DefaultLocalFontsSetting=2 DefaultWindowManagementSetting=2 \
+                DefaultIdleDetectionSetting=2 DefaultFileSystemReadGuardSetting=2 \
+                DefaultFileSystemWriteGuardSetting=2 'HttpsOnlyMode="disallowed"' \
+                SavingBrowserHistoryDisabled=true BrowserNetworkTimeQueriesEnabled=false \
+                NetworkPredictionOptions=2 AlternateErrorPagesEnabled=false MediaRecommendationsEnabled=false \
+                PromotionsEnabled=false BackgroundModeEnabled=false \
+                BatterySaverModeAvailability=0; do
                 name=''${want%%=*} value=''${want#*=}
                 got=$(jq -c --arg n "$name" '.[$n]' "$policies")
                 [ "$got" = "$value" ] || {

@@ -1705,6 +1705,60 @@ in
         AutofillCreditCardEnabled = false;
         PaymentMethodQueryEnabled = false;
         ShoppingListEnabled = false;
+
+        # More AI and speech, outside GenAiDefaultSettings' reach. Live Caption
+        # would download speech models; image labels send images to Google.
+        VoiceTypingSettings = 2;
+        ThirdPartyAiChatSettings = 1;
+        SearchContentSharingSettings = 1;
+        SmartTabSharingSettings = 1;
+        ChromeSuggestionsSettings = 1;
+        LiveCaptionEnabled = false;
+        AccessibilityImageLabelsEnabled = false;
+
+        # Ways out of the --app window into a normal browser window: "Search
+        # Google for …" on a long-press, guest mode and new profiles, Cast,
+        # installing the page as another app, and the task manager (Shift+Esc
+        # from the on-screen keyboard), which can end the dashboard's renderer.
+        DefaultSearchProviderContextMenuAccessAllowed = false;
+        BrowserGuestModeEnabled = false;
+        BrowserAddPersonEnabled = false;
+        EnableMediaRouter = false;
+        WebAppInstallByUserEnabled = false;
+        TaskManagerEndProcessEnabled = false;
+
+        # Permission prompts nobody at a wall display answers: sites are not
+        # asked at all. The microphone and camera stay askable for a voice
+        # assistant in the browser. HttpsOnlyMode keeps a plain-http dashboard
+        # from landing on a "not secure" page that waits for a tap.
+        DefaultNotificationsSetting = 2;
+        DefaultGeolocationSetting = 2;
+        DefaultSensorsSetting = 2;
+        DefaultWebBluetoothGuardSetting = 2;
+        DefaultWebUsbGuardSetting = 2;
+        DefaultSerialGuardSetting = 2;
+        DefaultWebHidGuardSetting = 2;
+        DefaultLocalFontsSetting = 2;
+        DefaultWindowManagementSetting = 2;
+        DefaultIdleDetectionSetting = 2;
+        DefaultFileSystemReadGuardSetting = 2;
+        DefaultFileSystemWriteGuardSetting = 2;
+        HttpsOnlyMode = "disallowed";
+
+        # Background traffic and flash writes. The profile (no --user-data-dir)
+        # is on the SD card, history database included, and every page switch
+        # wrote to it. The clock comes from NTP, not a Google time service.
+        SavingBrowserHistoryDisabled = true;
+        BrowserNetworkTimeQueriesEnabled = false;
+        NetworkPredictionOptions = 2;
+        AlternateErrorPagesEnabled = false;
+        MediaRecommendationsEnabled = false;
+        PromotionsEnabled = false;
+        BackgroundModeEnabled = false;
+
+        # An x86 device on battery must not throttle the dashboard's animations
+        # and video.
+        BatterySaverModeAvailability = 0;
       };
     };
 
