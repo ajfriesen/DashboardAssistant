@@ -1146,7 +1146,7 @@ let
 
   # On-screen keyboard toggle, driven by the ⌨ Keyboard button on the bar.
   # vboard has no auto-show and isn't a layer-shell surface, so we manage it by
-  # hand: if its window is up, kill it (hide); otherwise launch it and dock it to
+  # hand: if its window is up, end it; otherwise launch it and dock it to
   # the bottom of the focused output — full width, ~40% tall, sitting just above
   # the 50px button bar. Sway floats/pins/never-focuses it via the app_id rules
   # in the session config (see swayConfig below); this only handles show/hide and
@@ -1160,7 +1160,18 @@ let
       | ${lib.getExe pkgs.jq} -r --arg a "$app" \
         '[.. | objects | select(.app_id? == $a)] | length')
     if [ "''${present:-0}" != "0" ]; then
-      ${pkgs.sway}/bin/swaymsg "[app_id=\"$app\"] kill" >/dev/null 2>&1 || true
+      # End the process, not just the window: asked to close, vboard hides
+      # itself while it has a tray icon and keeps running, and the next launch
+      # only shows that instance again, with the font and geometry of the
+      # orientation it first opened on (#126).
+      pid=$(${pkgs.sway}/bin/swaymsg -t get_tree \
+        | ${lib.getExe pkgs.jq} -r --arg a "$app" \
+          '[.. | objects | select(.app_id? == $a)][0].pid // empty')
+      if [ -n "$pid" ]; then
+        ${pkgs.coreutils}/bin/kill "$pid" 2>/dev/null || true
+      else
+        ${pkgs.sway}/bin/swaymsg "[app_id=\"$app\"] kill" >/dev/null 2>&1 || true
+      fi
       exit 0
     fi
 
@@ -1178,18 +1189,21 @@ let
     # logic below decides the geometry every time anyway.
     ${pkgs.coreutils}/bin/rm -f "$HOME/.config/vboard/settings.conf"
 
-    # vboard's homogeneous key grid has a hard minimum width of ~900px at its
-    # built-in 19px key font (the word-labeled modifier keys set the column
-    # width), which fits a 960px landscape logical width but overflows the
-    # 853px of a Touch Display 2 in landscape (at the 1.5 scale displayRestore
-    # pins) and the 600px of a 1024x600 panel in portrait — GTK silently ignores a resize below its minimum and
-    # the right third of the keyboard hangs off-screen. The font is a CSS
-    # pixel size, immune to GDK_DPI_SCALE (points only, tried and disproven
-    # on-device), so our vboard package patches it to honour VBOARD_FONT_PX
-    # (packages/vboard). Applied only on outputs too narrow for the full-size
-    # keys, so wide landscape outputs keep them.
+    # vboard's key grid is as wide as its labels need: about 900px at its
+    # built-in 19px key font, which fits a 960px landscape logical width but
+    # overflows the 853px of a Touch Display 2 in landscape (at the 1.5 scale
+    # displayRestore pins) and the 600px of a 1024x600 panel in portrait. GTK
+    # ignores a resize below that minimum and the keyboard hangs off the
+    # screen. At 10px the grid needs 516px. (vboard opens at its natural width,
+    # 763px with its header unfolded, and folds the header right after: from
+    # then on the grid sets the minimum.) The font is a CSS pixel size, immune
+    # to GDK_DPI_SCALE (points only, tried and disproven on-device), so our
+    # vboard package patches it to honour VBOARD_FONT_PX. Applied only on
+    # outputs too narrow for the full-size keys, so wide landscape outputs keep
+    # them. The Touch Display 2 in portrait (480px) is still too narrow even at
+    # 10px (#126).
     if [ "$ow" -lt 900 ]; then
-      VBOARD_FONT_PX=11 ${vboard}/bin/vboard >/dev/null 2>&1 &
+      VBOARD_FONT_PX=10 ${vboard}/bin/vboard >/dev/null 2>&1 &
     else
       ${vboard}/bin/vboard >/dev/null 2>&1 &
     fi
@@ -1216,9 +1230,23 @@ let
         kh=$(( oh * 2 / 5 ))
         if [ "''${nh:-0}" -gt "$kh" ]; then kh=$nh; fi
         ky=$(( oy + oh - kh - bar ))
-        ${pkgs.sway}/bin/swaymsg \
-          "[app_id=\"$app\"] resize set width ''${ow}px height ''${kh}px, move absolute position ''${ox}px ''${ky}px" \
-          >/dev/null 2>&1 || true
+        # vboard maps at its natural width, with its header's extra controls
+        # still showing, and folds them right after (app.py). A resize that
+        # lands before the fold is refused, since the window cannot yet be that
+        # narrow, and nothing would ask again once it can (#126). So ask until
+        # Sway's container takes the width, for up to 2s.
+        j=0
+        while [ "$j" -lt 10 ]; do
+          j=$((j + 1))
+          ${pkgs.sway}/bin/swaymsg \
+            "[app_id=\"$app\"] resize set width ''${ow}px height ''${kh}px, move absolute position ''${ox}px ''${ky}px" \
+            >/dev/null 2>&1 || true
+          ${pkgs.coreutils}/bin/sleep 0.2
+          kw=$(${pkgs.sway}/bin/swaymsg -t get_tree \
+            | ${lib.getExe pkgs.jq} -r --arg a "$app" \
+              '[.. | objects | select(.app_id? == $a)][0].rect.width // 0')
+          [ "''${kw:-0}" -le "$ow" ] && break
+        done
         # Width analogue of the nh clamp: GTK refuses a resize below the grid's
         # minimum. If the surface still mapped wider than the output, center it
         # so the overflow clips evenly on both edges instead of eating the whole
