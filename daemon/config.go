@@ -69,6 +69,7 @@ var (
 	screensaverFifo = stateDir + "/screensaver.fifo" // daemon writes "start <name>"/"stop"; in-session agent overlays the saver over CDP
 	screensaverFile = stateDir + "/screensaver.json" // persisted screen saver choice + idle timeout (minutes)
 	regionFile      = stateDir + "/region.json"      // timezone + locale from Home Assistant; the kiosk launcher reads the locale
+	chargeFile      = stateDir + "/charge.json"      // battery charge thresholds from Home Assistant, applied again at boot (see charge.go)
 	// Audio output and input (see audio.go). Both must match modules/core/audio.nix:
 	// the agent publishes the sinks and sources to the file and reads
 	// "output <name>" / "input <name>" from the FIFO.
@@ -266,6 +267,9 @@ func provisioningStatePaths() []string {
 		onlineMarker, urlsFile, zoomFile, themeFile, rotationFile, barHiddenFile, screensaverFile,
 		// The timezone goes back to UTC on the next start (Region.Reconcile).
 		regionFile,
+		// ChargeControl.Reset has put the battery back to charging fully
+		// already; this only makes sure the thresholds are not applied again.
+		chargeFile,
 		// The recorded seed-file hash goes too, so a reset device re-imports
 		// the card it is sitting on instead of ignoring it. Without this a
 		// factory reset would appear to work and then come back unprovisioned
