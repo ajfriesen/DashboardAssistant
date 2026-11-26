@@ -217,6 +217,13 @@ func (p *Pages) Select(label string) {
 	}
 }
 
+// Reload asks the nav agent to reload the page the browser is on, without
+// moving off it. Home Assistant's frontend reads the signed-in user once, when
+// it loads, so after the device's user became an admin the admin parts only
+// show once the page loads again. Page URLs are always http(s), so the word
+// can never be a page.
+func (p *Pages) Reload() error { return p.navigate("reload") }
+
 // navigate hands the URL to the in-session nav agent over the FIFO. Non-blocking:
 // if the kiosk session isn't up there's no reader, and we report rather than hang.
 func (p *Pages) navigate(url string) error {

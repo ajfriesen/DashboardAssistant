@@ -535,6 +535,7 @@ func (h *HAHub) routes() http.Handler {
 	mux.HandleFunc("/api/ha/display", h.auth(h.handleDisplay))
 	mux.HandleFunc("/api/ha/page", h.auth(h.handlePage))
 	mux.HandleFunc("/api/ha/pages", h.auth(h.handlePages))
+	mux.HandleFunc("/api/ha/reload", h.auth(h.handleReload))
 	mux.HandleFunc("/api/ha/zoom", h.auth(h.handleZoom))
 	mux.HandleFunc("/api/ha/theme", h.auth(h.handleTheme))
 	mux.HandleFunc("/api/ha/rotation", h.auth(h.handleRotation))
@@ -783,7 +784,22 @@ func (h *HAHub) handleInfo(w http.ResponseWriter, r *http.Request) {
 		// button goes there. Before, both used the kiosk login's ha_url, so the
 		// integration keeps sending a home in it to a device without this.
 		"home_is_first_page": true,
+		// POST /api/ha/reload exists: the integration offers its button, and
+		// reloads by itself when the device's user becomes an admin.
+		"can_reload": true,
 	})
+}
+
+// handleReload reloads the page the kiosk browser is on (Pages.Reload).
+func (h *HAHub) handleReload(w http.ResponseWriter, r *http.Request) {
+	if !requirePost(w, r) {
+		return
+	}
+	if err := h.pages.Reload(); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "reloading"})
 }
 
 func (h *HAHub) handleStateSnapshot(w http.ResponseWriter, r *http.Request) {

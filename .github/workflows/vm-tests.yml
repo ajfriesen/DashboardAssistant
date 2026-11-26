@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        check: [first-boot, vnc, kiosk-bar, screensaver-brightness, touch-rotation, sendspin, audio, web-glyphs-have-fonts, kiosk-flash-flags, kiosk-chromium-policies, screenshot-path-agreement, one-nixpkgs, one-home-assistant-fallback, kiosk-urls, release-has-no-unattended-access, updates-need-no-local-build, machine-id-is-not-managed-by-nixos, update-keeps-machine-id, kiosk-region, vboard-layouts]
+        check: [first-boot, vnc, kiosk-bar, screensaver-brightness, touch-rotation, kiosk-reload, sendspin, audio, web-glyphs-have-fonts, kiosk-flash-flags, kiosk-chromium-policies, screenshot-path-agreement, one-nixpkgs, one-home-assistant-fallback, kiosk-urls, release-has-no-unattended-access, updates-need-no-local-build, machine-id-is-not-managed-by-nixos, update-keeps-machine-id, kiosk-region, vboard-layouts]
     steps:
       - uses: actions/checkout@v7
       - uses: cachix/install-nix-action@v31

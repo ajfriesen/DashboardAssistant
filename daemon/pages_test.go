@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"reflect"
 	"strings"
@@ -188,5 +190,44 @@ func TestAPairingURLLeavesASentListAlone(t *testing.T) {
 
 	if got := p.List(); !reflect.DeepEqual(got, threePages) {
 		t.Errorf("list = %v, want the one Home Assistant sent", got)
+	}
+}
+
+// Reload refreshes the page the browser is on, without moving off it: after
+// the device's user became an admin, Home Assistant's frontend only shows the
+// admin parts once it loads again.
+func TestReloadAsksTheNavAgentToReload(t *testing.T) {
+	p, nav := navReader(t)
+	if err := p.Replace(threePages); err != nil {
+		t.Fatal(err)
+	}
+	p.Next()
+	nav()
+
+	if err := p.Reload(); err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+	if got := nav(); got != "reload" {
+		t.Fatalf("nav agent got %q, want reload", got)
+	}
+	if got := p.CurrentLabel(); got != "Weather" {
+		t.Fatalf("current page = %q, want it unchanged", got)
+	}
+}
+
+func TestReloadEndpoint(t *testing.T) {
+	p, nav := navReader(t)
+	h := &HAHub{token: "tok", pair: NewPairing("tok"), pages: p}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ha/reload", strings.NewReader("{}"))
+	req.Header.Set("Authorization", "Bearer tok")
+	rec := httptest.NewRecorder()
+	h.routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST /api/ha/reload = %d %s", rec.Code, rec.Body)
+	}
+	if got := nav(); got != "reload" {
+		t.Fatalf("nav agent got %q, want reload", got)
 	}
 }
