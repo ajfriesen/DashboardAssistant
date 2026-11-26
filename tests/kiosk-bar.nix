@@ -24,6 +24,39 @@
 let
   oskAppId = "io.github.archisman-panigrahi.vboard";
 
+  # The narrowest the keyboard the toggle launched can be, as GTK sizes it.
+  # Sway's container cannot be trusted for this: it shows the size Sway asked
+  # for until the client commits its own, which can be later or never in a
+  # test, so a keyboard wider than the screen could pass (#126). Run with the
+  # launched keyboard's own environment, so the font is the one it got; the
+  # window is built, never shown. The header and the content stack, so the
+  # wider of the two is the window's width.
+  oskMinWidth = pkgs.writeText "osk-min-width.py" ''
+    import gi
+
+    gi.require_version("Gtk", "3.0")
+    from gi.repository import Gtk  # noqa: E402
+    from vboard.window import VirtualKeyboard  # noqa: E402
+
+    win = VirtualKeyboard()
+    # What vboard's app does when it opens the window (app.py, ensure_window):
+    # show everything, then fold the header's extra controls, as its ☰ does.
+    # On the children only, so no second window appears.
+    win.header.show_all()
+    win.get_child().show_all()
+    win.change_visibility()
+    # The suggestion bar is shown by the app itself, not by show_all.
+    win.update_suggestion_bar_visibility()
+    parts = {
+        "header": win.header.get_preferred_width()[0],
+        "suggestions": win.suggestion_revealer.get_preferred_width()[0],
+        "keys": win.grid.get_preferred_width()[0],
+        "content": win.get_child().get_preferred_width()[0],
+    }
+    print(parts)
+    print(max(parts["header"], parts["content"]))
+  '';
+
   # Runs of non-background pixels along one row through the pills, just under
   # their top edge: below the rounded corners, above the labels and the sponsor
   # mark, so each pill reads as one unbroken run. Also the first pill's height,
@@ -134,6 +167,29 @@ pkgs.testers.runNixOSTest {
             f"SWAYSOCK=$(ls {run}/sway-ipc.*.sock) {cmd}"
         )
 
+    def osk_min_width():
+        tree = json.loads(as_kiosk("swaymsg -t get_tree"))
+        pids = []
+
+        def walk(n):
+            if n.get("app_id") == osk_app:
+                pids.append(n["pid"])
+            for c in n.get("nodes", []) + n.get("floating_nodes", []):
+                walk(c)
+
+        walk(tree)
+        pid = pids[0]
+        py = machine.succeed(f"tr '\\0' '\\n' < /proc/{pid}/cmdline | head -1").strip()
+        share = machine.succeed(f"tr '\\0' '\\n' < /proc/{pid}/cmdline | grep -m1 -o '^/nix/store/[^/]*-vboard-[^/]*'").strip()
+        machine.succeed(f"tr '\\0' '\\n' < /proc/{pid}/environ > /tmp/vboard.env")
+        out = as_kiosk(
+            "sh -c 'env -i $(tr \"\\n\" \" \" < /tmp/vboard.env) "
+            f"PYTHONPATH={share}/share/vboard {py} ${oskMinWidth} 2>/dev/null'"
+        )
+        font = machine.succeed(f"tr '\\0' '\\n' < /proc/{pid}/environ | sed -n 's/^VBOARD_FONT_PX=//p'").strip()
+        machine.log(f"keyboard {pid}, font {font or 'built-in'}: {out.strip().splitlines()[-2]}")
+        return int(out.strip().splitlines()[-1]), font
+
     def output():
         return json.loads(as_kiosk("swaymsg -t get_outputs"))[0]
 
@@ -158,15 +214,15 @@ pkgs.testers.runNixOSTest {
     # (name, mode, the scale Sway picks for it unrotated, persisted rotation,
     #  scale after session start, bar layout, whether the keyboard fits)
     #
-    # The keyboard does not fit a 1024x600 panel in portrait: even with the
-    # small keys oskToggle asks for below 900px, vboard's grid maps 763px wide
-    # on the 600px output. Logged rather than asserted until that is fixed, so
-    # the case still guards the bar.
+    # The keyboard does not fit the Touch Display 2 in portrait: its 30 key
+    # columns need about 516px even with the small keys, on a 480px output.
+    # Logged rather than asserted until that is solved, so the case still
+    # guards the bar.
     cases = [
-        ("Touch Display 2, portrait (its native orientation)", "720x1280", 2, None, 1.5, "compact", True),
+        ("Touch Display 2, portrait (its native orientation)", "720x1280", 2, None, 1.5, "compact", False),
         ("Touch Display 2, rotated to landscape", "720x1280", 2, "90", 1.5, "labelled", True),
         ("Touch Display, landscape", "800x480", 1, None, 1, "labelled", True),
-        ("1024x600 panel, rotated to portrait", "1024x600", 1, "90", 1, "compact", False),
+        ("1024x600 panel, rotated to portrait", "1024x600", 1, "90", 1, "compact", True),
         ("1080p screen, landscape", "1920x1080", 1, None, 1, "labelled", True),
     ]
     pill_heights = {}
@@ -217,8 +273,17 @@ pkgs.testers.runNixOSTest {
             retry(lambda _: osk_rect() is not None, timeout_seconds=30)
             machine.sleep(3)  # the toggle polls, resizes, then re-centres
             k, o = osk_rect(), output()["rect"]
-            machine.log(f"{name}: keyboard {k} on output {o}")
-            fits = k["x"] >= o["x"] and k["x"] + k["width"] <= o["x"] + o["width"]
+            need, font = osk_min_width()
+            machine.log(f"{name}: keyboard {k}, at least {need}px wide, on output {o}")
+            # Each tap opens a fresh keyboard, with the keys for this output:
+            # one opened earlier on another orientation must not come back.
+            want = "10" if o["width"] < 900 else ""
+            assert font == want, f"the keyboard has font {font!r}, want {want!r} on {o}"
+            fits = (
+                k["x"] >= o["x"]
+                and k["x"] + k["width"] <= o["x"] + o["width"]
+                and need <= o["width"]
+            )
             if osk_fits:
                 assert fits, f"the keyboard runs off the screen: {k} on {o}"
             elif fits:
