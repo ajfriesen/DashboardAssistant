@@ -26,7 +26,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -132,7 +131,7 @@ func (h *HAHub) SetBar(b *Bar) {
 	b.SetObserver(func() { h.broadcast() })
 }
 
-// SetAudio gives the hub the audio output, set after construction like
+// SetAudio gives the hub the audio output and input, set after construction like
 // SetScreensaver, and wires its observer to the SSE broadcast.
 func (h *HAHub) SetAudio(a *Audio) {
 	h.audio = a
@@ -210,8 +209,8 @@ type stateSnapshot struct {
 	Sendspin *sendspinState `json:"sendspin,omitempty"`
 	// Omitted entirely on builds without VNC, like Sendspin.
 	VNC *vncState `json:"vnc,omitempty"`
-	// Omitted on builds without the audio stack, and until the audio-output
-	// agent has listed the sinks.
+	// Omitted on builds without the audio stack, and until the audio agent
+	// has listed the devices.
 	Audio *AudioState `json:"audio,omitempty"`
 	// Absent on builds before it, which is how the integration knows whether
 	// it can set them.
@@ -964,21 +963,44 @@ func (h *HAHub) handleSendspin(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleAudio makes one of the listed sinks the device's audio output
-// ({"output": "<node name>"}). A sink the agent did not list is a client error.
+// ({"output": "<node name>"}) and/or one of the listed sources its audio input
+// ({"input": "<node name>"}). A device the agent did not list on that side is
+// a client error, and nothing is changed.
 func (h *HAHub) handleAudio(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Output string `json:"output"`
+		Output *string `json:"output"`
+		Input  *string `json:"input"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if s := h.audio.State(); s == nil || !slices.ContainsFunc(s.Options, func(o AudioSink) bool { return o.Name == req.Output }) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "no audio output named " + strconv.Quote(req.Output)})
+	picks := []struct {
+		kind string
+		name *string
+	}{{"output", req.Output}, {"input", req.Input}}
+	given := false
+	for _, p := range picks {
+		if p.name == nil {
+			continue
+		}
+		given = true
+		if !h.audio.Has(p.kind, *p.name) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "no audio " + p.kind + " named " + strconv.Quote(*p.name)})
+			return
+		}
+	}
+	if !given {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "give an output, an input, or both"})
 		return
 	}
-	if err := h.audio.Set(req.Output); err != nil {
-		writeErr(w, err)
-		return
+	for _, p := range picks {
+		if p.name == nil {
+			continue
+		}
+		if err := h.audio.Set(p.kind, *p.name); err != nil {
+			writeErr(w, err)
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, h.snapshot())
 }

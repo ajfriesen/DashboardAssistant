@@ -75,6 +75,7 @@ press on the tablet. It appears as a single device with these entities:
 | Page | `select` | Jump to one of your pages (edit the list under **Configure**, see [Home Assistant integration](../getting-started.md#pages)) |
 | Next / Previous page | `button` | Cycle through the dashboard URLs |
 | Audio output | `select` | Which output the device plays to (HDMI, headphone jack, a USB speaker): Sendspin and dashboard sound both. Only on builds with the audio stack |
+| Audio input | `select` | Which microphone the device records from (a USB microphone, a speakerphone), for a voice assistant. Unavailable until one is plugged in. Only on builds with the audio stack |
 | Sendspin player | `switch` | Turn the device's multi-room audio player on/off; carries a `status` attribute. Only on builds with the audio stack |
 | VNC | `switch` | Start or stop remote access over VNC. While on, its attributes carry the address, username, this session's password and when it closes |
 | VNC timeout | `number` | Minutes before VNC switches itself off, 0–240; 0 keeps it on until switched off |

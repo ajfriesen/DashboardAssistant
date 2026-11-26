@@ -1,17 +1,21 @@
-# Audio output: which sink the device plays to, picked from Home Assistant.
+# Audio output and input: which sink the device plays to and which source it
+# records from, both picked from Home Assistant.
 #
-# It is PipeWire's default sink, so one choice moves everything: the Sendspin
-# player (`-o pipewire`, modules/core/sendspin.nix) and the kiosk's browser both
-# play there. WirePlumber remembers a default someone set, so the choice
-# survives a reboot without any state of ours.
+# They are PipeWire's default sink and default source, so one choice moves
+# everything on that side: the Sendspin player (`-o pipewire`,
+# modules/core/sendspin.nix) and the kiosk's browser play to the default sink,
+# and a voice assistant (linux-voice-assistant without --audio-input-device)
+# records from the default source. WirePlumber remembers a default someone
+# set, so the choices survive a reboot without any state of ours.
 #
-# The daemon must not reach PipeWire itself: the socket that lists sinks also
+# The daemon must not reach PipeWire itself: the socket that lists devices also
 # records from the microphone, and the daemon is the process on the network.
 # So this agent, in the `pipewire` group, does that side. It republishes the
-# sinks and the current default to outputsFile whenever the graph changes (a
-# USB DAC plugged in, a card's profile switched), and makes the sink named on
-# outputFifo the default, as `wpctl set-default` does. The daemon reads the
-# file and writes the FIFO (daemon/audio.go). Paths must match daemon/config.go.
+# sinks, the sources and the current defaults to devicesFile whenever the graph
+# changes (a USB DAC or microphone plugged in, a card's profile switched), and
+# applies "output <name>" / "input <name>" lines from fifo, as
+# `wpctl set-default` does. The daemon reads the file and writes the FIFO
+# (daemon/audio.go). Paths must match daemon/config.go.
 #
 # The audio stack exists only with the Sendspin player built in, so this does
 # too.
@@ -22,29 +26,38 @@
   ...
 }:
 let
-  outputsFile = "/run/audio-output/outputs.json";
-  outputFifo = "/var/lib/dashboard-assistant/audio-output.fifo";
+  devicesFile = "/run/audio-agent/devices.json";
+  fifo = "/var/lib/dashboard-assistant/audio.fifo";
 
   jq = lib.getExe pkgs.jq;
 
-  # The sinks with their labels, and the default sink WirePlumber settled on
-  # ("" before it has picked one).
-  outputs = pkgs.writeText "audio-outputs.jq" ''
-    {
-      default: (
-        [ .[]
-          | select(.type == "PipeWire:Interface:Metadata" and .props["metadata.name"] == "default")
-          | .metadata[]?
-          | select(.key == "default.audio.sink")
-          | .value.name
-        ][0] // ""
-      ),
-      sinks: [ .[]
-        | select(.type == "PipeWire:Interface:Node" and .info.props["media.class"] == "Audio/Sink")
-        | .info.props
-        | { name: .["node.name"], description: (.["node.description"] // .["node.name"]) }
-      ]
-    }
+  # Each side's devices with their labels, and the default WirePlumber settled
+  # on ("" before it has picked one, or with nothing to pick, e.g. no
+  # microphone). The shape is the daemon's snapshot slice, as is. A sink's
+  # monitor is a port on the sink, not an Audio/Source node, so it never shows
+  # up as an input.
+  devices = pkgs.writeText "audio-devices.jq" ''
+    def side($class; $key; $graph):
+      {
+        current: (
+          [ $graph[]
+            | select(.type == "PipeWire:Interface:Metadata" and .props["metadata.name"] == "default")
+            | .metadata[]?
+            | select(.key == $key)
+            | .value.name
+          ][0] // ""
+        ),
+        options: [ $graph[]
+          | select(.type == "PipeWire:Interface:Node" and .info.props["media.class"] == $class)
+          | .info.props
+          | { name: .["node.name"], description: (.["node.description"] // .["node.name"]) }
+        ]
+      };
+    . as $graph
+    | {
+        output: side("Audio/Sink"; "default.audio.sink"; $graph),
+        input: side("Audio/Source"; "default.audio.source"; $graph)
+      }
   '';
 
   # Turns pw-dump --monitor's stream of batches into one line per batch that
@@ -52,7 +65,7 @@ let
   # publish() itself connects as a client, so reacting to that would republish
   # forever (it did, at most of a CPU). A removal is just {id, info: null}, so
   # client ids are remembered to tell their removals from a sink's.
-  changes = pkgs.writeText "audio-output-changes.jq" ''
+  changes = pkgs.writeText "audio-changes.jq" ''
     foreach inputs as $batch ({clients: {}};
       .changed = false
       | reduce $batch[] as $o (.;
@@ -65,11 +78,11 @@ let
       select(.changed) | 1)
   '';
 
-  agent = pkgs.writeShellScript "audio-output-agent" ''
+  agent = pkgs.writeShellScript "audio-agent" ''
     set -u
     publish() {
-      ${pkgs.pipewire}/bin/pw-dump 2>/dev/null | ${jq} -f ${outputs} > ${outputsFile}.tmp \
-        && ${pkgs.coreutils}/bin/mv ${outputsFile}.tmp ${outputsFile}
+      ${pkgs.pipewire}/bin/pw-dump 2>/dev/null | ${jq} -f ${devices} > ${devicesFile}.tmp \
+        && ${pkgs.coreutils}/bin/mv ${devicesFile}.tmp ${devicesFile}
     }
 
     # pw-dump --monitor prints the whole graph, then every change. Changes come
@@ -86,35 +99,40 @@ let
       kill $$
     ) &
 
-    exec 3<> ${outputFifo}
-    while IFS= read -r name <&3; do
+    exec 3<> ${fifo}
+    while IFS=' ' read -r kind name <&3; do
+      case "$kind" in
+        output) key=default.configured.audio.sink ;;
+        input) key=default.configured.audio.source ;;
+        *) continue ;;
+      esac
       [ -n "$name" ] || continue
-      ${pkgs.pipewire}/bin/pw-metadata -n default 0 default.configured.audio.sink \
+      ${pkgs.pipewire}/bin/pw-metadata -n default 0 "$key" \
         "$(${jq} -cn --arg n "$name" '{name: $n}')" Spa:String:JSON >/dev/null
     done
   '';
 in
 {
   config = lib.mkIf config.dashboardAssistant.sendspin.enable {
-    users.groups.audio-output = { };
-    users.users.audio-output = {
+    users.groups.audio-agent = { };
+    users.users.audio-agent = {
       isSystemUser = true;
-      group = "audio-output";
+      group = "audio-agent";
       # pipewire for the graph; dashboard-assistant for the FIFO in the
       # daemon's state dir, like the kiosk user.
       extraGroups = [
         "pipewire"
         "dashboard-assistant"
       ];
-      description = "Audio output agent";
+      description = "Audio agent";
     };
 
     systemd.tmpfiles.rules = [
-      "p ${outputFifo} 0660 dashboard-assistant dashboard-assistant - -"
+      "p ${fifo} 0660 dashboard-assistant dashboard-assistant - -"
     ];
 
-    systemd.services.audio-output-agent = {
-      description = "Publishes the audio outputs and applies the one Home Assistant picks";
+    systemd.services.audio-agent = {
+      description = "Publishes the audio outputs and inputs and applies the ones Home Assistant picks";
       # Wanted by PipeWire too, so a restarted PipeWire brings it back: BindsTo
       # stops it with PipeWire, and Restart= does not cover that.
       wantedBy = [
@@ -131,15 +149,15 @@ in
       environment.PIPEWIRE_RUNTIME_DIR = "/run/pipewire";
       serviceConfig = {
         ExecStart = agent;
-        User = "audio-output";
-        Group = "audio-output";
+        User = "audio-agent";
+        Group = "audio-agent";
         Restart = "always";
         RestartSec = 2;
-        RuntimeDirectory = "audio-output";
+        RuntimeDirectory = "audio-agent";
         RuntimeDirectoryMode = "0755";
 
         ProtectSystem = "strict";
-        ReadWritePaths = [ outputFifo ];
+        ReadWritePaths = [ fifo ];
         ProtectHome = true;
         PrivateTmp = true;
         PrivateDevices = true;

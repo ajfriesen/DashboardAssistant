@@ -69,10 +69,11 @@ var (
 	screensaverFifo = stateDir + "/screensaver.fifo" // daemon writes "start <name>"/"stop"; in-session agent overlays the saver over CDP
 	screensaverFile = stateDir + "/screensaver.json" // persisted screen saver choice + idle timeout (minutes)
 	regionFile      = stateDir + "/region.json"      // timezone + locale from Home Assistant; the kiosk launcher reads the locale
-	// Audio output (see audio.go). Both must match modules/core/audio-output.nix:
-	// the agent publishes the sinks to the file and reads sink names from the FIFO.
-	audioOutputsFile = "/run/audio-output/outputs.json"
-	audioOutputFifo  = stateDir + "/audio-output.fifo"
+	// Audio output and input (see audio.go). Both must match modules/core/audio.nix:
+	// the agent publishes the sinks and sources to the file and reads
+	// "output <name>" / "input <name>" from the FIFO.
+	audioDevicesFile = "/run/audio-agent/devices.json"
+	audioFifo        = stateDir + "/audio.fifo"
 
 	// The system's IANA zones, the directory systemd-timedated checks a
 	// SetTimezone against (NixOS points it at /etc/zoneinfo). The daemon reads

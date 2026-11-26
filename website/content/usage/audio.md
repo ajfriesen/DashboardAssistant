@@ -82,6 +82,14 @@ and a USB speaker shows up there once it is plugged in.
 The choice moves all of the device's sound: Sendspin music and sound from the
 dashboard itself, like TTS or a media card. It survives a reboot.
 
+## Picking a microphone
+
+The **Audio input** select next to it picks the microphone, such as a USB
+microphone, a speakerphone or a sound card's input. It stays unavailable until
+the device has one, and fills in once one is plugged in. Nothing on the device
+records from it yet; it is there for a voice assistant to use. Like the output,
+the choice survives a reboot.
+
 ## Build options
 
 `dashboardAssistant.sendspin.name` overrides the player's name, `server` makes

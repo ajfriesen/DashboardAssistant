@@ -248,7 +248,7 @@
         vnc = import ./tests/vnc.nix { inherit pkgs version; };
         kiosk-bar = import ./tests/kiosk-bar.nix { inherit pkgs version; };
         sendspin = import ./tests/sendspin.nix { inherit pkgs version; };
-        audio-output = import ./tests/audio-output.nix { inherit pkgs version; };
+        audio = import ./tests/audio.nix { inherit pkgs version; };
 
         # Flash-wear flags on the browser command line. This is an eval-time
         # check rather than an assertion in first-boot.nix because that test

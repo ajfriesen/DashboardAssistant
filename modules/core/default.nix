@@ -10,7 +10,7 @@
     ./configimport.nix
     ./seed.nix
     ./sendspin.nix
-    ./audio-output.nix
+    ./audio.nix
     ./vnc.nix
     ./debug.nix
     ./cleanup.nix
