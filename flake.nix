@@ -816,35 +816,37 @@
             installable = lib.filterAttrs (
               _: s: s.config.dashboardAssistant.update.installable
             ) self.nixosConfigurations;
-            scripts = lib.mapAttrsToList (
-              name: s:
-              "${name}=${
-                lib.head (
-                  lib.splitString " " s.config.systemd.services."dashboard-assistant-update@".serviceConfig.ExecStart
-                )
-              }"
-            ) installable;
+            # Read the script's text at evaluation time rather than building it:
+            # the Pi boards' scripts are aarch64 builds an x86 runner cannot do.
+            # Commands only: its comments may mention a switch.
+            commands =
+              s:
+              lib.filter (l: !(lib.hasPrefix "#" (lib.trim l))) (
+                lib.splitString "\n" s.config.dashboardAssistant.update.script.text
+              );
+            has = s: needle: lib.any (lib.hasInfix needle) (commands s);
+            problems = lib.concatLists (
+              lib.mapAttrsToList (
+                name: s:
+                lib.optional (has s "nixos-rebuild switch") "${name}'s update switches the running system; install with nixos-rebuild boot and reboot instead"
+                ++ lib.optional (
+                  !(has s "nixos-rebuild boot" && has s "systemctl reboot")
+                ) "${name}'s update does not install with nixos-rebuild boot and reboot"
+              ) installable
+            );
           in
-          pkgs.runCommand "updates-finish-with-a-reboot" { scripts = lib.concatStringsSep " " scripts; } ''
-            set -euo pipefail
-            fail=0
-            [ -n "$scripts" ] || { echo "FAIL: no installable board found" >&2; exit 1; }
-            for entry in $scripts; do
-              board=''${entry%%=*} script=''${entry#*=}
-              # Commands only: the script's comments may mention a switch.
-              grep -v '^[[:space:]]*#' "$script" > commands
-              if grep -q 'nixos-rebuild switch' commands; then
-                echo "FAIL: $board's update switches the running system; install with nixos-rebuild boot and reboot instead" >&2
-                fail=1
-              fi
-              if ! grep -q 'nixos-rebuild boot' commands || ! grep -q 'systemctl reboot' commands; then
-                echo "FAIL: $board's update does not install with nixos-rebuild boot and reboot" >&2
-                fail=1
-              fi
-            done
-            [ "$fail" = 0 ] || exit 1
-            touch "$out"
-          '';
+          pkgs.runCommand "updates-finish-with-a-reboot"
+            {
+              boards = toString (lib.attrNames installable);
+              problems = builtins.unsafeDiscardStringContext (lib.concatMapStrings (p: "FAIL: ${p}\n") problems);
+            }
+            ''
+              set -euo pipefail
+              [ -n "$boards" ] || { echo "FAIL: no installable board found" >&2; exit 1; }
+              if [ -n "$problems" ]; then printf '%s' "$problems" >&2; exit 1; fi
+              echo "checked: $boards"
+              touch "$out"
+            '';
 
         # /etc/machine-id is the device's identity: the daemon derives its Home
         # Assistant node_id from it. NixOS must never manage that file. A managed

@@ -128,6 +128,17 @@ let
 in
 {
   options.dashboardAssistant.update = {
+    script = lib.mkOption {
+      type = lib.types.package;
+      internal = true;
+      readOnly = true;
+      default = updateScript;
+      description = ''
+        The update script, for the updates-finish-with-a-reboot check in
+        flake.nix to read without building it (a Pi board's is an aarch64 build).
+      '';
+    };
+
     repo = lib.mkOption {
       type = lib.types.str;
       default = "ajfriesen/DashboardAssistant";
