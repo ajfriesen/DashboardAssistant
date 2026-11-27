@@ -803,6 +803,49 @@
               touch "$out"
             '';
 
+        # An update finishes with a reboot, not a live switch. A switch kept the
+        # old kiosk session running, so whatever a release changed in it did not
+        # take effect: after 1.2.0 -> 1.3.0 the Button bar switch failed with an
+        # HTTP 500 until the next reboot, because the bar agent it talks to is
+        # new in 1.3.0. A new kernel needs the reboot anyway, and the automatic
+        # rollback planned in docs/adr/0009 counts boots. So the update script
+        # installs with `nixos-rebuild boot` and reboots, on every board that can
+        # update itself.
+        updates-finish-with-a-reboot =
+          let
+            installable = lib.filterAttrs (
+              _: s: s.config.dashboardAssistant.update.installable
+            ) self.nixosConfigurations;
+            scripts = lib.mapAttrsToList (
+              name: s:
+              "${name}=${
+                lib.head (
+                  lib.splitString " " s.config.systemd.services."dashboard-assistant-update@".serviceConfig.ExecStart
+                )
+              }"
+            ) installable;
+          in
+          pkgs.runCommand "updates-finish-with-a-reboot" { scripts = lib.concatStringsSep " " scripts; } ''
+            set -euo pipefail
+            fail=0
+            [ -n "$scripts" ] || { echo "FAIL: no installable board found" >&2; exit 1; }
+            for entry in $scripts; do
+              board=''${entry%%=*} script=''${entry#*=}
+              # Commands only: the script's comments may mention a switch.
+              grep -v '^[[:space:]]*#' "$script" > commands
+              if grep -q 'nixos-rebuild switch' commands; then
+                echo "FAIL: $board's update switches the running system; install with nixos-rebuild boot and reboot instead" >&2
+                fail=1
+              fi
+              if ! grep -q 'nixos-rebuild boot' commands || ! grep -q 'systemctl reboot' commands; then
+                echo "FAIL: $board's update does not install with nixos-rebuild boot and reboot" >&2
+                fail=1
+              fi
+            done
+            [ "$fail" = 0 ] || exit 1
+            touch "$out"
+          '';
+
         # /etc/machine-id is the device's identity: the daemon derives its Home
         # Assistant node_id from it. NixOS must never manage that file. A managed
         # /etc file is deleted when a switch goes to a config that does not
