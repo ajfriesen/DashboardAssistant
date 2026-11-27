@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 )
@@ -85,5 +86,47 @@ func TestBarSetWithoutSession(t *testing.T) {
 	}
 	if _, err := os.Stat(barHiddenFile); !os.IsNotExist(err) {
 		t.Fatalf("marker written without a session: %v", err)
+	}
+}
+
+// systems points the booted- and current-system links at two store paths, the
+// same one unless the running system was switched since boot.
+func systems(t *testing.T, b *Bar, booted, current string) {
+	t.Helper()
+	dir := t.TempDir()
+	b.bootedSystem = filepath.Join(dir, "booted-system")
+	b.currentSystem = filepath.Join(dir, "current-system")
+	if err := os.Symlink(booted, b.bootedSystem); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(current, b.currentSystem); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// An update switched the running system but kept the kiosk session it booted
+// with, which on 1.2.0 -> 1.3.x has no bar agent. "bar session not ready" told
+// nobody what to do; say that a restart finishes the update.
+func TestBarSetAfterUpdateWithoutRebootSaysRestart(t *testing.T) {
+	newTestBar(t)
+	t.Setenv("DASHBOARD_ASSISTANT_BAR_FIFO", filepath.Join(t.TempDir(), "missing.fifo"))
+	b := NewBar()
+	systems(t, b, "/nix/store/aaa-nixos-system-1.2.0", "/nix/store/bbb-nixos-system-1.3.1")
+	err := b.Set(false)
+	if err == nil || !strings.Contains(err.Error(), "restart the device") {
+		t.Fatalf("Set after an update without a reboot = %v, want it to say to restart the device", err)
+	}
+}
+
+// Without an update in between, a missing session is just not up yet (booting,
+// or the kiosk restarting): telling the user to restart would be wrong.
+func TestBarSetWithoutSessionAndNoUpdateDoesNotSayRestart(t *testing.T) {
+	newTestBar(t)
+	t.Setenv("DASHBOARD_ASSISTANT_BAR_FIFO", filepath.Join(t.TempDir(), "missing.fifo"))
+	b := NewBar()
+	systems(t, b, "/nix/store/aaa-nixos-system-1.3.1", "/nix/store/aaa-nixos-system-1.3.1")
+	err := b.Set(false)
+	if err == nil || strings.Contains(err.Error(), "restart") {
+		t.Fatalf("Set with no session and no update = %v, want a plain failure", err)
 	}
 }
