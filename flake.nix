@@ -803,6 +803,51 @@
               touch "$out"
             '';
 
+        # An update finishes with a reboot, not a live switch. A switch kept the
+        # old kiosk session running, so whatever a release changed in it did not
+        # take effect: after 1.2.0 -> 1.3.0 the Button bar switch failed with an
+        # HTTP 500 until the next reboot, because the bar agent it talks to is
+        # new in 1.3.0. A new kernel needs the reboot anyway, and the automatic
+        # rollback planned in docs/adr/0009 counts boots. So the update script
+        # installs with `nixos-rebuild boot` and reboots, on every board that can
+        # update itself.
+        updates-finish-with-a-reboot =
+          let
+            installable = lib.filterAttrs (
+              _: s: s.config.dashboardAssistant.update.installable
+            ) self.nixosConfigurations;
+            # Read the script's text at evaluation time rather than building it:
+            # the Pi boards' scripts are aarch64 builds an x86 runner cannot do.
+            # Commands only: its comments may mention a switch.
+            commands =
+              s:
+              lib.filter (l: !(lib.hasPrefix "#" (lib.trim l))) (
+                lib.splitString "\n" s.config.dashboardAssistant.update.script.text
+              );
+            has = s: needle: lib.any (lib.hasInfix needle) (commands s);
+            problems = lib.concatLists (
+              lib.mapAttrsToList (
+                name: s:
+                lib.optional (has s "nixos-rebuild switch") "${name}'s update switches the running system; install with nixos-rebuild boot and reboot instead"
+                ++ lib.optional (
+                  !(has s "nixos-rebuild boot" && has s "systemctl reboot")
+                ) "${name}'s update does not install with nixos-rebuild boot and reboot"
+              ) installable
+            );
+          in
+          pkgs.runCommand "updates-finish-with-a-reboot"
+            {
+              boards = toString (lib.attrNames installable);
+              problems = builtins.unsafeDiscardStringContext (lib.concatMapStrings (p: "FAIL: ${p}\n") problems);
+            }
+            ''
+              set -euo pipefail
+              [ -n "$boards" ] || { echo "FAIL: no installable board found" >&2; exit 1; }
+              if [ -n "$problems" ]; then printf '%s' "$problems" >&2; exit 1; fi
+              echo "checked: $boards"
+              touch "$out"
+            '';
+
         # /etc/machine-id is the device's identity: the daemon derives its Home
         # Assistant node_id from it. NixOS must never manage that file. A managed
         # /etc file is deleted when a switch goes to a config that does not

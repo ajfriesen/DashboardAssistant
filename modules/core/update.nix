@@ -6,7 +6,7 @@
 # `update` entity through the integration API (see daemon/update.go, daemon/ha.go).
 #
 # Applying (installable targets only): a privileged, root-run `dashboard-assistant-update@<tag>.service` does the
-# `nixos-rebuild switch --flake <ref>/<tag>#<attr>`, triggered by the daemon over
+# `nixos-rebuild boot --flake <ref>/<tag>#<attr>` and reboots, triggered by the daemon over
 # the scoped polkit rule below when HA's Install button is pressed. The flake ref
 # and hardware attr are baked in; only the target tag is a runtime instance.
 # Safety net: Home Assistant can roll a bad update back to an earlier generation.
@@ -114,12 +114,31 @@ let
       exit 1
     fi
 
-    echo "dashboard-assistant-update: switching to $target"
-    exec ${pkgs.nixos-rebuild}/bin/nixos-rebuild switch --flake "$target" --refresh
+    # Install as the next boot's default and reboot, rather than switching the
+    # running system: a switch kept the old kiosk session running (after
+    # 1.2.0 -> 1.3.0 the Button bar failed until a reboot, its bar agent being
+    # new), a new kernel needs the reboot anyway, and the rollback planned in
+    # docs/adr/0009 counts boots. The reboot is queued, so this unit still ends
+    # "done" and the daemon reports the install before the device goes down.
+    echo "dashboard-assistant-update: installing $target"
+    ${pkgs.nixos-rebuild}/bin/nixos-rebuild boot --flake "$target" --refresh
+    echo "dashboard-assistant-update: rebooting into $target"
+    ${pkgs.systemd}/bin/systemctl reboot
   '';
 in
 {
   options.dashboardAssistant.update = {
+    script = lib.mkOption {
+      type = lib.types.package;
+      internal = true;
+      readOnly = true;
+      default = updateScript;
+      description = ''
+        The update script, for the updates-finish-with-a-reboot check in
+        flake.nix to read without building it (a Pi board's is an aarch64 build).
+      '';
+    };
+
     repo = lib.mkOption {
       type = lib.types.str;
       default = "ajfriesen/DashboardAssistant";
@@ -235,11 +254,11 @@ in
         }
       ];
 
-      # Update to release %i and switch. Instantiated per tag by the daemon
+      # Update to release %i and reboot into it. Instantiated per tag by the daemon
       # (dashboard-assistant-update@<tag>.service); the script re-validates %i. Runs as root; a
       # long build must not time out.
       systemd.services."dashboard-assistant-update@" = {
-        description = "Update Dashboard Assistant OS to release %i and switch";
+        description = "Update Dashboard Assistant OS to release %i and reboot";
         # nixos-rebuild shells out to nix (build/eval) and git (flake fetch).
         path = [
           config.nix.package
