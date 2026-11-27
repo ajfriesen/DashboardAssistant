@@ -23,7 +23,8 @@ const (
 	defaultUpdateRepo     = "ajfriesen/dashboard-assistant"
 	defaultUpdateAPIBase  = "https://api.github.com"
 	defaultUpdateInterval = time.Hour
-	releaseSummaryMax     = 1000 // cap the retained release-notes payload
+	defaultUpdateRetry    = time.Minute // first retry after a failed check
+	releaseSummaryMax     = 1000        // cap the retained release-notes payload
 
 	// releaseListPage caps how many recent releases we pull. It bounds both the
 	// stable-update search and the version-picker dropdown the daemon exposes.
@@ -91,7 +92,8 @@ type UpdateChecker struct {
 	repo        string
 	apiBase     string
 	interval    time.Duration
-	installable bool // whether HA gets an Install button (a privileged unit exists)
+	retry       time.Duration // first wait after a failed check; doubles up to interval
+	installable bool          // whether HA gets an Install button (a privileged unit exists)
 	client      *http.Client
 
 	mu           sync.Mutex
@@ -110,6 +112,7 @@ func NewUpdateChecker() *UpdateChecker {
 		repo:        envOr("UPDATE_REPO", defaultUpdateRepo),
 		apiBase:     strings.TrimRight(envOr("UPDATE_API_BASE", defaultUpdateAPIBase), "/"),
 		interval:    updateInterval(),
+		retry:       defaultUpdateRetry,
 		installable: os.Getenv("UPDATE_INSTALLABLE") == "1",
 		client:      &http.Client{Timeout: 15 * time.Second},
 	}
@@ -135,12 +138,36 @@ func updateInterval() time.Duration {
 func (u *UpdateChecker) SetObserver(f func()) { u.observer = f }
 
 // Run checks immediately, then on the interval, forever. Meant to run in its own
-// goroutine. A failed check keeps the previous known value and retries next tick.
+// goroutine. A failed check keeps the previous known value and retries soon
+// rather than a whole interval later: on Wi-Fi the daemon starts before the
+// network (or the clock TLS needs) is up, so the check at boot fails, and the
+// version picker then stayed empty for an hour after every boot.
 func (u *UpdateChecker) Run() {
-	u.checkOnce()
-	for range time.Tick(u.interval) {
-		u.checkOnce()
+	var failing time.Duration // the last wait, while checks keep failing
+	for {
+		ok := u.checkOnce()
+		wait := u.nextWait(ok, failing)
+		if ok {
+			failing = 0
+		} else {
+			failing = wait
+		}
+		time.Sleep(wait)
 	}
+}
+
+// nextWait is how long to sleep before the next check. After a success, the
+// interval. After a failure, the retry delay, doubled for each further failure
+// in a row (prev is the wait before this failure, zero for the first) up to the
+// interval, so a source that stays down is not hammered.
+func (u *UpdateChecker) nextWait(ok bool, prev time.Duration) time.Duration {
+	if ok || u.retry <= 0 {
+		return u.interval
+	}
+	if prev <= 0 {
+		return min(u.retry, u.interval)
+	}
+	return min(prev*2, u.interval)
 }
 
 // CheckNow re-polls the release source immediately, outside the regular tick,
@@ -149,11 +176,12 @@ func (u *UpdateChecker) Run() {
 // with Run — the checks serialize on the mutex when storing.
 func (u *UpdateChecker) CheckNow() { u.checkOnce() }
 
-func (u *UpdateChecker) checkOnce() {
+// checkOnce reports whether the check reached the release source.
+func (u *UpdateChecker) checkOnce() bool {
 	rels, err := u.fetchReleases()
 	if err != nil {
 		log.Printf("update: check %s: %v", u.repo, err)
-		return
+		return false
 	}
 	u.mu.Lock()
 	changed := !u.haveReleases || !sameTags(u.releases, rels)
@@ -163,6 +191,7 @@ func (u *UpdateChecker) checkOnce() {
 	if changed && u.observer != nil {
 		u.observer()
 	}
+	return true
 }
 
 // fetchReleases pulls the recent releases list and returns the publishable ones
