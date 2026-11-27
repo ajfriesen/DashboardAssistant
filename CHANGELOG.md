@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.3.1](https://github.com/ajfriesen/DashboardAssistant/compare/v1.3.0...v1.3.1) (2026-11-27)
+
+
+### Bug Fixes
+
+* **core:** reboot into an update instead of switching to it ([#146](https://github.com/ajfriesen/DashboardAssistant/issues/146)) ([4f534a7](https://github.com/ajfriesen/DashboardAssistant/commit/4f534a7c065ab674c0696c18336761df702533f5))
+* **daemon:** ask for a restart when the Button bar predates an update ([#147](https://github.com/ajfriesen/DashboardAssistant/issues/147)) ([886c58e](https://github.com/ajfriesen/DashboardAssistant/commit/886c58e79d1f47f900579c518b44a8dba1ee8e31))
+* **daemon:** retry a failed release check within a minute ([#145](https://github.com/ajfriesen/DashboardAssistant/issues/145)) ([0eec40e](https://github.com/ajfriesen/DashboardAssistant/commit/0eec40e30300f042eaeaefa273a84126a88edfd2))
+
+
+### Documentation
+
+* **website:** restart the device once after updating from 1.3.0 or earlier ([#148](https://github.com/ajfriesen/DashboardAssistant/issues/148)) ([2273fe5](https://github.com/ajfriesen/DashboardAssistant/commit/2273fe58c4081ba2fbeab15985438191a6111d75))
+
 ## [1.3.0](https://github.com/ajfriesen/DashboardAssistant/compare/v1.2.0...v1.3.0) (2026-11-26)
 
 
