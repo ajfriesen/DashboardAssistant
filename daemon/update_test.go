@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -242,5 +243,59 @@ func TestFinishInstallFailureReason(t *testing.T) {
 	u.FinishInstall("v9", "done")
 	if st := u.State(); st.InProgress || st.LastError != "" {
 		t.Fatalf("success: in_progress=%v last_error=%q", st.InProgress, st.LastError)
+	}
+}
+
+// A device on Wi-Fi starts the daemon before it has a network (or the right
+// time for TLS), so the first check fails. Waiting the full interval after that
+// left the version picker empty and the update entity "up to date" for an hour
+// after every boot. A failed check retries soon instead.
+func TestFailedCheckRetriesSoon(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) <= 2 {
+			http.Error(w, "no network yet", http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(sampleReleases))
+	}))
+	defer srv.Close()
+
+	u := newTestChecker("1.4.0", srv.URL, srv.Client())
+	u.retry = 10 * time.Millisecond
+	go u.Run()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for len(u.State().Available) == 0 {
+		if time.Now().After(deadline) {
+			t.Fatalf("no releases %v after %d checks; a failed check must not wait the %v interval",
+				2*time.Second, calls.Load(), u.interval)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// The retry backs off, doubling up to the regular interval, so a source that
+// stays down is not polled every minute forever.
+func TestRetryBacksOffToTheInterval(t *testing.T) {
+	u := &UpdateChecker{interval: time.Hour, retry: time.Minute}
+	got := []time.Duration{}
+	wait := time.Duration(0)
+	for i := 0; i < 9; i++ {
+		wait = u.nextWait(false, wait)
+		got = append(got, wait)
+	}
+	want := []time.Duration{
+		time.Minute, 2 * time.Minute, 4 * time.Minute, 8 * time.Minute,
+		16 * time.Minute, 32 * time.Minute, time.Hour, time.Hour, time.Hour,
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("retry waits = %v, want %v", got, want)
+		}
+	}
+	if w := u.nextWait(true, time.Hour); w != time.Hour {
+		t.Fatalf("after a success the wait = %v, want the interval %v", w, time.Hour)
 	}
 }
