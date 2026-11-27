@@ -91,6 +91,15 @@ compares the installed version against the latest release and offers a one-tap
 install. Every version is kept as a NixOS generation, so if an update misbehaves
 you can roll back from the device (see below).
 
+The device restarts to finish an update. **Updating from 1.3.0 or earlier**,
+it doesn't do that on its own yet: press **Reboot** once the update is
+installed. Until then, the **Button bar** switch fails with a message asking
+you to restart the device.
+
+The device looks for new releases every hour. To look right away, use
+**Settings → Updates → ⋮ → Check for updates** in Home Assistant (needs
+integration 1.2.1 or later).
+
 ## Recovery
 
 If an update misbehaves, press the device's **Roll back** button in Home
