@@ -19,6 +19,8 @@ type Bar struct {
 	visible  bool
 	fifo     string
 	observer func()
+
+	bootedSystem, currentSystem string
 }
 
 // NewBar reads the marker (no marker: visible). The FIFO path can be
@@ -29,7 +31,24 @@ func NewBar() *Bar {
 		fifo = v
 	}
 	_, err := os.Stat(barHiddenFile)
-	return &Bar{visible: err != nil, fifo: fifo}
+	return &Bar{
+		visible:       err != nil,
+		fifo:          fifo,
+		bootedSystem:  "/run/booted-system",
+		currentSystem: "/run/current-system",
+	}
+}
+
+// switchedSinceBoot reports whether the running system is no longer the one the
+// device booted: an update switched it in place and the kiosk session still
+// running is the old system's. False when either link cannot be read.
+func (b *Bar) switchedSinceBoot() bool {
+	booted, err := os.Readlink(b.bootedSystem)
+	if err != nil {
+		return false
+	}
+	current, err := os.Readlink(b.currentSystem)
+	return err == nil && booted != current
 }
 
 // SetObserver registers a callback fired (outside the lock) after any change, so
@@ -57,6 +76,11 @@ func (b *Bar) Set(visible bool) error {
 	f, err := os.OpenFile(b.fifo, os.O_WRONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		b.mu.Unlock()
+		// An update from a release before 1.3.1 switched the running system and kept the
+		// kiosk session, which then has no bar agent until the next boot.
+		if b.switchedSinceBoot() {
+			return fmt.Errorf("the screen is still running the version from before the update: restart the device to finish the update (%w)", err)
+		}
 		return fmt.Errorf("bar session not ready: %w", err)
 	}
 	defer f.Close()
