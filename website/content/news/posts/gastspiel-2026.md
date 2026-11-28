@@ -28,6 +28,8 @@ in the event video from 7:50. The video is in German.
 The rack holds my Home Assistant setup and, of course, Dashboard Assistant,
 twice over:
 
+![My 10-inch rack at Gastspiel 2026: the mini-PC display and a Raspberry Pi Touch Display 2 on top showing the onboarding screen](../../img/news/gastspiel-2026-rack.jpg){ width="800" loading=lazy }
+
 - **An x86 mini-PC with GeeekPi's 9-inch rack-mount display.** The display
   connects over plain HDMI, with touch over USB.
 - **A Raspberry Pi 5 with the official
@@ -45,4 +47,3 @@ you switch pages, the kiosk simply loads the page's URL again, so it doesn't
 remember deep navigation or the scroll position. That hurts when you have a
 recipe open, pop over to Music Assistant for a moment and want to come back.
 
-<!-- TODO: add photos from the event, then delete draft: true. -->

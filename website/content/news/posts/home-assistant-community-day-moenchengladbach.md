@@ -1,5 +1,5 @@
 ---
-date: 2026-01-03
+date: 2026-11-07
 draft: true
 authors:
   - ajfriesen
@@ -8,10 +8,13 @@ categories:
 slug: home-assistant-community-day-moenchengladbach
 ---
 
-# Dashboard Assistant at the Home Assistant Community Day in Mönchengladbach
+# Dashboard Assistant at the Home Assistant Community Day 2026 in Mönchengladbach
 
-I showed Dashboard Assistant at my Home Assistant Community Day in Mönchengladbach.
+I organized one of the meetups for the Home Assistant Community Day 2026 here
+in Germany. Around 110 people came, and it was a blast.
+
+![My 10-inch rack and a device showing the Dashboard Assistant screensaver at the Home Assistant Community Day 2026](../../img/news/ha-community-day-2026.jpg){ width="800" loading=lazy }
 
 <!-- more -->
 
-<!-- TODO: set the real date above, write the post, add photos, then delete draft: true. -->
+I showed Dashboard Assistant on my 10-inch rack, and we just had fun.

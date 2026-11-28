@@ -23,10 +23,12 @@ Video zum Event sieht man das Rack ab Minute 7:50.
 
 <!-- more -->
 
-## Was ich gezeigt habe
+## Was ich gezeigt habe { #what-i-showed }
 
 In dem Rack steckt mein Home-Assistant-Setup, und natürlich Dashboard
 Assistant, gleich zweimal:
+
+![Mein 10-Zoll-Rack beim Gastspiel 2026: das Display des Mini-PCs und oben drauf ein Raspberry Pi Touch Display 2 mit dem Onboarding-Bildschirm](/img/news/gastspiel-2026-rack.jpg){ width="800" loading=lazy }
 
 - **Ein x86-Mini-PC mit dem 9-Zoll-Rack-Display von GeeekPi.** Das Display
   hängt ganz normal per HDMI dran, Touch läuft über USB.
