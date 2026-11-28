@@ -11,6 +11,7 @@ icon: lucide/sparkles
 - Das Display per Berührung aufwecken.
 - Bildschirmschoner nach einer Weile ohne Berührung (standardmäßig 10 Minuten):
   eine wandernde Uhr oder das hüpfende Logo über dem Dashboard, ein Tippen beendet ihn.
+  Er kann das Panel dimmen, solange er läuft.
 - Bildschirmtastatur für Textfelder auf Geräten, die nur einen Touchscreen haben. (Experimentell)
 - Automatische Anmeldung mit einem langlebigen HA-Token – kein Durchtippen durch den Anmeldebildschirm.
 
@@ -71,12 +72,17 @@ Gerät zu drücken. Es erscheint als ein einzelnes Gerät mit diesen Entitäten:
 | Screen saver | `switch` | Den Bildschirmschoner jetzt zeigen oder beenden. Schaltet sich nach der Leerlaufzeit auch von selbst ein und bei einer Berührung wieder aus |
 | Screen saver style | `select` | Welcher Bildschirmschoner gezeigt wird (Uhr, Logo) |
 | Screen saver timeout | `number` | Minuten ohne Berührung, bis der Bildschirmschoner startet, 0–240; 0 schaltet den Leerlauf-Auslöser ab |
+| Screen saver brightness | `number` | Helligkeit des Panels, solange der Bildschirmschoner läuft, 0–100 %; 0 (der Standard) lässt die Helligkeit, wie sie ist |
 | Screenshot | `button` + `image` | Die aktuelle Webansicht auf Abruf aufnehmen; die neueste Aufnahme erscheint als Bild, das du zum Vergrößern anklicken kannst |
 | Page | `select` | Zu einer deiner Seiten springen (die Liste bearbeitest du unter **Configure**, siehe [Home-Assistant-Integration](../getting-started.md#pages)) |
 | Next / Previous page | `button` | Durch die Dashboard-URLs blättern |
+| Reload page | `button` | Die aktuelle Seite neu laden, zum Beispiel nachdem du ein Dashboard bearbeitet hast. Passiert von selbst, wenn der Home-Assistant-Benutzer des Geräts Administrator wird oder es nicht mehr ist, damit die Admin-Bereiche erscheinen oder verschwinden |
+| Audio output | `select` | Auf welcher Ausgabe das Gerät spielt (HDMI, Kopfhörerbuchse, ein USB-Lautsprecher): Sendspin und Ton vom Dashboard gleichermaßen. Nur bei Builds mit Audio-Stack |
+| Audio input | `select` | Von welchem Mikrofon das Gerät aufnimmt (ein USB-Mikrofon, eine Freisprecheinrichtung), für einen Sprachassistenten. Nicht verfügbar, bis eines eingesteckt ist. Nur bei Builds mit Audio-Stack |
 | Sendspin player | `switch` | Den Multiroom-Audio-Player des Geräts ein-/ausschalten; trägt ein `status`-Attribut. Nur bei Builds mit Audio-Stack |
 | VNC | `switch` | Den Fernzugriff über VNC starten oder stoppen. Solange er läuft, tragen die Attribute die Adresse, den Benutzernamen, das Passwort dieser Sitzung und den Zeitpunkt, zu dem er sich schließt |
 | VNC timeout | `number` | Minuten, bis VNC sich selbst ausschaltet, 0–240; bei 0 bleibt es an, bis du es ausschaltest |
+| Charge start / Charge stop | `number` | Akkustand in Prozent, unter dem das Laden beginnt und bei dem es aufhört, für ein Gerät, das immer am Strom hängt. Zeigt, was der Akku tatsächlich übernommen hat, und folgt einer Änderung im BIOS. Nur, wenn der Akku das unterstützt (zum Beispiel Laptops und Tablets von ThinkPad, Dell und ASUS); manche haben nur einen Stopp-Wert |
 | Reboot / Shut down | `button` | Das Gerät neu starten oder herunterfahren |
 | Roll back | `button` | Die vorherige System-Generation starten. Wird abgelehnt, wenn es nur eine gibt |
 | Factory reset | `button` | Die Kopplung, die Einstellungen und das WLAN vergessen, neu starten und den Eintrag entfernen. Siehe [Wiederherstellung](use-cases.md#recovery) |

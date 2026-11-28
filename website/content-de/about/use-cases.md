@@ -32,7 +32,8 @@ kannst du:
 - Das Display um 0, 90, 180 oder 270° **drehen**.
 - Den **Bildschirmschoner** jetzt zeigen, seinen Stil wählen oder einstellen, wie lange
   das Panel ohne Berührung wartet, bevor er startet (standardmäßig 10 Minuten; 0
-  schaltet ihn ab). Ein Tippen beendet ihn.
+  schaltet ihn ab). Ein Tippen beendet ihn. Gib ihm eine eigene **Helligkeit**, um
+  das Panel zu dimmen, solange er läuft – siehe [Bildschirmschoner dimmen](#dimming-the-screen-saver).
 - Auf Abruf einen **Screenshot** der aktuellen Ansicht aufnehmen.
 - Die aktive **Seite** wechseln und unter **Configure** auf der Karte der Integration
   das Dashboard und die Seiten (beliebige Websites) auswählen.
@@ -47,12 +48,60 @@ kannst (zum Beispiel das Panel nachts dimmen oder bei Bewegung aufwecken).
 Die vollständige Liste der Entitäten findest du in der Referenz zur
 [Home-Assistant-Integration](features.md#home-assistant-integration).
 
+### Bildschirmschoner dimmen { #dimming-the-screen-saver }
+
+**Screen saver brightness** legt fest, wie hell das Panel ist, solange der
+Bildschirmschoner läuft. Das Gerät regelt das Panel herunter, wenn der
+Bildschirmschoner startet, und zurück auf die Helligkeit des **Display**, wenn er
+endet – durch ein Tippen oder aus Home Assistant. Bei 0, dem Standard, lässt der
+Bildschirmschoner die Helligkeit, wie sie ist.
+
+Die Helligkeit des Display bleibt der Wert, zu dem das Panel zurückkehrt: Verstellst
+du sie, während der Bildschirmschoner läuft, änderst du diesen Wert, ohne dass der
+Bildschirmschoner heller wird.
+
+Für unterschiedliche Werte je nach Tageszeit stellst du beide aus einer Automation
+ein. Diese hält den Bildschirmschoner bei 10 % und lässt das Panel tagsüber mit
+100 % und nachts mit 50 % laufen:
+
+```yaml
+automation:
+  - alias: "Kitchen panel: day and night brightness"
+    triggers:
+      - trigger: time
+        at: "07:00:00"
+        id: day
+      - trigger: time
+        at: "20:00:00"
+        id: night
+    actions:
+      - action: number.set_value
+        target:
+          entity_id: number.kitchen_panel_screen_saver_brightness
+        data:
+          value: 10
+      - action: light.turn_on
+        target:
+          entity_id: light.kitchen_panel_display
+        data:
+          brightness_pct: "{{ 100 if trigger.id == 'day' else 50 }}"
+```
+
 ## Updates { #updates }
 
 OS-Updates sind atomar und erscheinen in Home Assistant als `update`-Entität: Sie
 vergleicht die installierte Version mit dem neuesten Release und bietet die
 Installation per Fingertipp an. Jede Version bleibt als NixOS-Generation erhalten.
 Macht ein Update Ärger, kannst du also zurückrollen (siehe [Wiederherstellung](#recovery)).
+
+Das Gerät startet neu, um ein Update abzuschließen. **Beim Update von 1.3.0 oder
+älter** tut es das noch nicht von selbst: Drück **Reboot**, sobald das Update
+installiert ist. Bis dahin schlägt der Schalter **Button bar** mit einer Meldung
+fehl, die dich bittet, das Gerät neu zu starten.
+
+Das Gerät sucht stündlich nach neuen Releases. Um sofort nachzusehen, nutze in Home
+Assistant **Einstellungen → Updates → ⋮ → Nach Updates suchen** (braucht die
+Integration 1.2.1 oder neuer).
 
 ## Multiroom-Audio { #audio }
 
@@ -68,20 +117,19 @@ Millisekunde genau.
 Sendspin besteht aus einem **Server**, der die Musik liefert, und **Playern**, die
 sie empfangen. Das Dashboard ist nur ein Player. Der Server ist [Music
 Assistant][ma] – installiere ihn in Home Assistant, falls du ihn noch nicht nutzt.
-Auf der Seite des Dashboards gibt es sonst nichts zu konfigurieren: Der Player findet
-den Server über mDNS in deinem lokalen Netzwerk und verbindet sich von selbst.
+Auf der Seite des Dashboards gibt es sonst nichts zu konfigurieren: Der Player kündigt
+sich über mDNS in deinem lokalen Netzwerk an, und Music Assistant findet ihn und
+verbindet sich mit ihm.
 
 [ma]: https://www.music-assistant.io/
 
 Der Ton verlässt nie dein Netzwerk, und nirgends auf dem Weg gibt es ein
 Cloud-Konto.
 
-Eine Einstellung auf dem Server ist wichtig: Music Assistant kann von Playern
-verlangen, sich mit einer PIN zu **koppeln**, und lässt sich so einstellen, dass das
-*Pflicht* ist. Ungekoppelte Player sind standardmäßig erlaubt, und genau darauf
-verlässt sich das Dashboard – ihm lässt sich keine PIN übergeben. Lass den
-ungekoppelten Zugriff dafür in den Sendspin-Einstellungen von Music Assistant
-eingeschaltet.
+Die Verbindung ist verschlüsselt. Sendspin kann einen Server sich mit einem Player
+**koppeln** lassen, bevor er spielt, mit einem Code, den der Player anzeigt. Das
+Dashboard verlangt das noch nicht: Jedes Music Assistant in deinem Netzwerk kann
+darauf spielen, ohne dass du etwas eintippen musst.
 
 ### Benutzung { #using-it }
 
@@ -135,26 +183,31 @@ Gerät eingeschaltet ist, aber keine funktionierende Tonausgabe hat.
 
 ### Eine andere Ausgabe wählen { #picking-a-different-output }
 
-Geräte mit mehr als einer Ausgabe – etwa HDMI plus ein USB-DAC oder ein
-Lautsprecher-HAT – wählen standardmäßig vielleicht die falsche. Liste auf, was der
-Player sieht:
+Geräte mit mehr als einer Ausgabe, etwa HDMI plus ein USB-DAC oder ein
+Lautsprecher-HAT, spielen vielleicht auf der falschen. Wähle die richtige mit dem
+Select **Audio output** am Gerät in Home Assistant. Es listet jede Ausgabe des
+Geräts auf, und ein USB-Lautsprecher erscheint dort, sobald er eingesteckt ist.
 
-```bash
-sendspin-player --list-audio-devices
-```
+Die Wahl verlegt den gesamten Ton des Geräts: Musik über Sendspin und Ton vom
+Dashboard selbst, etwa TTS oder eine Media-Karte. Sie übersteht einen Neustart.
 
-Trage dann die gewünschte in deinem Build ein:
+### Ein Mikrofon wählen { #picking-a-microphone }
 
-```nix
-dashboardAssistant.sendspin.audioDevice = "USB Audio Device";
-```
+Das Select **Audio input** daneben wählt das Mikrofon, etwa ein USB-Mikrofon, eine
+Freisprecheinrichtung oder den Eingang einer Soundkarte. Es bleibt nicht verfügbar,
+bis das Gerät eines hat, und füllt sich, sobald eines eingesteckt ist. Noch nimmt
+nichts auf dem Gerät davon auf; es ist für einen Sprachassistenten da. Wie bei der
+Ausgabe übersteht die Wahl einen Neustart.
 
-Der Name muss exakt übereinstimmen, einschließlich eines etwaigen Suffixes
-`(hw:X,Y)`. Daneben gibt es weitere Optionen: `name` überschreibt den Namen des
-Players, `server` legt ihn auf einen Server fest, statt einen zu suchen (nützlich,
-wo Multicast blockiert ist), `bufferMs` tauscht Latenz gegen Robustheit in
-wackeligem WLAN, und `dashboardAssistant.sendspin.enable = false` lässt den
-Audio-Stack ganz aus dem Image heraus.
+### Build-Optionen { #build-options }
+
+`dashboardAssistant.sendspin.name` überschreibt den Namen des Players, `server` lässt
+den Player sich mit einem bestimmten Server verbinden, statt darauf zu warten,
+gefunden zu werden (nützlich, wo Multicast blockiert ist), `bufferMs` tauscht Latenz
+gegen gleichmäßigere Wiedergabe, und `output` legt den Player auf ein Gerät fest,
+statt das Select Audio output zu nutzen (`sendspin-cli -l` listet sie auf).
+`dashboardAssistant.sendspin.enable = false` lässt den Audio-Stack ganz aus dem Image
+heraus.
 
 ## Fernzugriff (VNC) { #remote-access }
 

@@ -9,17 +9,15 @@ sind es vier Schritte. Geh sie der Reihe nach durch.
 
 ## Wähle dein Image { #download }
 
-Das aktuelle Release ist **1.3.0**
-([Release Notes](https://github.com/ajfriesen/DashboardAssistant/releases/tag/v1.3.0)).
 Für jedes Board gibt es ein eigenes Image. **Adresse kopieren** legt die Adresse
 deines Images in die Zwischenablage; im nächsten Schritt fügst du sie in das
 Flash-Programm ein.
 
 | Board | Image | |
 |---|---|---|
-| x86_64 (Mini-PC, NUC) | [`dashboard-assistant-x86_64-1.3.0.raw.xz`](https://download.dashboardassistant.org/release/x86_64/dashboard-assistant-x86_64-1.3.0.raw.xz) | <button type="button" class="da-btn da-btn--ghost da-btn--compact" data-clipboard-text="https://download.dashboardassistant.org/release/x86_64/dashboard-assistant-x86_64-1.3.0.raw.xz">:lucide-copy: Adresse kopieren</button> |
-| Raspberry Pi 4 | [`dashboard-assistant-rpi4-1.3.0.raw.xz`](https://download.dashboardassistant.org/release/rpi4/dashboard-assistant-rpi4-1.3.0.raw.xz) | <button type="button" class="da-btn da-btn--ghost da-btn--compact" data-clipboard-text="https://download.dashboardassistant.org/release/rpi4/dashboard-assistant-rpi4-1.3.0.raw.xz">:lucide-copy: Adresse kopieren</button> |
-| Raspberry Pi 5 | [`dashboard-assistant-rpi5-1.3.0.raw.xz`](https://download.dashboardassistant.org/release/rpi5/dashboard-assistant-rpi5-1.3.0.raw.xz) | <button type="button" class="da-btn da-btn--ghost da-btn--compact" data-clipboard-text="https://download.dashboardassistant.org/release/rpi5/dashboard-assistant-rpi5-1.3.0.raw.xz">:lucide-copy: Adresse kopieren</button> |
+| x86_64 (Mini-PC, NUC) | [`dashboard-assistant-x86_64-1.3.1.raw.xz`](https://download.dashboardassistant.org/release/x86_64/dashboard-assistant-x86_64-1.3.1.raw.xz) | <button type="button" class="da-btn da-btn--ghost da-btn--compact" data-clipboard-text="https://download.dashboardassistant.org/release/x86_64/dashboard-assistant-x86_64-1.3.1.raw.xz">:lucide-copy: Adresse kopieren</button> |
+| Raspberry Pi 4 | [`dashboard-assistant-rpi4-1.3.1.raw.xz`](https://download.dashboardassistant.org/release/rpi4/dashboard-assistant-rpi4-1.3.1.raw.xz) | <button type="button" class="da-btn da-btn--ghost da-btn--compact" data-clipboard-text="https://download.dashboardassistant.org/release/rpi4/dashboard-assistant-rpi4-1.3.1.raw.xz">:lucide-copy: Adresse kopieren</button> |
+| Raspberry Pi 5 | [`dashboard-assistant-rpi5-1.3.1.raw.xz`](https://download.dashboardassistant.org/release/rpi5/dashboard-assistant-rpi5-1.3.1.raw.xz) | <button type="button" class="da-btn da-btn--ghost da-btn--compact" data-clipboard-text="https://download.dashboardassistant.org/release/rpi5/dashboard-assistant-rpi5-1.3.1.raw.xz">:lucide-copy: Adresse kopieren</button> |
 
 Von Hand herunterladen musst du nichts: Das Flash-Programm holt sich das Image
 selbst. Wenn du die Datei trotzdem behalten möchtest, folge dem Link in der
@@ -241,9 +239,45 @@ eingerichtet wurde, wird genauso gekoppelt.
 
 [![Öffne deine Home-Assistant-Instanz und zeige deine Integrationen.](https://my.home-assistant.io/badges/integrations.svg)](https://my.home-assistant.io/redirect/integrations/)
 
-Die Erkennung ist der einzige Weg, ein Gerät hinzuzufügen. Erscheint die Karte
-nicht, sieht Home Assistant die mDNS-Ankündigung des Geräts nicht, meist weil
-beide in unterschiedlichen Netzwerken oder VLANs sind.
+Erscheint die Karte nicht, sieht Home Assistant die mDNS-Ankündigung des Geräts
+nicht, meist weil beide in unterschiedlichen Netzwerken oder VLANs sind. Füge das
+Gerät dann über seine Adresse hinzu: siehe [Geräte in einem anderen VLAN](#vlans).
+
+### Geräte in einem anderen VLAN { #vlans }
+
+Viele halten Geräte wie dieses in einem eigenen Netzwerksegment, zum Beispiel in
+einem IoT-VLAN. mDNS geht nicht über Segmentgrenzen, deshalb entdeckt Home
+Assistant das Gerät dort nicht. Alles andere funktioniert auch über Segmente
+hinweg:
+
+1. Lies die IP-Adresse des Geräts auf seiner ⓘ-Ansicht ab. Gib ihm in deinem
+   Router eine DHCP-Reservierung, damit sich die Adresse später nicht ändert.
+2. Geh in Home Assistant zu **Einstellungen → Geräte & Dienste → Integration
+   hinzufügen → Dashboard Assistant** und gib die Adresse ein. Das Gerät koppelt
+   sich genauso wie ein entdecktes, ohne dass du sonst etwas eintippen musst.
+
+Deine Firewall muss diese Verbindungen zwischen den beiden Segmenten durchlassen:
+
+| Von | Nach | Port | Wofür |
+|---|---|---|---|
+| Home Assistant | Gerät | TCP 8081, 8443 | Kopplung und Steuerung |
+| Gerät | Home Assistant | TCP 8123 (oder dein Home-Assistant-Port) | Das Dashboard |
+| Music Assistant | Gerät | TCP 8928 | Multiroom-Audio, falls du es nutzt |
+| dein Computer | Gerät | TCP 5900 | [VNC](about/use-cases.md#remote-access), solange es an ist |
+
+Das Gerät öffnet Home Assistant unter der URL, die Home Assistant ihm bei der
+Kopplung übergibt: seiner lokalen URL aus **Einstellungen → System → Netzwerk**.
+Ist das ein `.local`-Name wie `homeassistant.local`, kann das Gerät ihn aus einem
+anderen Segment nicht auflösen. Stell dort dann eine IP-Adresse oder einen
+DNS-Namen ein, den beide Segmente auflösen können.
+
+Auch Music Assistant findet den Lautsprecher des Geräts über mDNS. Über
+Segmentgrenzen hinweg erscheint er nur, wenn dein Router mDNS zwischen ihnen
+weiterreicht (oft mDNS-Reflektor oder -Repeater genannt).
+
+Ändert sich die Adresse des Geräts, füge es einfach unter seiner neuen Adresse
+erneut hinzu: Home Assistant aktualisiert dann den bestehenden Eintrag, statt einen
+zweiten anzulegen.
 
 !!! note "Ein Gerät lässt sich nur einmal koppeln"
     Ein bereits gekoppeltes Gerät gibt sein Token nicht noch einmal heraus. Das
