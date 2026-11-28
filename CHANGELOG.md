@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.2](https://github.com/ajfriesen/DashboardAssistant/compare/v1.3.1...v1.3.2) (2026-11-28)
+
+
+### Documentation
+
+* **website:** flash from a URL, add News and German, fold the nav into About ([#130](https://github.com/ajfriesen/DashboardAssistant/issues/130)) ([869ac46](https://github.com/ajfriesen/DashboardAssistant/commit/869ac46c182bf907e15dde03ff732f58ba0941ec))
+
 ## [1.3.1](https://github.com/ajfriesen/DashboardAssistant/compare/v1.3.0...v1.3.1) (2026-11-27)
 
 
