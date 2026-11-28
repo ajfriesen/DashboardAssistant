@@ -1,0 +1,163 @@
+# ============================================================================
+# The German website: dashboardassistant.org/de/
+#
+# Zensical builds one language per project, so German is a second project
+# beside zensical.toml. `just website-build` builds both: English into site/,
+# then this one into site/de/.
+#
+# This file is zensical.toml without its comments (read the explanations
+# there) and with these differences, which are the only ones there should be:
+#
+#   - docs_dir, site_dir, site_url: the pages are in content-de/, one file per
+#     English page at the same path, so every page has the same address under
+#     /de/ and the language picker can stay on the page.
+#   - language, site_description, the nav labels, the palette and social
+#     tooltips, the footer links: German.
+#   - extra_css, extra_javascript, favicon, logo: root-absolute ("/..."). The
+#     fonts, stylesheets, scripts, brand files and images are NOT copied into
+#     content-de/; the German pages load them from the English site at the
+#     domain root. For the same reason an image in a German page is written
+#     ![..](/img/name.png), not img/name.png. A German build on its own is
+#     therefore unstyled: preview it with `just website-serve`.
+#
+# Change a setting here whenever you change it in zensical.toml.
+# ============================================================================
+[project]
+site_name = "Dashboard Assistant"
+docs_dir = "content-de"
+site_dir = "site/de"
+site_description = "Ein Dashboard-Betriebssystem für Home Assistant. Ein Image auf ein x86-Tablet, einen Mini-PC oder Raspberry Pi flashen, und es startet direkt in dein Dashboard."
+site_author = "ajfriesen"
+site_url = "https://dashboardassistant.org/de/"
+repo_url = "https://github.com/ajfriesen/DashboardAssistant"
+repo_name = "ajfriesen/DashboardAssistant"
+copyright = """
+Copyright &copy; 2026 Andrej Friesen &middot;
+<a href="/de/legal/impressum/">Impressum</a> &middot;
+<a href="/de/legal/datenschutz/">Datenschutz</a>
+"""
+nav = [
+  { "Start" = "index.md" },
+  { "Neuigkeiten" = [
+     "news/index.md",
+     "news/in-the-media.md",
+  ]},
+  { "Erste Schritte" = "getting-started.md" },
+  {"Über" = [
+      "about/features.md",
+      "about/use-cases.md",
+      "about/faq.md",
+      "about/license.md",
+      "about/license-faq.md",
+      "about/stack-for-nerds.md",
+  ]},
+  { "In Aktion" = "in-action.md" },
+  {"Hardware-Unterstützung" = [
+     "hardware-support/index.md",
+     "hardware-support/x86.md",
+     "hardware-support/raspberry-pi.md",
+     "hardware-support/touchscreens.md",
+     "hardware-support/dimming.md",
+  ]},
+  { "Sponsor" = "sponsor.md" },
+  { "Für Unternehmen" = "business.md" },
+]
+extra_css = ["/stylesheets/fonts.css", "/brand/colors.css", "/stylesheets/brand-theme.css", "/stylesheets/extra.css"]
+extra_javascript = ["/javascripts/privacy-optout.js", "/javascripts/language-picker.js", "/javascripts/video-embed.js"]
+
+[project.theme]
+custom_dir = "overrides"
+favicon = "/brand/favicon.svg"
+language = "de"
+features = [
+    "announce.dismiss",
+    "content.code.annotate",
+    "content.code.copy",
+    "content.code.select",
+    "content.footnote.tooltips",
+    "content.tabs.link",
+    "content.tooltips",
+    "navigation.footer",
+    "navigation.indexes",
+    "navigation.instant",
+    "navigation.instant.prefetch",
+    "navigation.path",
+    "navigation.sections",
+    "navigation.tabs",
+    "navigation.tabs.sticky",
+    "navigation.top",
+    "navigation.tracking",
+    "search.highlight",
+     "toc.follow",
+]
+logo = "/brand/mark-wide.svg"
+font = false
+
+[[project.theme.palette]]
+scheme = "default"
+primary = "custom"
+accent = "custom"
+toggle.icon = "lucide/sun"
+toggle.name = "Zum dunklen Modus wechseln"
+
+[[project.theme.palette]]
+scheme = "slate"
+primary = "custom"
+accent = "custom"
+toggle.icon = "lucide/moon"
+toggle.name = "Zum hellen Modus wechseln"
+
+[project.extra]
+alternate = [
+  { name = "English", link = "/", lang = "en" },
+  { name = "Deutsch", link = "/de/", lang = "de" },
+]
+
+[[project.extra.social]]
+icon = "fontawesome/brands/github"
+link = "https://github.com/ajfriesen/DashboardAssistant"
+name = "Dashboard Assistant auf GitHub"
+
+[[project.extra.social]]
+icon = "fontawesome/brands/discord"
+link = "https://discord.gg/GzNR9TqAy8"
+name = "Dashboard Assistant auf Discord"
+
+[project.plugins.blog]
+blog_dir = "news"
+
+[project.markdown_extensions.abbr]
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.attr_list]
+[project.markdown_extensions.def_list]
+[project.markdown_extensions.footnotes]
+[project.markdown_extensions.md_in_html]
+[project.markdown_extensions.toc]
+permalink = true
+[project.markdown_extensions.pymdownx.arithmatex]
+generic = true
+[project.markdown_extensions.pymdownx.betterem]
+[project.markdown_extensions.pymdownx.caret]
+[project.markdown_extensions.pymdownx.details]
+[project.markdown_extensions.pymdownx.emoji]
+emoji_generator = "zensical.extensions.emoji.to_svg"
+emoji_index = "zensical.extensions.emoji.twemoji"
+[project.markdown_extensions.pymdownx.highlight]
+anchor_linenums = true
+line_spans = "__span"
+pygments_lang_class = true
+[project.markdown_extensions.pymdownx.inlinehilite]
+[project.markdown_extensions.pymdownx.keys]
+[project.markdown_extensions.pymdownx.magiclink]
+[project.markdown_extensions.pymdownx.mark]
+[project.markdown_extensions.pymdownx.smartsymbols]
+[project.markdown_extensions.pymdownx.superfences]
+custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" }
+]
+[project.markdown_extensions.pymdownx.tabbed]
+alternate_style = true
+combine_header_slug = true
+[project.markdown_extensions.pymdownx.tasklist]
+custom_checkbox = true
+[project.markdown_extensions.pymdownx.tilde]
