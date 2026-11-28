@@ -9,16 +9,14 @@ takes four steps. Follow them in order.
 
 ## Pick your image { #download }
 
-The current release is **1.3.0**
-([release notes](https://github.com/ajfriesen/DashboardAssistant/releases/tag/v1.3.0)).
 There is one image per board. **Copy address** puts the address of yours on the
 clipboard; you paste it into the flashing tool in the next step.
 
 | Board | Image | |
 |---|---|---|
-| x86_64 (mini-PC, NUC) | [`dashboard-assistant-x86_64-1.3.0.raw.xz`](https://download.dashboardassistant.org/release/x86_64/dashboard-assistant-x86_64-1.3.0.raw.xz) | <button type="button" class="da-btn da-btn--ghost da-btn--compact" data-clipboard-text="https://download.dashboardassistant.org/release/x86_64/dashboard-assistant-x86_64-1.3.0.raw.xz">:lucide-copy: Copy address</button> |
-| Raspberry Pi 4 | [`dashboard-assistant-rpi4-1.3.0.raw.xz`](https://download.dashboardassistant.org/release/rpi4/dashboard-assistant-rpi4-1.3.0.raw.xz) | <button type="button" class="da-btn da-btn--ghost da-btn--compact" data-clipboard-text="https://download.dashboardassistant.org/release/rpi4/dashboard-assistant-rpi4-1.3.0.raw.xz">:lucide-copy: Copy address</button> |
-| Raspberry Pi 5 | [`dashboard-assistant-rpi5-1.3.0.raw.xz`](https://download.dashboardassistant.org/release/rpi5/dashboard-assistant-rpi5-1.3.0.raw.xz) | <button type="button" class="da-btn da-btn--ghost da-btn--compact" data-clipboard-text="https://download.dashboardassistant.org/release/rpi5/dashboard-assistant-rpi5-1.3.0.raw.xz">:lucide-copy: Copy address</button> |
+| x86_64 (mini-PC, NUC) | [`dashboard-assistant-x86_64-1.3.1.raw.xz`](https://download.dashboardassistant.org/release/x86_64/dashboard-assistant-x86_64-1.3.1.raw.xz) | <button type="button" class="da-btn da-btn--ghost da-btn--compact" data-clipboard-text="https://download.dashboardassistant.org/release/x86_64/dashboard-assistant-x86_64-1.3.1.raw.xz">:lucide-copy: Copy address</button> |
+| Raspberry Pi 4 | [`dashboard-assistant-rpi4-1.3.1.raw.xz`](https://download.dashboardassistant.org/release/rpi4/dashboard-assistant-rpi4-1.3.1.raw.xz) | <button type="button" class="da-btn da-btn--ghost da-btn--compact" data-clipboard-text="https://download.dashboardassistant.org/release/rpi4/dashboard-assistant-rpi4-1.3.1.raw.xz">:lucide-copy: Copy address</button> |
+| Raspberry Pi 5 | [`dashboard-assistant-rpi5-1.3.1.raw.xz`](https://download.dashboardassistant.org/release/rpi5/dashboard-assistant-rpi5-1.3.1.raw.xz) | <button type="button" class="da-btn da-btn--ghost da-btn--compact" data-clipboard-text="https://download.dashboardassistant.org/release/rpi5/dashboard-assistant-rpi5-1.3.1.raw.xz">:lucide-copy: Copy address</button> |
 
 There is nothing to download by hand: the flashing tool fetches the image
 itself. To keep a copy of the file anyway, follow the link in the table.
