@@ -411,8 +411,8 @@ hw-release:
 #
 # Only one copy can run per checkout, whatever the port: a second one would
 # empty the site/ the first is serving.
-[doc('Serve the website, English and German, on http://localhost:8000 with live reload')]
-website-serve PORT='8000':
+[doc('Serve the website, English and German, on http://localhost:8008 with live reload')]
+website-serve PORT='8008':
   #!/usr/bin/env bash
   set -euo pipefail
   cd website
